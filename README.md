@@ -3,6 +3,11 @@
 This repository contains a research agent application designed to
 facilitate paper research and slide generation. It consists of a
 backend powered by FastAPI and a frontend built with Streamlit.
+For more details please read: 
+
+[How I Streamline My Research and Presentation with LlamaIndex Workflows](https://medium.com/data-science/how-i-streamline-my-research-and-presentation-with-llamaindex-workflows-3d75a9a10564)
+
+[Building an Interactive UI for Llamaindex Workflows](https://medium.com/data-science/building-an-interactive-ui-for-llamaindex-workflows-842dd7abedde)
 
 ![ui-recording.gif](docs/assets/ui-recording.gif)./assets/research-agent.png)
 
