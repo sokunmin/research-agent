@@ -1,18 +1,19 @@
 import asyncio
+import json
+import time
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-import click
-from llama_index.core.program import FunctionCallingProgram
-import time
-from config import settings
-
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
 import arxiv
-from semanticscholar import SemanticScholar
-from prompts.prompts import IS_CITATION_RELEVANT_PMT
+import click
+import pyalex
+from llama_index.core.program import FunctionCallingProgram
+from pyalex import Works
+from pydantic import BaseModel
 
+from config import settings
+from prompts.prompts import IS_CITATION_RELEVANT_PMT
 from services import llms
 import logging
 import sys
@@ -38,123 +39,91 @@ class Paper(BaseModel):
 
 
 class IsCitationRelevant(BaseModel):
-    # is_relevant: bool
     score: int
     reason: str
 
 
-# def search_paper_arxiv(title, limit=1):
-#     client = arxiv.Client()
-#
-#     search = arxiv.Search(
-#         query=title,
-#         max_results=limit,
-#         # sort_by=arxiv.SortCriterion.SubmittedDate
-#     )
-#
-#     results = client.results(search)
-#     papers = []
-#     for result in results:
-#         paper = Paper(
-#             entry_id=result.entry_id,
-#             title=result.title,
-#             authors=[a.name for a in result.authors],
-#             published=result.published.strftime("%Y-%m-%d %H:%M:%S"),
-#             summary=result.summary,
-#             primary_category=result.primary_category,
-#             link=result.pdf_url
-#         )
-#         papers.append(paper)
-#     return papers
+# ── OpenAlex helpers ──────────────────────────────────────────────────────────
+
+def _reconstruct_abstract(inverted_index: Optional[dict]) -> str:
+    """OpenAlex stores abstracts as inverted index; rebuild plain text."""
+    if not inverted_index:
+        return ""
+    pos_map: dict[int, str] = {}
+    for word, positions in inverted_index.items():
+        for pos in positions:
+            pos_map[pos] = word
+    return " ".join(pos_map[i] for i in sorted(pos_map))
 
 
-def search_paper_ss(query: str, limit: int = 1):
-    s2 = SemanticScholar(api_key=settings.SEMANTIC_SCHOLAR_API_KEY)
-    results = s2.search_paper(query, limit=limit)
+def _extract_arxiv_id(work: dict) -> Optional[str]:
+    """Extract ArXiv paper ID from OpenAlex work locations list."""
+    for loc in work.get("locations", []):
+        url = loc.get("landing_page_url") or ""
+        if "arxiv.org" in url:
+            # e.g. https://arxiv.org/abs/2101.03961 → "2101.03961"
+            return url.rstrip("/").split("/")[-1]
+    return None
+
+
+def openalex_result_to_paper(result: dict) -> Paper:
+    authors = [
+        a["author"]["display_name"]
+        for a in result.get("authorships", [])
+        if a.get("author")
+    ]
+    primary_topic = result.get("primary_topic") or {}
+    field = (primary_topic.get("field") or {}).get("display_name")
+
+    arxiv_id = _extract_arxiv_id(result)
+    oa_url = (result.get("open_access") or {}).get("oa_url")
+
+    return Paper(
+        entry_id=result["id"],
+        title=result.get("title") or "",
+        authors=authors,
+        summary=_reconstruct_abstract(result.get("abstract_inverted_index")),
+        published=result.get("publication_date"),
+        primary_category=field,
+        link=result.get("doi"),
+        external_ids={"ArXiv": arxiv_id} if arxiv_id else {},
+        open_access_pdf={"url": oa_url} if oa_url else None,
+    )
+
+
+def search_paper_openalex(query: str, limit: int = 1) -> List[Paper]:
+    pyalex.config.email = settings.OPENALEX_EMAIL
+    results = Works().search_filter(title_and_abstract=query).get(per_page=limit)
+    return [openalex_result_to_paper(r) for r in results]
+
+
+def get_citations_openalex(paper: Paper, limit: int = 50) -> List[Paper]:
+    """Return papers that cite *paper* (incoming citations)."""
+    pyalex.config.email = settings.OPENALEX_EMAIL
+    results = Works().filter(cites=paper.entry_id).get(per_page=limit)
     papers = []
-    for result in results.raw_data:
-        # paper = Paper(
-        #     entry_id=str(result['corpusId']),
-        #     title=result['title'],
-        #     authors=[a["name"] for a in result['authors']],
-        #     published=result['publicationDate'],
-        #     summary=result['abstract'],
-        #     primary_category=result['fieldsOfStudy'][0],
-        #     link=result['url'],
-        #     external_ids=result['externalIds'],
-        #     open_access_pdf=result['openAccessPdf']
-        # )
-        papers.append(ss_result_to_paper(result))
-
+    for r in results:
+        try:
+            papers.append(openalex_result_to_paper(r))
+        except Exception as e:
+            logging.warning(f"Error parsing citation '{r.get('title')}': {e}")
     return papers
 
 
-def get_citations_ss(paper: Paper):
-    s2 = SemanticScholar(api_key=settings.SEMANTIC_SCHOLAR_API_KEY)
-    results = s2.get_paper_citations(f"CorpusID:{paper.entry_id}")
-    citations = []
-    for res in results:
-        result = res.paper
-        try:
-            # citation = Paper(
-            #     entry_id=str(result['corpusId']),
-            #     title=result['title'],
-            #     authors=[a["name"] for a in result['authors']],
-            #     published=result['publicationDate'].strftime("%Y-%m-%d %H:%M:%S") if isinstance(
-            #         result['publicationDate'], datetime) else result['publicationDate'],
-            #     summary=result['abstract'],
-            #     primary_category=result['fieldsOfStudy'][0] if result['fieldsOfStudy'] else None,
-            #     link=result['url'],
-            #     external_ids=result['externalIds'],
-            #     open_access_pdf=result['openAccessPdf']
-            # )
-            citations.append(ss_result_to_paper(result))
-        except Exception as e:
-            logging.warning(
-                f"Error parsing citation titled {result['title'] if result['title'] else None}, skipping..."
-            )
-            logging.warning(e)
-            continue
-    return citations
-
-
-def ss_result_to_paper(result):
-    paper = Paper(
-        entry_id=str(result["corpusId"]),
-        title=result["title"],
-        authors=[a["name"] for a in result["authors"]],
-        published=(
-            result["publicationDate"].strftime("%Y-%m-%d %H:%M:%S")
-            if isinstance(result["publicationDate"], datetime)
-            else result["publicationDate"]
-        ),
-        summary=result["abstract"],
-        primary_category=(
-            result["fieldsOfStudy"][0] if result["fieldsOfStudy"] else None
-        ),
-        link=result["url"],
-        external_ids=result["externalIds"],
-        open_access_pdf=result["openAccessPdf"],
-    )
-    return paper
-
-
 def get_paper_with_citations(query: str, limit: int = 1) -> List[Paper]:
-    """
-    Get a paper and its citations from Semantic Scholar.
-    :param query: title of the paper to query
-    :param limit: maximum number of papers to return for initial query. Default is 1.
-    :return:
-    """
-    papers = search_paper_ss(query, limit=limit)
-    logging.info("Found paper!")
-    logging.debug(papers[0].dict())
-    citations = get_citations_ss(papers[0])
-    logging.info(f"Found {len(citations)} citations!")
-    logging.debug([c.dict() for c in citations])
+    """Search OpenAlex for *query*, then collect its incoming citations."""
+    papers = search_paper_openalex(query, limit=limit)
+    if not papers:
+        logging.warning(f"No papers found for query: '{query}'")
+        return []
+    logging.info(f"Found paper: {papers[0].title}")
+    citations = get_citations_openalex(papers[0])
+    logging.info(f"Found {len(citations)} citations")
     citations.append(papers[0])
     return citations
 
+
+# ── Relevance filtering (unchanged) ──────────────────────────────────────────
 
 async def process_citation(i, research_topic, citation, llm):
     program = FunctionCallingProgram.from_defaults(
@@ -175,12 +144,6 @@ async def process_citation(i, research_topic, citation, llm):
 async def filter_relevant_citations(
     research_topic: str, citations: List[Paper]
 ) -> Dict[str, Any]:
-    """
-    Filter relevant citations based on research topic.
-    :param citations: list of papers to filter
-    :param research_topic: research topic to filter by
-    :return:
-    """
     llm = llms.new_gpt4o_mini(temperature=0.0)
     tasks = [
         process_citation(i, research_topic, citation, llm)
@@ -188,154 +151,153 @@ async def filter_relevant_citations(
     ]
     results = await asyncio.gather(*tasks)
 
-    # Match results to their corresponding index
     citations_w_relevance = {}
     for i, response in results:
         citations_w_relevance[i] = {
             "citation": citations[i],
             "is_relevant": response,
         }
-
     return citations_w_relevance
 
 
+# ── ArXiv download (unchanged) ────────────────────────────────────────────────
+
 def download_paper_arxiv(paper_id: str, download_dir: str, filename: str):
     max_retries = 3
-    retry_count = 0
-    retry_delay = 5  # seconds
+    retry_delay = 5
 
-    while retry_count < max_retries:
+    for attempt in range(max_retries):
         try:
             paper = next(arxiv.Client().results(arxiv.Search(id_list=[paper_id])))
-            logging.info(
-                f"Downloading paper: {paper.title} to {download_dir}/{filename}"
-            )
+            logging.info(f"Downloading: {paper.title} → {download_dir}/{filename}")
             paper.download_pdf(dirpath=download_dir, filename=filename)
             logging.info("Done!")
-            break
+            return
         except Exception as e:
-            logging.warning(f"Failed to download paper: {e}")
-            retry_count += 1
-            if retry_count < max_retries:
-                logging.info(f"Retrying in {retry_delay} seconds...")
+            logging.warning(f"Download attempt {attempt + 1} failed: {e}")
+            if attempt < max_retries - 1:
+                logging.info(f"Retrying in {retry_delay}s...")
                 time.sleep(retry_delay)
             else:
-                logging.error("Max retries reached. Could not download the paper.")
+                logging.error("Max retries reached.")
                 raise
 
-    # paper = next(arxiv.Client().results(arxiv.Search(id_list=[paper_id])))
-    # logging.info(f"Downloading paper: {paper.title} to {download_dir}/{filename}")
-    # paper.download_pdf(dirpath=download_dir, filename=filename)
-    # logging.info("Done!")
 
-
-def download_relevant_citations(citation_dict: Dict[str, Any], paper_dir: Path = None):
-    """
-    Check of the citation is relevant and download the relevant ones use arxiv.
-    :param citation_dict: dictionary of citations with relevance scores
-    :param paper_dir: directory to save the papers
-    :return:
-    """
+def download_relevant_citations(
+    citation_dict: Dict[str, Any], paper_dir: Path = None
+) -> Path:
     if not paper_dir:
         paper_dir = Path(__file__).parent / "data" / "papers"
     paper_dir.mkdir(parents=True, exist_ok=True)
-    # count how many relevant citations are there
-    relevant_citations = len(
-        [
-            v["is_relevant"].score
-            for v in citation_dict.values()
-            if v["is_relevant"].score > 0
-        ]
-    )
-    logging.info(f"Found {relevant_citations} relevant citations.")
 
-    for i, v in citation_dict.items():
+    relevant = [
+        v for v in citation_dict.values() if v["is_relevant"].score > 0
+    ]
+    logging.info(f"Downloading {len(relevant)} relevant papers...")
+
+    for v in citation_dict.values():
         if v["is_relevant"].score > 0:
-            if v["citation"].external_ids and "ArXiv" in v["citation"].external_ids:
-                logging.info(
-                    f"ArXiv found, downloading relevant paper: {v['citation'].title}"
-                )
-                arxiv_id = v["citation"].external_ids["ArXiv"]
+            ext_ids = v["citation"].external_ids or {}
+            if "ArXiv" in ext_ids and ext_ids["ArXiv"]:
+                logging.info(f"Downloading: {v['citation'].title}")
                 download_paper_arxiv(
-                    arxiv_id, paper_dir.as_posix(), f"{v['citation'].title}.pdf"
+                    ext_ids["ArXiv"],
+                    paper_dir.as_posix(),
+                    f"{v['citation'].title}.pdf",
                 )
             else:
-                logging.info(
-                    f"No ArXiv id found for '{v['citation'].title}', skipping..."
-                )
+                logging.info(f"No ArXiv ID for '{v['citation'].title}', skipping.")
     return paper_dir
 
 
-def paper2md(
-    fname: Path,
-    output_dir: Path,
-    langs: Optional[list] = ["English"],
-    max_pages: Optional[int] = None,
-    batch_multiplier: Optional[int] = 1,
-    start_page: Optional[int] = None,
-):
-    # https://github.com/VikParuchuri/marker/blob/master/convert_single.py#L8
-    from marker.convert import convert_single_pdf
-    from marker.models import load_all_models
-    from marker.output import save_markdown
-    import time
+# ── marker PDF → markdown (updated to new API) ───────────────────────────────
 
-    model_lst = load_all_models()
-    start = time.time()
-    full_text, images, out_meta = convert_single_pdf(
-        fname.as_posix(),
-        model_lst,
-        max_pages=max_pages,
-        langs=langs,
-        batch_multiplier=batch_multiplier,
-        start_page=start_page,
-    )
+def paper2md(fname: Path, output_dir: Path, disable_ocr: bool = False) -> Path:
+    """
+    Convert a PDF to markdown using marker (new API >= 1.0.0).
 
-    name = fname.name
-    subfolder_path = save_markdown(
-        output_dir.as_posix(), name, full_text, images, out_meta
-    )
+    Output layout:
+        output_dir/{fname.stem}/
+            {fname.stem}.md      — full markdown with tables & LaTeX
+            metadata.json        — table of contents + page stats
+            *.png / *.jpg        — extracted figures
+    """
+    from marker.converters.pdf import PdfConverter
+    from marker.models import create_model_dict
+    from marker.output import text_from_rendered
+    from marker.config.parser import ConfigParser
+    from marker.schema import BlockTypes
 
-    logging.info(f"Saved markdown to the '{subfolder_path}' folder")
-    logging.debug(f"Total time: {time.time() - start}")
-    # return subfolder_path
-
-
-def parse_pdf(pdf_path: Path, force_reparse=False):
-    md_output_dir = pdf_path.parents[1].joinpath("parsed_papers")
-
-    if (
-        len(list(md_output_dir.joinpath(pdf_path.stem).glob("*.md")))
-        and not force_reparse
-    ):
-        logging.info(
-            f"force_reparse=False and Markdown file already exists for '{pdf_path}', skipping..."
+    if disable_ocr:
+        config = ConfigParser({"skip_ocr_blocks": list(BlockTypes)})
+        converter = PdfConverter(
+            config=config.generate_config_dict(),
+            artifact_dict=create_model_dict(),
         )
     else:
-        logging.info(f"Converting '{pdf_path}' to markdown")
-        paper2md(Path(pdf_path), md_output_dir)
-    return md_output_dir
+        converter = PdfConverter(artifact_dict=create_model_dict())
+    rendered = converter(fname.as_posix())
+    markdown_text, _, images = text_from_rendered(rendered)
+
+    subfolder = output_dir / fname.stem
+    subfolder.mkdir(parents=True, exist_ok=True)
+
+    (subfolder / f"{fname.stem}.md").write_text(markdown_text, encoding="utf-8")
+
+    for img_name, img_pil in images.items():
+        img_pil.save(subfolder / img_name)
+
+    (subfolder / "metadata.json").write_text(
+        json.dumps(rendered.metadata, indent=2, default=str), encoding="utf-8"
+    )
+
+    logging.info(
+        f"marker: saved markdown + {len(images)} image(s) to '{subfolder}'"
+    )
+    return subfolder
 
 
-def parse_paper_pdfs(papers_dir: Path, force_reparse=False):
+def parse_pdf(pdf_path: Path, force_reparse: bool = False, disable_ocr: bool = False) -> Path:
+    md_output_dir = pdf_path.parents[1] / "parsed_papers"
+
+    existing = list((md_output_dir / pdf_path.stem).glob("*.md"))
+    if existing and not force_reparse:
+        logging.info(
+            f"Markdown already exists for '{pdf_path.name}', skipping "
+            f"(use force_reparse=True to re-parse)"
+        )
+        return md_output_dir / pdf_path.stem
+
+    logging.info(f"Converting '{pdf_path.name}' to markdown via marker...")
+    return paper2md(pdf_path, md_output_dir, disable_ocr=disable_ocr)
+
+
+def parse_paper_pdfs(papers_dir: Path, force_reparse: bool = False, disable_ocr: bool = False):
     for f in papers_dir.rglob("*.pdf"):
-        if f.parents[1].joinpath("summaries").joinpath(f"{f.stem}_summary.md").exists():
-            logging.info(f"Summary already exists for '{f}', skip generation")
+        summary_exists = (
+            f.parents[1] / "summaries" / f"{f.stem}_summary.md"
+        ).exists()
+        if summary_exists:
+            logging.info(f"Summary already exists for '{f.name}', skipping")
             continue
-        logging.info(f"Parsing pdf file '{f}' to markdown")
-        parse_pdf(f, force_reparse)
+        logging.info(f"Parsing '{f.name}'...")
+        parse_pdf(f, force_reparse, disable_ocr=disable_ocr)
 
+
+# ── CLI entry point ───────────────────────────────────────────────────────────
 
 @click.command()
 @click.argument(
-    "research_topic", type=str, default="Automatic Presentation Slides Generation"
+    "research_topic",
+    type=str,
+    default="Automatic Presentation Slides Generation",
 )
 @click.argument(
     "entry_paper_title",
     type=str,
     default="DOC2PPT: Automatic Presentation Slides Generation from Scientific Documents",
 )
-def main(research_topic, entry_paper_title):
+def main(research_topic: str, entry_paper_title: str):
     citations = get_paper_with_citations(entry_paper_title)
     if citations:
         relevant_citations = asyncio.run(
@@ -343,7 +305,6 @@ def main(research_topic, entry_paper_title):
         )
         paper_dir = download_relevant_citations(relevant_citations)
         parse_paper_pdfs(paper_dir)
-    # pprint(relevant_citations)
 
 
 if __name__ == "__main__":

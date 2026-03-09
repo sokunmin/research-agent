@@ -4,8 +4,9 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    SEMANTIC_SCHOLAR_API_KEY: str
     TAVILY_API_KEY: str
+    OPENALEX_API_KEY: str = ""   # 免費，空值也能用但 rate limit 較低
+    OPENALEX_EMAIL: str = ""     # 建議填寫，進入 polite pool（較高 rate limit）
 
     AZURE_OPENAI_ENDPOINT: str
     AZURE_OPENAI_API_KEY: str
