@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     LLM_SMART_MODEL: str = "gemini/gemini-2.5-flash"
     LLM_FAST_MODEL: str = "gemini/gemini-2.5-flash"
     LLM_VISION_MODEL: str = "gemini/gemini-2.5-flash"
+    LLM_VISION_FALLBACK_MODEL: str = "openrouter/google/gemma-3-27b-it:free"
     LLM_EMBED_MODEL: str = "gemini/gemini-embedding-001"
 
     # ── Provider API keys ─────────────────────────────────────────────────────

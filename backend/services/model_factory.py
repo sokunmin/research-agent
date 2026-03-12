@@ -19,10 +19,11 @@ from services.multimodal import LiteLLMMultiModal
 
 @dataclass
 class ModelConfig:
-    smart_model: str    # high-capability LLM (was: gpt-4o role)
-    fast_model: str     # fast/cheap LLM (was: gpt-4o-mini role)
-    vision_model: str   # VLM — used in Phase 4 only
-    embed_model: str    # embedding model
+    smart_model: str           # high-capability LLM (was: gpt-4o role)
+    fast_model: str            # fast/cheap LLM (was: gpt-4o-mini role)
+    vision_model: str          # VLM
+    vision_fallback_model: str # VLM fallback on 429 (empty string = disabled)
+    embed_model: str           # embedding model
     max_tokens: int = 4096
 
 
@@ -52,12 +53,16 @@ class ModelFactory:
         temperature: float = 0.0,
         callback_manager: Optional[CallbackManager] = None,
     ) -> LiteLLMMultiModal:
-        return LiteLLMMultiModal(
+        kw = dict(
             model=self._config.vision_model,
             temperature=temperature,
             max_tokens=self._config.max_tokens,
-            callback_manager=callback_manager,
         )
+        if callback_manager:
+            kw["callback_manager"] = callback_manager
+        if self._config.vision_fallback_model:
+            kw["fallback_models"] = [self._config.vision_fallback_model]
+        return LiteLLMMultiModal(**kw)
 
 
 def _build() -> ModelFactory:
@@ -66,6 +71,7 @@ def _build() -> ModelFactory:
         smart_model=settings.LLM_SMART_MODEL,
         fast_model=settings.LLM_FAST_MODEL,
         vision_model=settings.LLM_VISION_MODEL,
+        vision_fallback_model=settings.LLM_VISION_FALLBACK_MODEL,
         embed_model=settings.LLM_EMBED_MODEL,
         max_tokens=settings.MAX_TOKENS,
     ))
