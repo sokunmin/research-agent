@@ -78,6 +78,7 @@ class LiteLLMMultiModal(MultiModalLLM):
     temperature: float = Field(default=0.0, description="Sampling temperature")
     max_tokens: int = Field(default=4096, description="Max output tokens")
     extra_kwargs: dict = Field(default_factory=dict, description="Additional kwargs for LiteLLM")
+    fallback_models: list = Field(default_factory=list, description="Fallback model IDs tried on 429/error, e.g. ['openrouter/google/gemma-3-27b-it:free']")
 
     @property
     def metadata(self) -> MultiModalLLMMetadata:
@@ -121,6 +122,18 @@ class LiteLLMMultiModal(MultiModalLLM):
 
     # ── Sync methods ──────────────────────────────────────────────────────────
 
+    def _litellm_kwargs(self) -> dict:
+        """Common kwargs for every litellm call, including retry and fallback config."""
+        kw = dict(
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            num_retries=3,
+            **self.extra_kwargs,
+        )
+        if self.fallback_models:
+            kw["fallbacks"] = self.fallback_models
+        return kw
+
     def complete(
         self,
         prompt: str,
@@ -131,9 +144,7 @@ class LiteLLMMultiModal(MultiModalLLM):
         resp = litellm.completion(
             model=self.model,
             messages=messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            **self.extra_kwargs,
+            **self._litellm_kwargs(),
             **kwargs,
         )
         return CompletionResponse(text=resp.choices[0].message.content, raw=resp)
@@ -142,9 +153,7 @@ class LiteLLMMultiModal(MultiModalLLM):
         resp = litellm.completion(
             model=self.model,
             messages=self._chat_to_litellm_messages(messages),
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            **self.extra_kwargs,
+            **self._litellm_kwargs(),
             **kwargs,
         )
         return ChatResponse(
@@ -164,9 +173,7 @@ class LiteLLMMultiModal(MultiModalLLM):
         resp = await litellm.acompletion(
             model=self.model,
             messages=messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            **self.extra_kwargs,
+            **self._litellm_kwargs(),
             **kwargs,
         )
         return CompletionResponse(text=resp.choices[0].message.content, raw=resp)
@@ -175,9 +182,7 @@ class LiteLLMMultiModal(MultiModalLLM):
         resp = await litellm.acompletion(
             model=self.model,
             messages=self._chat_to_litellm_messages(messages),
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            **self.extra_kwargs,
+            **self._litellm_kwargs(),
             **kwargs,
         )
         return ChatResponse(
