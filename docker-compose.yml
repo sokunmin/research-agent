@@ -1,15 +1,21 @@
-version: '3.8'
-
 services:
   backend:
     build:
       context: ./backend
-      args:
-        - --no-cache
     ports:
       - "8000:80"
     networks:
       - app-network
+    restart: on-failure
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:80/')"]
+      interval: 60s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
     env_file:
       - path: .env
         required: true
@@ -18,6 +24,7 @@ services:
       SLIDE_TEMPLATE_PATH: /app/assets/pptx-template.pptx
       MLFLOW_TRACKING_URI: http://mlflow:8080
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
       - ./assets:/app/assets:ro
       - ./workflow_artifacts:/app/workflow_artifacts
       - ./mlruns:/app/mlruns:rw
@@ -26,12 +33,14 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        - --no-cache
     ports:
       - "8501:8501"
     networks:
       - app-network
+    restart: on-failure
+    depends_on:
+      backend:
+        condition: service_healthy
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:v3.10.0
@@ -39,11 +48,18 @@ services:
       - "8080:8080"
     networks:
       - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     volumes:
       - ./mlruns:/mlruns:rw
       - ./mlartifacts:/mlartifacts:rw
     environment:
-      MLFLOW_LOGGING_LEVEL: "DEBUG"
+      MLFLOW_LOGGING_LEVEL: "WARNING"
     command: >
       mlflow server
       --host 0.0.0.0

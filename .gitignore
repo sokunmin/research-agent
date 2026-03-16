@@ -191,3 +191,5 @@ dist/
 **mlruns
 mlruns.db
 /mlartifacts/
+.agent/
+.agents/
