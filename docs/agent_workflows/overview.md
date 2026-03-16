@@ -4,21 +4,31 @@
 
 ## 三個 Workflow 的關係
 
-```mermaid
-graph TD
-    User["🧑 User\n(research topic)"] --> SAG
+```
+  User (research topic)
+         │
+         ▼
+┌─────────────────────────────────────────────────────────┐
+│          SummaryAndSlideGenerationWorkflow              │
+│                    (orchestrator)                       │
+│                                                         │
+│  ┌────────────────────────────────────────────────┐    │
+│  │         SummaryGenerationWorkflow              │    │
+│  │               (sub-workflow)                   │    │
+│  └─────────────────────┬──────────────────────────┘    │
+│                        │ summary_dir (path)             │
+│  ┌─────────────────────▼──────────────────────────┐    │
+│  │           SlideGenerationWorkflow              │    │
+│  │               (sub-workflow)                   │    │
+│  └────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
+         │
+         ▼
+  final.pptx / final.pdf
 
-    subgraph SAG["SummaryAndSlideGenerationWorkflow\n(orchestrator)"]
-        direction TB
-        SG["SummaryGenerationWorkflow\n(sub-workflow)"]
-        SLG["SlideGenerationWorkflow\n(sub-workflow)"]
-        SG -- "summary_dir (path)" --> SLG
-    end
-
-    SAG --> Output["📊 final.pptx / final.pdf"]
-
-    HITL["HumanInTheLoopWorkflow\n(base class)"] -.->|繼承| SG
-    HITL -.->|繼承| SLG
+HumanInTheLoopWorkflow (base class)
+  ├── (繼承) SummaryGenerationWorkflow
+  └── (繼承) SlideGenerationWorkflow
 ```
 
 | Workflow | 職責 | 繼承 |
@@ -31,27 +41,28 @@ graph TD
 
 ## HumanInTheLoopWorkflow（基類）
 
-```mermaid
-classDiagram
-    class HumanInTheLoopWorkflow {
-        +loop: asyncio.EventLoop
-        +user_input_future: asyncio.Future
-        +parent_workflow: Workflow
-        +run(*args, **kwargs)
-    }
-    class SummaryGenerationWorkflow {
-        +wid: UUID
-        +tavily_max_results: int = 2
-        +n_max_final_papers: int = 5
-    }
-    class SlideGenerationWorkflow {
-        +wid: UUID
-        +max_validation_retries: int = 2
-        +slide_template_path: str
-        +sandbox: LlmSandboxToolSpec
-    }
-    HumanInTheLoopWorkflow <|-- SummaryGenerationWorkflow
-    HumanInTheLoopWorkflow <|-- SlideGenerationWorkflow
+```
+┌───────────────────────────────────────────────────┐
+│            HumanInTheLoopWorkflow                 │
+│───────────────────────────────────────────────────│
+│  loop:              asyncio.EventLoop             │
+│  user_input_future: asyncio.Future                │
+│  parent_workflow:   Workflow                      │
+│  run(*args, **kwargs)                             │
+└──────────────────┬────────────────────────────────┘
+                   │ extends
+       ┌───────────┴───────────┐
+       ▼                       ▼
+┌──────────────────────┐  ┌──────────────────────────────┐
+│ SummaryGeneration    │  │   SlideGenerationWorkflow    │
+│ Workflow             │  │──────────────────────────────│
+│──────────────────────│  │  wid: UUID                   │
+│  wid: UUID           │  │  max_validation_retries: 2   │
+│  tavily_max_results: │  │  slide_template_path: str    │
+│    2                 │  │  sandbox: LlmSandboxToolSpec │
+│  n_max_final_        │  │                              │
+│    papers: 5         │  │                              │
+└──────────────────────┘  └──────────────────────────────┘
 ```
 
 `HumanInTheLoopWorkflow` 的主要職責：
@@ -63,12 +74,19 @@ classDiagram
 
 ## 資料流總覽
 
-```mermaid
-flowchart LR
-    Q["user_query"] --> SGen["SummaryGenerationWorkflow"]
-    SGen --> SD["paper summaries\n(*.md files)"]
-    SD --> SlGen["SlideGenerationWorkflow"]
-    SlGen --> PPTX["final.pptx\nfinal.pdf"]
+```
+  user_query
+      │
+      ▼
+  SummaryGenerationWorkflow
+      │
+      │  paper summaries (*.md files)
+      │  workflow_artifacts/SummaryGenerationWorkflow/{wid}/data/papers_images/
+      ▼
+  SlideGenerationWorkflow
+      │
+      ▼
+  final.pptx / final.pdf
 ```
 
 中間產物（paper summaries）存放路徑：

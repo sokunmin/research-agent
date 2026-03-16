@@ -56,26 +56,30 @@ Content-Type: application/json
 
 ### SSE 串流架構
 
-```mermaid
-sequenceDiagram
-    participant FE as Frontend
-    participant BE as Backend
-    participant WF as Workflow
-
-    FE->>BE: POST /run-slide-gen {query}
-    BE->>WF: run(user_query) [背景 task]
-    BE-->>FE: {"workflow_id": "..."}
-    loop workflow steps
-        WF-->>BE: stream_events()
-        BE-->>FE: {"event_type": "server_message", ...}
-    end
-    WF-->>BE: request_user_input event
-    BE-->>FE: {"event_type": "request_user_input", ...}
-    Note over FE: 顯示 outline，等待 user 操作
-    FE->>BE: POST /submit_user_input
-    BE->>WF: Future.set_result(user_input)
-    WF-->>BE: 繼續 stream_events()
-    BE-->>FE: {"final_result": {...}}
+```
+  Frontend                   Backend                    Workflow
+     │                          │                          │
+     │── POST /run-slide-gen ──►│                          │
+     │   {"query": "..."}       │── run(user_query) ──────►│
+     │                          │   [背景 task]             │
+     │◄── {"workflow_id":"..."} │                          │
+     │                          │                          │
+     │         (workflow 執行中)│◄── stream_events() ──────│
+     │◄── {"event_type":        │                          │
+     │     "server_message"} ───│                          │
+     │                          │◄── request_user_input ───│
+     │◄── {"event_type":        │                          │
+     │     "request_user_input"}│                 await future
+     │                          │                          │
+  顯示 outline，等待 user 操作  │                          │
+     │                          │                          │
+     │── POST /submit_user_input►│                          │
+     │                          │── future.set_result() ──►│
+     │                          │                          │
+     │         (workflow 繼續)  │◄── stream_events() ──────│
+     │◄── {"event_type":        │                          │
+     │     "server_message"} ───│                          │
+     │◄── {"final_result":{...}}│◄── StopEvent ────────────│
 ```
 
 ---

@@ -56,28 +56,17 @@ LLM_SMART_MODEL=anthropic/claude-3-5-sonnet-20241022
 
 > **Note:** 目前主要 workflow（SummaryGen + SlideGen）不依賴 Qdrant / Redis，這些是預留給未來擴充用。
 
-### 路徑設定（選填，有預設值）
+### Infra 設定（由 docker-compose 注入，不需在 .env 設定）
 
-| 變數名稱 | 預設值 | 說明 |
-|---------|--------|------|
-| `WORKFLOW_ARTIFACTS_PATH` | `./workflow_artifacts` | 所有 workflow 產出（PPTX、PDF）的根目錄 |
-| `PAPERS_DOWNLOAD_PATH` | `data/papers` | 下載論文 PDF 的子路徑（相對於各 workflow artifact 目錄） |
-| `PAPERS_IMAGES_PATH` | `data/papers_images` | PDF 轉圖片後的存放子路徑 |
-| `PAPER_SUMMARY_PATH` | `data/paper_summaries` | 論文摘要 Markdown 的存放子路徑 |
+以下三個變數在 `config.py` 中**無預設值**，必須由環境注入。使用 docker-compose 時，`docker-compose.yml` 的 `environment:` 區塊已自動注入；本機開發時需手動設定。
 
-### Slide 設定（選填，有預設值）
-
-| 變數名稱 | 預設值 | 說明 |
-|---------|--------|------|
-| `SLIDE_TEMPLATE_PATH` | `./data/Inmeta 2023 template.pptx` | PPTX 模板路徑，Agent 會基於此模板生成投影片 |
-| `SLIDE_OUTLINE_FNAME` | `slide_outlines.json` | 大綱 JSON 輸出檔名 |
-| `GENERATED_SLIDE_FNAME` | `paper_summaries.pptx` | 生成投影片的初始檔名 |
-
-### MLflow
-
-| 變數名稱 | 預設值 | 說明 |
-|---------|--------|------|
+| 變數名稱 | docker-compose 注入值 | 說明 |
+|---------|----------------------|------|
+| `WORKFLOW_ARTIFACTS_ROOT` | `/app/workflow_artifacts` | 所有 workflow 產出（PPTX、PDF）的根目錄 |
+| `SLIDE_TEMPLATE_PATH` | `/app/assets/pptx-template.pptx` | PPTX 模板路徑（對應 `./assets` volume mount） |
 | `MLFLOW_TRACKING_URI` | `http://mlflow:8080` | MLflow tracking server URI（Docker 網路內） |
+
+> 論文 PDF 子路徑（`papers/`、`papers_images/`、`paper_summaries/`）及投影片檔名（`slide_outlines.json`、`paper_summaries.pptx`）均 hardcode 在各自的 workflow class 中，不透過環境變數設定。
 
 ## .env 範本
 

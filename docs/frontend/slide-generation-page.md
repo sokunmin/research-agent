@@ -27,23 +27,35 @@
 
 Streamlit 是同步框架，無法直接 `await` SSE 串流，因此採用 **背景 Thread + Queue** 解耦：
 
-```mermaid
-flowchart TD
-    Submit["User 點擊 Submit"] --> Thread["啟動背景 Thread\nstart_long_running_task()"]
+```
+  User 點擊 Submit
+       │
+       ▼
+  start_long_running_task()  ← 啟動背景 Thread
+       │
+       ▼
+  建立 asyncio.new_event_loop()
+  loop.run_until_complete(get_stream_data(...))
+       │
+       ▼
+  get_stream_data(): async 消費 SSE
+       │
+       ├── 進度訊息       ──► message_queue.put("message", ...)
+       │
+       ├── HITL 請求      ──► message_queue.put("user_input_required", ...)
+       │                       user_input_event.wait()  ← 阻塞直到 UI 回應
+       │
+       └── 完成           ──► message_queue.put("final_result", ...)
 
-    Thread --> ALoop["建立 asyncio event loop\nloop.run_until_complete()"]
-    ALoop --> SSE["get_stream_data()\nasync 消費 SSE"]
-
-    SSE -->|"進度訊息"| Q["message_queue.put('message', ...)"]
-    SSE -->|"HITL 請求"| Q2["message_queue.put('user_input_required', ...)"]
-    SSE -->|"完成"| Q3["message_queue.put('final_result', ...)"]
-
-    AutoRefresh["st_autorefresh\n每 2 秒觸發 rerun"] --> PM["process_messages()\n從 queue 取出訊息\n更新 session_state"]
-    PM --> Render["重新 render UI"]
-
-    Q --> PM
-    Q2 --> PM
-    Q3 --> PM
+  ──────────────────────────────────────────────────────
+  @st.fragment(run_every="2s")  workflow_display()
+  (workflow_complete 後 run_every=None，停止自動 rerun)
+       │
+       ▼
+  process_messages()  ← 從 message_queue 取出訊息，更新 session_state
+       │
+       ▼
+  st.status("Agent is working...")  ← 重新 render UI
 ```
 
 ### 關鍵函式
@@ -57,23 +69,39 @@ flowchart TD
 
 ## HITL Outline 審核流程
 
-```mermaid
-flowchart TD
-    Recv["process_messages() 收到\nuser_input_required"] --> Check{"正在審核中？"}
-    Check -->|"否"| Show["顯示 outline 審核 UI\ngather_outline_feedback()"]
-    Check -->|"是"| Queue["加入 pending_user_inputs queue"]
-
-    Show --> Display["顯示：\nst.text_area(summary)\nst.json(outline)\nst.feedback(thumbs)\nst.text_area(feedback)"]
-    Display --> Submit["User 點擊 Submit Feedback"]
-
-    Submit --> Valid{"approval_state\n已選擇？"}
-    Valid -->|"否"| Error["st.error('請選擇')"]
-    Valid -->|"是"| Post["POST /submit_user_input\n{workflow_id, user_input_json}"]
-
-    Post --> SignalThread["user_input_event.set()\n喚醒背景 Thread"]
-    SignalThread --> NextQ{"pending queue\n有下一個？"}
-    NextQ -->|"是"| NextShow["從 queue 取出下一個\n顯示新的 outline"]
-    NextQ -->|"否"| Wait["等待下一個 SSE event"]
+```
+  process_messages() 收到 user_input_required
+       │
+       ├── 正在審核中？
+       │     ├── 是 ──► pending_user_inputs.append(content)
+       │     └── 否 ──► session_state.user_input_required = True
+       │                 session_state.user_input_prompt = content
+       ▼
+  gather_outline_feedback()
+       │
+       ▼
+  顯示：
+    st.text_area(summary, disabled=True)
+    st.json(outline)
+    st.feedback("thumbs", key=approval_key)
+    st.text_area("feedback", key=feedback_key)
+    st.button("Submit Feedback")
+       │
+       ▼
+  User 點擊 Submit Feedback
+       │
+       ├── approval_state 未選擇？ ──► st.error("請選擇")
+       │
+       └── 已選擇 ──► httpx.post("/submit_user_input",
+                                  {"workflow_id": ...,
+                                   "user_input": {"approval": ..., "feedback": ...}})
+                          │
+                          └── user_input_event.set()  ← 喚醒背景 Thread
+                                   │
+                                   ├── pending_user_inputs 非空？
+                                   │     └── 是 ──► 取出下一個，顯示新的 outline
+                                   │
+                                   └── 否 ──► 等待下一個 SSE event
 ```
 
 ### Outline 審核 Widget
@@ -101,16 +129,12 @@ User input payload：
 
 Workflow 完成後，右側 column 展示：
 
-1. **PDF 預覽**：透過 `base64` 將 PDF 嵌入 `<iframe>`
+1. **PDF 預覽**：用 `st.pdf()` 原生 API 顯示（Streamlit >= 1.49.0）
 2. **PPTX 下載**：`st.download_button`，直接從 backend 抓取二進位內容
 
 ```python
-# PDF 預覽
-st.markdown(
-    f'<iframe src="data:application/pdf;base64,{base64.b64encode(pdf_data).decode()}"
-      width="100%" height="600px"></iframe>',
-    unsafe_allow_html=True,
-)
+# PDF 預覽（pages/slide_generation_page.py）
+st.pdf(st.session_state.pdf_data, height=600)
 
 # PPTX 下載
 st.download_button(
@@ -123,16 +147,26 @@ st.download_button(
 
 ## Auto-refresh 機制
 
-Streamlit 預設只在 user 互動時 rerun。為了顯示 SSE 進度，使用 `streamlit-autorefresh`：
+Streamlit 預設只在 user 互動時 rerun。為了顯示 SSE 進度，使用 `@st.fragment(run_every=...)`（Streamlit >= 1.37.0）：
 
 ```python
-if not st.session_state.workflow_complete:
-    st_autorefresh(interval=2000, limit=None, key="data_refresh")
+# pages/slide_generation_page.py
+_run_every = None if st.session_state.workflow_complete else "2s"
+
+@st.fragment(run_every=_run_every)
+def workflow_display():
+    process_messages()
+    if st.session_state.received_lines:
+        state = "complete" if st.session_state.workflow_complete else "running"
+        with st.status("🤖⚒️ Agent is working...", state=state):
+            for line in st.session_state.received_lines:
+                st.write(line)
+                st.divider()
 ```
 
-- 每 **2 秒** 觸發一次 rerun
-- `workflow_complete = True` 後停止（避免不必要的 rerun）
-- 每次 rerun 都執行 `process_messages()` 取得最新進度
+- `_run_every = "2s"`：workflow 進行中每 **2 秒** 自動重新執行 fragment
+- `_run_every = None`：`workflow_complete = True` 後停止自動 rerun（避免不必要刷新）
+- 每次執行 fragment 都呼叫 `process_messages()` 取得最新進度
 
 ## 並發保護
 

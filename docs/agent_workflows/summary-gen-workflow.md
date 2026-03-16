@@ -4,29 +4,62 @@
 
 ## 完整流程
 
-```mermaid
-flowchart TD
-    Start(["StartEvent\nuser_query: str"]) --> TQ
-
-    TQ["tavily_query\n用 Tavily 搜尋 arXiv 相關論文\n關鍵字"]
-    TQ --> TR["TavilyResultsEvent\nresults: List[TavilySearchResult]"]
-
-    TR --> GPWC["get_paper_with_citations\n對每個 Tavily 結果，\n從 OpenAlex 取得論文與其引用"]
-    GPWC -->|"fan-out，每篇論文各一個"| PE["PaperEvent × N"]
-
-    PE --> FP["filter_papers\n用 new_fast_llm 評估每篇論文\n與研究主題的相關性\n(num_workers=4，並行)"]
-    FP --> FPE["FilteredPaperEvent × N\n(含 score + reason)"]
-
-    FPE -->|"collect all N\n依 score + ArXiv 可用性排序\n取前 n_max_final_papers=5 篇"| DP["download_papers\n透過 ArXiv 下載相關論文 PDF"]
-    DP --> P2SD["Paper2SummaryDispatcherEvent\npapers_path: str"]
-
-    P2SD -->|"fan-out，每個 PDF 各一個"| P2SE["Paper2SummaryEvent × M\n(pdf_path, image_output_dir, summary_path)"]
-
-    P2SE --> P2S["paper2summary\n1. PDF → images (每頁一張)\n2. VLM (new_vlm) 從圖片生成摘要\n3. 儲存為 .md\n(num_workers=4，並行)"]
-    P2S --> SSE["SummaryStoredEvent × M\nfpath: Path"]
-
-    SSE -->|"collect all M"| FIN["finish\n確認所有 .md 存在\n回傳摘要目錄路徑"]
-    FIN --> Stop(["StopEvent\nresult: summary_dir (str)"])
+```
+  StartEvent  user_query: str
+       │
+       ▼
+  [tavily_query]
+  Tavily 搜尋 arXiv 相關論文
+       │
+       ▼
+  TavilyResultsEvent
+  results: List[TavilySearchResult]
+       │
+       ▼
+  [get_paper_with_citations]
+  對每個 Tavily 結果從 OpenAlex 取得論文與其引用
+       │ fan-out，每篇論文各一個
+       ├──► PaperEvent (paper 1)
+       ├──► PaperEvent (paper 2)
+       └──► PaperEvent (paper N)
+            │
+            ▼  (num_workers=4 並行)
+       [filter_papers]
+       new_fast_llm 評估每篇論文與研究主題的相關性
+            │
+            ▼
+       FilteredPaperEvent × N (含 score + reason)
+            │ collect all N
+            │ 依 score + ArXiv 可用性排序，取前 n_max_final_papers=5 篇
+            ▼
+       [download_papers]
+       透過 ArXiv 下載論文 PDF
+            │
+            ▼
+       Paper2SummaryDispatcherEvent
+       papers_path: str
+            │ fan-out，每個 PDF 各一個
+            ├──► Paper2SummaryEvent (pdf 1)
+            ├──► Paper2SummaryEvent (pdf 2)
+            └──► Paper2SummaryEvent (pdf M)
+                 │
+                 ▼  (num_workers=4 並行)
+            [paper2summary]
+            1. PDF → images（每頁一張）
+            2. VLM (new_vlm) 從圖片生成摘要
+            3. 儲存為 .md 檔案
+                 │
+                 ▼
+            SummaryStoredEvent × M
+            fpath: Path
+                 │ collect all M
+                 ▼
+            [finish]
+            確認所有 .md 存在，回傳摘要目錄路徑
+                 │
+                 ▼
+            StopEvent
+            result: summary_dir (str)
 ```
 
 ## Step 詳細說明
