@@ -51,45 +51,101 @@
 
 ### SummaryGenerationWorkflow
 
-```mermaid
-flowchart TD
-    Start([StartEvent]) --> TQ[tavily_query]
-    TQ --> TR[TavilyResultsEvent]
-    TR --> GP[get_paper_with_citations\nOpenAlex]
-    GP -->|fan-out| PE[PaperEvent × N]
-    PE --> FP[filter_papers\nnum_workers=4\nnew_fast_llm]
-    FP --> FPE[FilteredPaperEvent × N]
-    FPE -->|collect all N| DP[download_papers]
-    DP --> P2SD[Paper2SummaryDispatcherEvent]
-    P2SD -->|fan-out| P2SE[Paper2SummaryEvent × M]
-    P2SE --> P2S[paper2summary\nnum_workers=4\nnew_vlm]
-    P2S --> SSE[SummaryStoredEvent × M]
-    SSE -->|collect all M| FIN[finish]
-    FIN --> Stop([StopEvent\nsummary_dir])
+```
+  StartEvent (user_query)
+       │
+       ▼
+  [tavily_query]
+       │
+       ▼
+  TavilyResultsEvent
+       │
+       ▼
+  [get_paper_with_citations] (OpenAlex)
+       │ fan-out
+       ├──► PaperEvent (paper 1)
+       ├──► PaperEvent (paper 2)
+       └──► PaperEvent (paper N)
+            │
+            ▼  (num_workers=4)
+       [filter_papers] (new_fast_llm)
+            │
+            ▼
+       FilteredPaperEvent × N
+            │ collect all N
+            ▼
+       [download_papers] (ArXiv PDF)
+            │
+            ▼
+       Paper2SummaryDispatcherEvent
+            │ fan-out
+            ├──► Paper2SummaryEvent (pdf 1)
+            ├──► Paper2SummaryEvent (pdf 2)
+            └──► Paper2SummaryEvent (pdf M)
+                 │
+                 ▼  (num_workers=4)
+            [paper2summary] (PDF → images → VLM)
+                 │
+                 ▼
+            SummaryStoredEvent × M
+                 │ collect all M
+                 ▼
+            [finish]
+                 │
+                 ▼
+            StopEvent (summary_dir)
 ```
 
 ### SlideGenerationWorkflow
 
-```mermaid
-flowchart TD
-    Start([StartEvent\nfile_dir]) --> GS[get_summaries]
-    GS -->|fan-out| SE[SummaryEvent × N]
-    SE --> S2O[summary2outline\nnew_fast_llm]
-    S2O --> OE[OutlineEvent]
-    OE --> GFO[gather_feedback_outline\nHITL]
-    GFO -->|user 拒絕| OFE[OutlineFeedbackEvent]
-    OFE --> S2O
-    GFO -->|user 核准| OOE[OutlineOkEvent]
-    OOE -->|collect all N| OWL[outlines_with_layout\nnew_llm]
-    OWL --> OWLE[OutlinesWithLayoutEvent]
-    OWLE --> SG[slide_gen\nReAct Agent\nDocker sandbox]
-    SG --> SGE[SlideGeneratedEvent]
-    SGE --> VS[validate_slides\nnew_vlm]
-    VS -->|pass| Stop([StopEvent\npptx path])
-    VS -->|fail, retry| SVE[SlideValidationEvent]
-    SVE --> MS[modify_slides\nReAct Agent]
-    MS --> SGE2[SlideGeneratedEvent]
-    SGE2 --> VS
+```
+  StartEvent (file_dir)
+       │
+       ▼
+  [get_summaries] (reads *.md files)
+       │ fan-out
+       ├──► SummaryEvent (summary 1)
+       ├──► SummaryEvent (summary 2)
+       └──► SummaryEvent (summary N)
+            │
+            ▼
+       [summary2outline] (new_fast_llm)
+            │
+            ▼
+       OutlineEvent
+            │
+            ▼
+       [gather_feedback_outline]  ← HITL: await user_input_future
+            │
+            ├── user 拒絕 ──► OutlineFeedbackEvent ──► [summary2outline] (loop back)
+            │
+            └── user 核准 ──► OutlineOkEvent
+                                   │ collect all N
+                                   ▼
+                              [outlines_with_layout] (new_llm)
+                                   │
+                                   ▼
+                              OutlinesWithLayoutEvent
+                                   │
+                                   ▼
+                              [slide_gen] (ReAct Agent + Docker sandbox)
+                                   │
+                                   ▼
+                              SlideGeneratedEvent
+                                   │
+                                   ▼
+                              [validate_slides] (new_vlm)
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+                    ▼ pass                        ▼ fail (retry < 2)
+               StopEvent                    SlideValidationEvent
+             (pptx path)                         │
+                                                 ▼
+                                           [modify_slides] (ReAct Agent)
+                                                 │
+                                                 ▼
+                                           SlideGeneratedEvent ──► [validate_slides]
 ```
 
 ## Fan-out / Fan-in 並行模式

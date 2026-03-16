@@ -21,7 +21,7 @@ User query → Paper search (OpenAlex) → Filter & Download → Summarize (VLM)
 | Python | >= 3.12 |
 | Poetry | any |
 | Docker Desktop | any（slide generation 需要） |
-| Docker Compose | v3.8+（full stack 部署） |
+| Docker Compose | V2+（full stack 部署） |
 
 需要的外部服務帳號：
 

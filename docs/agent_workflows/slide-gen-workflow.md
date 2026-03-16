@@ -4,40 +4,73 @@
 
 ## 完整流程
 
-```mermaid
-flowchart TD
-    Start(["StartEvent\nfile_dir: str"]) --> GS
+```
+  StartEvent  file_dir: str
+       │
+       ▼
+  [get_summaries]  讀取 file_dir 下所有 .md 摘要
+       │ fan-out，每篇摘要各一個
+       ├──► SummaryEvent (summary 1)
+       ├──► SummaryEvent (summary 2)
+       └──► SummaryEvent (summary N)
+            │
+            ▼
+       [summary2outline]
+       new_fast_llm 將摘要壓縮成 SlideOutline
+            │
+            ▼
+       OutlineEvent (summary, outline)
+            │
+            ▼
+       [gather_feedback_outline]   ← HITL
+       ─────────────────────────────────────
+       透過 SSE 推送 outline 給前端
+       等待 user 審核（await user_input_future）
+       ─────────────────────────────────────
+            │
+            ├── user 按 👎 + feedback ──► OutlineFeedbackEvent
+            │                                  │
+            │                                  └──► [summary2outline] (重新生成)
+            │
+            └── user 按 👍 ──► OutlineOkEvent
+                                   │ collect all N（全部核准後）
+                                   ▼
+                              [outlines_with_layout]
+                              new_llm 為每個大綱選擇 PPTX layout
+                                   │
+                                   ▼
+                              OutlinesWithLayoutEvent (outlines JSON 路徑)
+                                   │
+                                   ▼
+                              [slide_gen]  ReAct Agent
+                              1. 上傳 PPTX 模板到 Docker sandbox
+                              2. 讀取 slide_outlines.json
+                              3. python-pptx 生成投影片
+                              4. 下載結果
+                                   │
+                                   ▼
+                              SlideGeneratedEvent (pptx_fpath)
+                                   │
+                                   ▼
+                              [validate_slides]
+                              PPTX → images，VLM 逐頁驗證
+                                   │
+                    ┌──────────────┴──────────────────┐
+                    │                                 │
+                    ▼ 全部通過                        ▼ 有問題 (retry < 2)
+               [copy_final_slide]              SlideValidationEvent
+               複製為 final.pptx / final.pdf    含修改建議清單
+                    │                                 │
+                    ▼                                 ▼
+               StopEvent                       [modify_slides]  ReAct Agent
+               (pptx path)                     根據 feedback 修正投影片
+                                               儲存為 _v{n}.pptx
+                                                      │
+                                                      ▼
+                                               SlideGeneratedEvent ──► [validate_slides]
 
-    GS["get_summaries\n讀取 file_dir 下所有 .md 摘要"]
-    GS -->|"fan-out，每篇摘要各一個"| SE["SummaryEvent × N"]
-
-    SE --> S2O["summary2outline\n用 new_fast_llm 將摘要\n壓縮成投影片大綱\n(SlideOutline)"]
-    S2O --> OE["OutlineEvent\n(summary, outline)"]
-
-    OE --> GFO["gather_feedback_outline\n【HITL】\n透過 SSE 推送 outline 給前端\n等待 user 審核"]
-
-    GFO -->|"user 按 👎 + 提供 feedback"| OFE["OutlineFeedbackEvent"]
-    OFE --> S2O
-
-    GFO -->|"user 按 👍"| OOE["OutlineOkEvent"]
-    OOE -->|"collect all N\n全部大綱核准後"| OWL["outlines_with_layout\n用 new_llm 為每個大綱\n選擇 PPTX layout"]
-    OWL --> OWLE["OutlinesWithLayoutEvent\n(outlines JSON 路徑)"]
-
-    OWLE --> SG["slide_gen\nReAct Agent\n- 上傳 PPTX 模板到 Docker sandbox\n- 讀取 slide_outlines.json\n- 用 python-pptx 生成投影片\n- 下載結果"]
-    SG --> SGE["SlideGeneratedEvent\npptx_fpath"]
-
-    SGE --> VS["validate_slides\nPPTX → images\n用 new_vlm (VLM) 逐頁驗證\n是否符合大綱內容"]
-
-    VS -->|"全部通過"| CP["copy_final_slide\n複製為 final.pptx / final.pdf"]
-    CP --> Stop(["StopEvent\npptx path"])
-
-    VS -->|"有問題 & retry < 2"| SVE["SlideValidationEvent\n含修改建議清單"]
-    SVE --> MS["modify_slides\nReAct Agent\n根據 feedback 修正投影片\n儲存為 _v{n}.pptx"]
-    MS --> SGE2["SlideGeneratedEvent"]
-    SGE2 --> VS
-
-    VS -->|"超過最大重試次數 (2)"| CP2["copy_final_slide\n強制輸出最終版本"]
-    CP2 --> Stop2(["StopEvent\n含錯誤訊息"])
+  * 超過最大重試次數 (2) 時：
+    [validate_slides] → [copy_final_slide] → StopEvent（含錯誤訊息）
 ```
 
 ## Step 詳細說明

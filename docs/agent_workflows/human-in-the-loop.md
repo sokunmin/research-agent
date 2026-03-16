@@ -4,35 +4,41 @@ HITL 機制讓 workflow 在生成每張投影片大綱後**暫停**，等待使�
 
 ## 端對端流程
 
-```mermaid
-sequenceDiagram
-    participant FE as Frontend (Streamlit)
-    participant BE as Backend (FastAPI)
-    participant WF as SlideGenerationWorkflow
-    participant FUT as asyncio.Future
-
-    WF->>WF: summary2outline 生成大綱
-    WF->>BE: stream_events: request_user_input<br/>{summary, outline, eid}
-    BE-->>FE: SSE event: request_user_input
-
-    Note over FE: 顯示 outline 審核 UI<br/>st.text_area(summary)<br/>st.json(outline)<br/>st.feedback(thumbs)
-
-    WF->>FUT: await user_input_future ← 暫停
-    
-    alt User 按 👍（核准）
-        FE->>BE: POST /submit_user_input<br/>{workflow_id, approval: "thumb_up", feedback: ""}
-        BE->>FUT: future.set_result(user_input)
-        FUT-->>WF: 喚醒，回傳 user_input
-        WF->>WF: → OutlineOkEvent（進入 outlines_with_layout）
-    else User 按 👎（修改）
-        FE->>BE: POST /submit_user_input<br/>{workflow_id, approval: "thumb_down", feedback: "請加強 XXX 部分"}
-        BE->>FUT: future.set_result(user_input)
-        FUT-->>WF: 喚醒，回傳 user_input
-        WF->>WF: → OutlineFeedbackEvent（重新 summary2outline）
-    end
-
-    WF->>FUT: reset_user_input_future()<br/>建立新的 Future
-    Note over WF: 繼續下一篇論文的 outline 審核
+```
+  Frontend (Streamlit)         Backend (FastAPI)       SlideGenerationWorkflow
+         │                           │                           │
+         │                           │              summary2outline 生成大綱
+         │                           │◄── stream_events: ────────│
+         │                           │    request_user_input     │
+         │◄── SSE: request_user_input│    {summary, outline, eid}│
+         │                           │                           │
+  ┌──────────────────────┐          │              await user_input_future
+  │  顯示 outline 審核 UI│          │              ← 暫停
+  │  st.text_area(summary)│         │                           │
+  │  st.json(outline)    │          │                           │
+  │  st.feedback(thumbs) │          │                           │
+  └──────────────────────┘          │                           │
+         │                           │                           │
+  [User 按 👍（核准）]               │                           │
+         │                           │                           │
+         │── POST /submit_user_input ►│                           │
+         │   {approval: thumb_up,    │── future.set_result() ───►│
+         │    feedback: ""}          │                           │
+         │                           │              喚醒，回傳 user_input
+         │                           │              → OutlineOkEvent
+         │                           │              (進入 outlines_with_layout)
+         │                           │                           │
+  [User 按 👎（修改）]               │                           │
+         │                           │                           │
+         │── POST /submit_user_input ►│                           │
+         │   {approval: thumb_down,  │── future.set_result() ───►│
+         │    feedback: "加強 XXX"}  │                           │
+         │                           │              喚醒，回傳 user_input
+         │                           │              → OutlineFeedbackEvent
+         │                           │              (重新 summary2outline)
+         │                           │                           │
+         │                           │    reset_user_input_future()
+         │                           │    建立新的 Future，繼續下一篇
 ```
 
 ## 技術實作細節
