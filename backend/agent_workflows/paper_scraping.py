@@ -92,7 +92,7 @@ def search_papers(query: str, limit: int = 1) -> List[Paper]:
     return [_work_to_paper(r) for r in results]
 
 
-def get_citing_papers(paper: Paper, limit: int = 50) -> List[Paper]:
+def get_citing_papers(paper: Paper, limit: int = settings.NUM_MAX_CITING_PAPERS) -> List[Paper]:
     """Return papers that cite *paper* (incoming citations)."""
     results = Works().filter(cites=paper.entry_id).get(per_page=limit)
     papers = []

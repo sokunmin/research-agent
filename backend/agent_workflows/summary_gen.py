@@ -48,8 +48,8 @@ Settings.embed_model = embedder
 
 class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
     wid: Optional[uuid.UUID] = uuid.uuid4()
-    tavily_max_results: int = 2
-    n_max_final_papers: int = 5
+    tavily_max_results: int = settings.TAVILY_MAX_RESULTS
+    num_max_final_papers: int = settings.NUM_MAX_FINAL_PAPERS
 
     _PAPERS_SUBDIR = "papers"
     _IMAGES_SUBDIR = "papers_images"
@@ -118,6 +118,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
 
     @step(num_workers=settings.NUM_WORKERS_FAST)
     async def filter_papers(self, ctx: Context, ev: PaperEvent) -> FilteredPaperEvent:
+        await asyncio.sleep(settings.DELAY_SECONDS_FAST)
         llm = new_fast_llm(temperature=0.0)
         research_topic = await ctx.store.get("research_topic")
         _, response = await process_citation(
@@ -143,7 +144,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
                 ),  # prioritize papers can be found on ArXiv
             ),
             reverse=True,
-        )[: self.n_max_final_papers]
+        )[: self.num_max_final_papers]
         papers_dict = {
             i: {"citation": p.paper, "is_relevant": p.is_relevant}
             for i, p in enumerate(papers)
@@ -189,6 +190,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
     async def paper2summary(
         self, ctx: Context, ev: Paper2SummaryEvent
     ) -> SummaryStoredEvent:
+        await asyncio.sleep(settings.DELAY_SECONDS_VISION)
         pdf2images(ev.pdf_path, ev.image_output_dir)
         summary_txt = await summarize_paper_images(ev.image_output_dir)
         save_summary_as_markdown(summary_txt, ev.summary_path)
