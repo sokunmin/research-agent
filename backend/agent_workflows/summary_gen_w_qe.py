@@ -14,20 +14,19 @@ import qdrant_client
 from llama_index.core.agent.workflow import ReActAgent
 from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.llms import LLM
-from llama_index.core.node_parser import (
-    UnstructuredElementNodeParser,
-)
+from llama_index.core.node_parser import UnstructuredElementNodeParser
 from llama_index.core.tools import QueryEngineTool, ToolMetadata, FunctionTool
 from llama_index.storage.docstore.redis import RedisDocumentStore
 from llama_index.storage.index_store.redis import RedisIndexStore
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.core import (
+    Settings,
+    PromptTemplate,
     SimpleDirectoryReader,
     StorageContext,
     VectorStoreIndex,
     load_index_from_storage,
 )
-from llama_index.core import Settings
 from config import settings
 from prompts.prompts import SUMMARIZE_PAPER_PMT, REACT_PROMPT_SUFFIX
 from services.llms import llm
@@ -35,7 +34,6 @@ from services.embeddings import embedder
 from utils.visualization import visualize_nodes_with_attributes
 import logging
 import sys
-from llama_index.core import PromptTemplate
 import json
 
 logging.basicConfig(

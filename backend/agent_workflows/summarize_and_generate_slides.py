@@ -2,12 +2,11 @@ import asyncio
 import uuid
 
 import click
-from llama_index.core import Settings
-
 from services.llms import llm
 from services.embeddings import embedder
 import logging
 
+from llama_index.core import Settings
 from llama_index.core.workflow import (
     Context,
     StartEvent,
@@ -17,7 +16,6 @@ from llama_index.core.workflow import (
 )
 
 from agent_workflows.events import *
-
 from agent_workflows.slide_gen import SlideGenerationWorkflow
 from agent_workflows.summary_gen import SummaryGenerationWorkflow
 
@@ -37,10 +35,17 @@ Settings.embed_model = embedder
 
 class SummaryAndSlideGenerationWorkflow(Workflow):
 
-    def __init__(self, wid: Optional[uuid.UUID] = uuid.uuid4(), *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Initialize user input future
-        self.wid = wid
+    def __init__(
+        self,
+        summary_gen_wf: SummaryGenerationWorkflow,
+        slide_gen_wf: SlideGenerationWorkflow,
+        wid: Optional[uuid.UUID] = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.wid = wid or uuid.uuid4()
+        self.summary_gen_wf = summary_gen_wf
+        self.slide_gen_wf = slide_gen_wf
         self.user_input_future = asyncio.Future()
 
     async def run(self, *args, **kwargs):
@@ -54,13 +59,26 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
         logger.debug(f"Starting sub-workflow: {sub_wf.__class__.__name__}")
         sub_wf.user_input_future = self.user_input_future
         sub_wf.parent_workflow = self
-        sub_task = asyncio.create_task(sub_wf.run(**kwargs))
-        logger.debug(f"Created sub-workflow task: {sub_task}")
+        # Set loop manually: HumanInTheLoopWorkflow.run() normally sets self.loop,
+        # but we bypass it below. SlideGenerationWorkflow's HITL step calls
+        # self.loop.create_future(), so this must be set before execution.
+        sub_wf.loop = asyncio.get_running_loop()
+
+        # llama-index-core 0.14.x: Workflow.run() returns a Handler synchronously;
+        # stream_events() lives on the Handler, not on the Workflow instance.
+        # We call the base Workflow.run() directly to obtain the Handler.
+        # HumanInTheLoopWorkflow.run() is async def and internally awaits the Handler,
+        # which consumes it and makes stream_events() unreachable.
+        # Trade-off: sub-workflow MLflow runs are not created as nested runs;
+        # LLM calls are still tracked under the parent's active MLflow run via autolog.
+        # See BACKUP_PLAN.md for Approach B which preserves nested MLflow runs.
+        handler = Workflow.run(sub_wf, **kwargs)
+        logger.debug(f"Created sub-workflow handler: {handler}")
         try:
-            async for event in sub_wf.stream_events():
+            async for event in handler.stream_events():
                 logger.debug(f"Relaying event from sub-workflow: {event}")
                 ctx.write_event_to_stream(event)
-            result = await sub_task
+            result = await handler
             logger.debug(f"Sub-workflow completed with result: {result}")
             return result
         except Exception as e:
@@ -69,11 +87,9 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
 
     @step
     async def summary_gen(
-        self, ctx: Context, ev: StartEvent, summary_gen_wf: SummaryGenerationWorkflow
+        self, ctx: Context, ev: StartEvent
     ) -> SummaryWfReadyEvent:
-        # res = await summary_gen_wf.run(user_query=ev.user_query)
-        res = await self.run_subworkflow(summary_gen_wf, ctx, user_query=ev.user_query)
-
+        res = await self.run_subworkflow(self.summary_gen_wf, ctx, user_query=ev.user_query)
         return SummaryWfReadyEvent(summary_dir=res)
 
     @step
@@ -81,23 +97,19 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
         self,
         ctx: Context,
         ev: SummaryWfReadyEvent,
-        slide_gen_wf: SlideGenerationWorkflow,
     ) -> StopEvent:
-        # res = await slide_gen_wf.run(file_dir=ev.summary_dir)
-        res = await self.run_subworkflow(slide_gen_wf, ctx, file_dir=ev.summary_dir)
-
+        res = await self.run_subworkflow(self.slide_gen_wf, ctx, file_dir=ev.summary_dir)
         return StopEvent(res)
 
 
 async def run_workflow(user_query: str):
-    wf = SummaryAndSlideGenerationWorkflow(timeout=2000, verbose=True)
-    wf.add_workflows(
-        summary_gen_wf=SummaryGenerationWorkflow(timeout=800, verbose=True)
+    wf = SummaryAndSlideGenerationWorkflow(
+        summary_gen_wf=SummaryGenerationWorkflow(timeout=800, verbose=True),
+        slide_gen_wf=SlideGenerationWorkflow(timeout=1200, verbose=True),
+        timeout=2000,
+        verbose=True,
     )
-    wf.add_workflows(slide_gen_wf=SlideGenerationWorkflow(timeout=1200, verbose=True))
-    result = await wf.run(
-        user_query=user_query,
-    )
+    result = await wf.run(user_query=user_query)
     print(result)
 
 

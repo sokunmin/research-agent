@@ -9,14 +9,26 @@ from typing import Optional
 
 import click
 
-from llama_index.core import Settings, SimpleDirectoryReader
+import logging
+import inspect
+from llama_index.core import (
+    Settings,
+    SimpleDirectoryReader,
+    PromptTemplate,
+)
+from llama_index.core.workflow import (
+    Context,
+    StartEvent,
+    StopEvent,
+    step,
+)
+from llama_index.core.tools import FunctionTool
 from llama_index.core.agent.workflow import ReActAgent, AgentStream, ToolCall
 from llama_index.core.output_parsers import PydanticOutputParser
 from llama_index.core.program import (
     FunctionCallingProgram,
     MultiModalLLMCompletionProgram,
 )
-from llama_index.core.tools import FunctionTool
 
 from config import settings
 from prompts.prompts import (
@@ -28,31 +40,19 @@ from prompts.prompts import (
     SLIDE_MODIFICATION_PMT,
     MODIFY_SUMMARY2OUTLINE_PMT,
 )
+from services.embeddings import embedder
+from services.sandbox import LlmSandboxToolSpec, SANDBOX_DIR
 from services.llms import (
     llm,
     new_llm,
     new_fast_llm,
     new_vlm,
 )
-from services.embeddings import embedder
-import logging
-from llama_index.core import PromptTemplate
-from llama_index.core.workflow import (
-    Context,
-    StartEvent,
-    StopEvent,
-    step,
-)
-
 from utils.tools import get_all_layouts_info
-import inspect
-from services.sandbox import LlmSandboxToolSpec, SANDBOX_DIR
-
 from utils.file_processing import pptx2images
 from agent_workflows.events import *
-import mlflow
-
 from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow
+import mlflow
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -226,23 +226,23 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             )
         )
 
-    @step(pass_context=True, num_workers=1)
+    @step(num_workers=1)
     async def get_summaries(self, ctx: Context, ev: StartEvent) -> SummaryEvent:
         """Entry point of the workflow. Read the content of the summary files from provided
         directory. For each summary file, send a SummaryEvent to the next step."""
 
-        ctx.data["n_retry"] = 0  # keep count of slide validation retries
         markdown_files = list(Path(ev.get("file_dir")).glob("*.md"))
-        ctx.data["n_summaries"] = len(
-            markdown_files
-        )  # make sure later step collect all the summaries
+        async with ctx.store.edit_state() as state:
+            state["n_retry"] = 0  # keep count of slide validation retries
+            state["n_summaries"] = len(markdown_files)
+        n_summaries = await ctx.store.get("n_summaries")
         ctx.write_event_to_stream(
             Event(
                 msg=WorkflowStreamingEvent(
                     event_type="server_message",
                     event_sender=inspect.currentframe().f_code.co_name,
                     event_content={
-                        "message": f"Reading {ctx.data['n_summaries']} summaries from markdown files..."
+                        "message": f"Reading {n_summaries} summaries from markdown files..."
                     },
                 ).model_dump()
             )
@@ -258,9 +258,9 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     ).model_dump()
                 )
             )
-            self.send_event(SummaryEvent(summary=s))
+            ctx.send_event(SummaryEvent(summary=s))
 
-    @step(pass_context=True, num_workers=1)
+    @step(num_workers=settings.NUM_WORKERS_FAST)
     async def summary2outline(
         self, ctx: Context, ev: SummaryEvent | OutlineFeedbackEvent
     ) -> OutlineEvent:
@@ -309,7 +309,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
 
         return OutlineEvent(summary=ev.summary, outline=response)
 
-    @step(pass_context=True)
+    @step
     async def gather_feedback_outline(
         self, ctx: Context, ev: OutlineEvent
     ) -> OutlineFeedbackEvent | OutlineOkEvent:
@@ -390,7 +390,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         else:
             logger.info("User input future is already done, skipping await.")
 
-    @step(pass_context=True)
+    @step
     async def outlines_with_layout(
         self, ctx: Context, ev: OutlineOkEvent
     ) -> OutlinesWithLayoutEvent:
@@ -398,7 +398,8 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         The layout information includes the layout name, the index of the title placeholder,
         and the index of the content placeholder. Return an event with the augmented outlines.
         """
-        ready = ctx.collect_events(ev, [OutlineOkEvent] * ctx.data["n_summaries"])
+        n_summaries = await ctx.store.get("n_summaries")
+        ready = ctx.collect_events(ev, [OutlineOkEvent] * n_summaries)
         if ready is None:
             return None
         ctx.write_event_to_stream(
@@ -456,7 +457,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             outlines_fpath=slide_outlines_json, outline_example=slides_w_layout[0]
         )
 
-    @step(pass_context=True)
+    @step
     async def slide_gen(
         self, ctx: Context, ev: OutlinesWithLayoutEvent
     ) -> SlideGeneratedEvent:
@@ -510,17 +511,20 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             pptx_fpath=f"{self.workflow_artifacts_path}/{self.generated_slide_fname}"
         )
 
-    @step(pass_context=True, num_workers=4)
+    @step(num_workers=settings.NUM_WORKERS_VISION)
     async def validate_slides(
         self, ctx: Context, ev: SlideGeneratedEvent
     ) -> StopEvent | SlideValidationEvent:
         """Validate the generated slide deck"""
-        ctx.data["n_retry"] += 1
-        ctx.data["latest_pptx_file"] = Path(ev.pptx_fpath).name
-        logger.info(f"[validate_slides] the retry count is: {ctx.data['n_retry']}")
+        async with ctx.store.edit_state() as state:
+            state["n_retry"] = state.get("n_retry", 0) + 1
+            state["latest_pptx_file"] = Path(ev.pptx_fpath).name
+        n_retry = await ctx.store.get("n_retry")
+        latest_pptx_file = await ctx.store.get("latest_pptx_file")
+        logger.info(f"[validate_slides] the retry count is: {n_retry}")
         logger.info(
             f"[validate_slides] Validating the generated slide deck"
-            f" {Path(ev.pptx_fpath).name} | {ctx.data['latest_pptx_file']}..."
+            f" {Path(ev.pptx_fpath).name} | {latest_pptx_file}..."
         )
         # slide to images
         img_dir = pptx2images(Path(ev.pptx_fpath))
@@ -534,7 +538,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     event_type="server_message",
                     event_sender=inspect.currentframe().f_code.co_name,
                     event_content={
-                        "message": f"{ctx.data['n_retry']}th try for validating the generated slide deck..."
+                        "message": f"{n_retry}th try for validating the generated slide deck..."
                     },
                 ).model_dump()
             )
@@ -580,7 +584,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                 self.workflow_artifacts_path.joinpath(self.generated_slide_fname)
             )
         else:
-            if ctx.data["n_retry"] < self.max_validation_retries:
+            if n_retry < self.max_validation_retries:
                 ctx.write_event_to_stream(
                     Event(
                         msg=WorkflowStreamingEvent(
@@ -610,7 +614,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     f"The slides are not fixed after {self.max_validation_retries} retries!"
                 )
 
-    @step(pass_context=True)
+    @step
     async def modify_slides(
         self, ctx: Context, ev: SlideValidationEvent
     ) -> SlideGeneratedEvent:
@@ -632,13 +636,14 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         )
 
         # Locate the current pptx in the sandbox (fall back to default path if not found)
-        latest_filename = ctx.data["latest_pptx_file"]
+        latest_filename = await ctx.store.get("latest_pptx_file")
+        n_retry = await ctx.store.get("n_retry")
         slide_pptx_path = f"{SANDBOX_DIR}/{latest_filename}"
         for f in self.sandbox.list_files():
             if f.filename == self.generated_slide_fname:
                 slide_pptx_path = f.file_full_path
                 break
-        modified_pptx_path = f"{Path(slide_pptx_path).stem}_v{ctx.data['n_retry']}.pptx"
+        modified_pptx_path = f"{Path(slide_pptx_path).stem}_v{n_retry}.pptx"
         logger.info(f"[modify_slides] slide_pptx_path={slide_pptx_path}, modified={modified_pptx_path}")
 
         agent = ReActAgent(

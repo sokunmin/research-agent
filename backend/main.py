@@ -14,6 +14,7 @@ from agent_workflows.summary_gen import (
     SummaryGenerationDummyWorkflow,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from llama_index.core.workflow import Workflow
 
 import mlflow
 from config import settings
@@ -49,23 +50,20 @@ app.add_middleware(
 async def run_workflow_endpoint(topic: ResearchTopic):
     workflow_id = str(uuid.uuid4())
 
-    wf = SummaryAndSlideGenerationWorkflow(wid=workflow_id, timeout=2000, verbose=True)
-    wf.add_workflows(
+    wf = SummaryAndSlideGenerationWorkflow(
         summary_gen_wf=SummaryGenerationWorkflow(
             wid=workflow_id, timeout=800, verbose=True
-        )
-    )
-    # toggle for skipping running SummaryGenerationWorkflow
-    # and debugging SlideGenerationWorkflow
-    # wf.add_workflows(
-    #     summary_gen_wf=SummaryGenerationDummyWorkflow(
-    #         wid=workflow_id, timeout=800, verbose=True
-    #     )
-    # )
-    wf.add_workflows(
+        ),
+        # toggle for skipping SummaryGenerationWorkflow and debugging SlideGenerationWorkflow:
+        # summary_gen_wf=SummaryGenerationDummyWorkflow(
+        #     wid=workflow_id, timeout=800, verbose=True
+        # ),
         slide_gen_wf=SlideGenerationWorkflow(
             wid=workflow_id, timeout=1200, verbose=True
-        )
+        ),
+        wid=workflow_id,
+        timeout=2000,
+        verbose=True,
     )
 
     # wf = SlideGenerationWorkflow(timeout=1200, verbose=True)
@@ -77,14 +75,18 @@ async def run_workflow_endpoint(topic: ResearchTopic):
         logger.debug(f"event_generator: loop id {id(loop)}")
         yield f"{json.dumps({'workflow_id': workflow_id})}\n\n"
 
-        task = asyncio.create_task(wf.run(user_query=topic.query))
-        logger.debug(f"event_generator: Created task {task}")
+        # llama-index-core 0.14.x: stream_events() lives on the Handler returned
+        # by Workflow.run(), not on the Workflow instance. Call base Workflow.run()
+        # directly to obtain the Handler (same approach as run_subworkflow).
+        wf.loop = asyncio.get_running_loop()
+        handler = Workflow.run(wf, user_query=topic.query)
+        logger.debug(f"event_generator: Created handler {handler}")
         try:
-            async for ev in wf.stream_events():
+            async for ev in handler.stream_events():
                 logger.info(f"Sending message to frontend: {ev.msg}")
                 yield f"{ev.msg}\n\n"
                 await asyncio.sleep(0.1)  # Small sleep to ensure proper chunking
-            final_result = await task
+            final_result = await handler
 
             # Construct the download URL
             download_pptx_url = f"http://backend:80/download_pptx/{workflow_id}"

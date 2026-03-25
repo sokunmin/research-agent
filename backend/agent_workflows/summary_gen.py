@@ -3,13 +3,13 @@ import inspect
 import uuid
 
 import click
-from llama_index.core import Settings
 from tavily import TavilyClient
 
 from config import settings
 from services.llms import llm, new_fast_llm
 from services.embeddings import embedder
 import logging
+from llama_index.core import Settings
 from llama_index.core.workflow import (
     Context,
     StartEvent,
@@ -69,9 +69,10 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         self.paper_summary_path = self.papers_images_path
         self.paper_summary_path.mkdir(parents=True, exist_ok=True)
 
-    @step(pass_context=True)
+    @step
     async def tavily_query(self, ctx: Context, ev: StartEvent) -> TavilyResultsEvent:
-        ctx.data["research_topic"] = ev.user_query
+        async with ctx.store.edit_state() as state:
+            state["research_topic"] = ev.user_query
         query = f"arxiv papers about the state of the art of {ev.user_query}"
         ctx.write_event_to_stream(
             Event(
@@ -88,7 +89,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         logger.info(f"tavily results: {results}")
         return TavilyResultsEvent(results=results)
 
-    @step(pass_context=True)
+    @step
     async def get_paper_with_citations(
         self, ctx: Context, ev: TavilyResultsEvent
     ) -> PaperEvent:
@@ -98,7 +99,8 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
             papers += p
         # deduplicate papers
         papers = list({p.entry_id: p for p in papers}.values())
-        ctx.data["n_all_papers"] = len(papers)
+        async with ctx.store.edit_state() as state:
+            state["n_all_papers"] = len(papers)
         logger.info(f"papers found: {[p.title for p in papers]}")
         for paper in papers:
             ctx.write_event_to_stream(
@@ -112,21 +114,23 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
                     ).model_dump()
                 )
             )
-            self.send_event(PaperEvent(paper=paper))
+            ctx.send_event(PaperEvent(paper=paper))
 
-    @step(pass_context=True, num_workers=4)
+    @step(num_workers=settings.NUM_WORKERS_FAST)
     async def filter_papers(self, ctx: Context, ev: PaperEvent) -> FilteredPaperEvent:
         llm = new_fast_llm(temperature=0.0)
+        research_topic = await ctx.store.get("research_topic")
         _, response = await process_citation(
-            0, ctx.data["research_topic"], ev.paper, llm
+            0, research_topic, ev.paper, llm
         )
         return FilteredPaperEvent(paper=ev.paper, is_relevant=response)
 
-    @step(pass_context=True)
+    @step
     async def download_papers(
         self, ctx: Context, ev: FilteredPaperEvent
     ) -> Paper2SummaryDispatcherEvent:
-        ready = ctx.collect_events(ev, [FilteredPaperEvent] * ctx.data["n_all_papers"])
+        n_all_papers = await ctx.store.get("n_all_papers")
+        ready = ctx.collect_events(ev, [FilteredPaperEvent] * n_all_papers)
         if ready is None:
             return None
         papers = sorted(
@@ -161,17 +165,19 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
             papers_path=self.papers_download_path.as_posix()
         )
 
-    @step(pass_context=True)
+    @step
     async def paper2summary_dispatcher(
         self, ctx: Context, ev: Paper2SummaryDispatcherEvent
     ) -> Paper2SummaryEvent:
-        ctx.data["n_pdfs"] = 0
+        async with ctx.store.edit_state() as state:
+            state["n_pdfs"] = 0
         for pdf_name in Path(ev.papers_path).glob("*.pdf"):
             img_output_dir = self.papers_images_path / pdf_name.stem
             img_output_dir.mkdir(exist_ok=True, parents=True)
             summary_fpath = self.paper_summary_path / f"{pdf_name.stem}.md"
-            ctx.data["n_pdfs"] += 1
-            self.send_event(
+            async with ctx.store.edit_state() as state:
+                state["n_pdfs"] = state.get("n_pdfs", 0) + 1
+            ctx.send_event(
                 Paper2SummaryEvent(
                     pdf_path=pdf_name,
                     image_output_dir=img_output_dir,
@@ -179,7 +185,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
                 )
             )
 
-    @step(num_workers=4, pass_context=True)
+    @step(num_workers=settings.NUM_WORKERS_VISION)
     async def paper2summary(
         self, ctx: Context, ev: Paper2SummaryEvent
     ) -> SummaryStoredEvent:
@@ -197,9 +203,10 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         )
         return SummaryStoredEvent(fpath=ev.summary_path)
 
-    @step(pass_context=True)
+    @step
     async def finish(self, ctx: Context, ev: SummaryStoredEvent) -> StopEvent:
-        ready = ctx.collect_events(ev, [SummaryStoredEvent] * ctx.data["n_pdfs"])
+        n_pdfs = await ctx.store.get("n_pdfs")
+        ready = ctx.collect_events(ev, [SummaryStoredEvent] * n_pdfs)
         if ready is None:
             return None
         for e in ready:
