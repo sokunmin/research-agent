@@ -1,3 +1,60 @@
+---
+## [2026-03-20] pyalex `work.get("abstract")` 永遠回傳 None，需從 `abstract_inverted_index` 手動重建 `[通用]`
+原因：OpenAlex API 以倒排索引格式儲存 abstract（`{word: [pos, ...]}`），`abstract` 欄位本身為空；pyalex 文件所述的自動重建在 list/singleton 呼叫中均未生效。
+修正：從 `work["abstract_inverted_index"]` 反轉為 `{pos: word}`，按 key 排序後 join 成純文字；約 20% paper 在 OpenAlex 本身無 abstract（資料源限制，非 API 問題）。
+---
+## [2026-03-19] pyalex 預設 max_retries=0，similar() endpoint 偶發 HTTP 500 直接 crash `[通用]`
+原因：pyalex 預設 `max_retries=0`，similar() 語義搜尋 endpoint 偶發 HTTP 500，直接 raise 不重試
+修正：config 區設定 `pyalex.config.max_retries = 5` 與 `pyalex.config.retry_backoff_factor = 0.5`
+---
+## [2026-03-19] OpenAlex `work["ids"]` 不含 ArXiv ID，必須從 `locations` 解析 `[通用: pyalex]`
+原因：OpenAlex 設計上 ArXiv 不列入 `ids` 欄位，只出現在 `locations[*]["landing_page_url"]`（如 `http://arxiv.org/abs/1706.03762`）。
+修正：掃描 `work["locations"]`，找含 `"arxiv.org"` 的 `landing_page_url`，切最後一段取 ID；`pdf_url` 缺席時用 `f"https://arxiv.org/pdf/{arxiv_id}"` 構造。
+---
+## [2026-03-19] OpenAlex title search 拿到無 ArXiv 的出版版，ArXiv preprint 是未合併的獨立 record `[通用: pyalex title search]`
+原因：同一篇論文的 publisher 版（如 AAAI）與 ArXiv preprint 有時是兩個未 dedup 的 OpenAlex record；`search_filter(title=).get(per_page=1)` 優先回傳引用數高的出版版，其 `locations` 無 `arxiv.org`，preprint record 被忽略。
+修正：改為 `get(per_page=3)`，逐一掃描每個 record 的 `locations`，優先回傳含 `arxiv.org` 的 record；全無時 fallback 回第一筆。
+---
+## [2026-03-19] 學術出版商（AAAI OJS 等）對 `python-requests` User-Agent 回 403 `[通用]`
+原因：AAAI OJS 伺服器黑名單封鎖 `python-requests/x.x.x` UA；`requests.get()` 預設不帶 browser UA，伺服器直接拒絕，curl 同 URL 無此問題。
+修正：統一定義 `_BROWSER_HEADERS = {"User-Agent": "Mozilla/5.0 ... Chrome/120.0.0.0 ..."}` 並套用至所有 `requests.get(url, headers=_BROWSER_HEADERS)`。
+---
+## [2026-03-16] Breaking API change 修改時未全面搜尋 codebase，導致同一問題多處重複出現 `[通用]`
+原因：修改 `run_subworkflow` 的 `stream_events()` 時，只修了當前報錯的地方，未搜尋 `main.py` 等其他使用相同舊 API 的位置，導致下次測試又出現相同錯誤。
+修正：任何 breaking API change，先用 Grep 全面搜尋 codebase 所有使用位置，再用 context7 查最新 API，列出完整影響清單後一次修改完畢。
+---
+## [2026-03-16] llama-index-core 0.14.x `@step(pass_context=True)` 移除 `[版本: llama-index-core>=0.13.0]`
+原因：0.14.x 的 `ctx: Context` 透過 type annotation 自動注入，`pass_context=True` 參數不再需要且已移除，使用會造成 `unexpected keyword argument`。
+修正：所有 `@step(pass_context=True)` 改為 `@step`；有 `num_workers` 的改為 `@step(num_workers=N)`。
+---
+## [2026-03-16] llama-index-core 0.14.x `self.send_event()` 改為 `ctx.send_event()` `[版本: llama-index-core>=0.13.0]`
+原因：0.14.x 將事件發送從 Workflow 實例方法改為 Context 方法，`self.send_event(ev)` 不再存在（會靜默失敗或 AttributeError）。
+修正：所有 step 內的 `self.send_event(ev)` 改為 `ctx.send_event(ev)`。
+---
+## [2026-03-16] llama-index-core 0.14.x `Context.data` dict 完全移除 `[版本: llama-index-core>=0.13.0]`
+原因：0.14.x 將 `ctx.data` dict 改為 async store API，舊的 `ctx.data["key"]` 拋出 `AttributeError: 'Context' object has no attribute 'data'`。
+修正：寫入改為 `async with ctx.store.edit_state() as state: state["key"] = value`；讀取改為 `await ctx.store.get("key")`；concurrent step 的累加用 `edit_state()` 保證 atomic。
+---
+## [2026-03-16] llama-index-core 0.14.x 移除 `Workflow.add_workflows()` `[版本: llama-index-core>=0.13.0]`
+原因：0.13.x 起 sub-workflow 注入改為 `Annotated[T, Resource(factory)]` DI 模式，`add_workflows()` 方法完全移除，呼叫時拋出 `AttributeError: object has no attribute 'add_workflows'`。
+修正：改用 constructor injection——在 orchestrator `__init__` 接收 sub-workflow 實例為參數，存成 `self.xxx_wf`；`@step` 簽名移除 sub-workflow 參數，改用 `self.xxx_wf`；`main.py` 改為在建構時傳入。
+---
+## [2026-03-16] llama-index-core 0.14.x `stream_events()` 從 Workflow 實例移至 Handler `[版本: llama-index-core>=0.13.0]`
+原因：`Workflow.run()` 改為同步回傳 `Handler` 物件，`stream_events()` 移到 Handler 上，Workflow 實例本身不再有此方法，呼叫 `sub_wf.stream_events()` 拋出 `AttributeError`。
+修正（Approach A）：在 `run_subworkflow` 中直接呼叫 `Workflow.run(sub_wf, **kwargs)` 取得 Handler，改用 `handler.stream_events()` 與 `await handler`；並手動補設 `sub_wf.loop = asyncio.get_running_loop()`，因為繞過了 `HumanInTheLoopWorkflow.run()`。完整 Approach B 重構方案見 `BACKUP_PLAN.md`。
+---
+## [2026-03-16] `HumanInTheLoopWorkflow.run()` 為 `async def`，內部 `await Handler` 導致外部無法取得 Handler `[版本: llama-index-core>=0.13.0]`
+原因：`HumanInTheLoopWorkflow.run()` override 為 `async def`，內部執行 `result = await super().run()`，將 `Workflow.run()` 回傳的 Handler 立即消化並回傳最終結果；呼叫端拿到 coroutine 而非 Handler，`handler.stream_events()` 無從取得。`SlideGenerationWorkflow` 的 HITL 步驟另依賴 `self.loop`（`self.loop.create_future()`），繞過此方法需手動補設。
+修正：Approach A 繞過 `HumanInTheLoopWorkflow.run()`，直接呼叫 `Workflow.run(sub_wf)`；Approach B 將 `run()` 改為 sync def 並加 `MLflowAwareHandler` wrapper，詳見 `BACKUP_PLAN.md`。
+---
+## [2026-03-16] MLflow v3 security middleware 拒絕 Docker 容器間 Host header，回傳 403 `[版本: mlflow>=3.x]`
+原因：MLflow v3 新增 security middleware，預設只允許 `localhost` 作為 Host header；backend 容器以 `http://mlflow:8080` 為 tracking URI，Host header 為 `mlflow:8080`，被 middleware 拒絕，log 顯示 `Rejected request with invalid Host header: mlflow:8080`，MLflow API 回傳 403。
+修正：在 `docker-compose.yml` 的 mlflow `command` 加入 `--allowed-hosts mlflow,localhost,127.0.0.1`，允許 Docker 內部網路容器名稱作為合法 Host。
+---
+## [2026-03-16] LiteLLM model 字串必須帶 `{provider}/{model}` 前綴，否則報 LLM Provider NOT provided `[通用]`
+原因：LiteLLM 以 model 字串的第一段作為 provider 識別（如 `groq/`、`gemini/`、`openrouter/`），若只寫 `model_name`（如 `qwen/qwen3-32b`，其中 `qwen` 不是合法 provider）則拋出 `BadRequestError: LLM Provider NOT provided`；唯一例外是 OpenAI（預設 provider）。
+修正：所有 model 字串改為 `{provider}/{model}` 格式（如 `groq/moonshotai/kimi-k2-instruct`）；可用 `litellm.provider_list` 確認合法 provider 名稱。
+---
 ## [2026-03-15] `draw_all_possible_flows` 從 `llama_index.core.workflow` 移至 `llama_index.utils.workflow` `[版本: llama-index-workflows>=2.9.0]`
 原因：llama-index-workflows 2.9.0 起，`drawing.py` 中的舊函數 raise error，且 `llama_index.core.workflow.__init__.py` 不再 export `draw_all_possible_flows`，造成頂層 import 時 `ImportError`。
 修正：從 `[tool.poetry.dependencies]` 新增 `llama-index-utils-workflow = ">=0.9.5"`；將 `draw_all_possible_flows` 的 import 從模組頂層移入 `if __name__ == "__main__":` 區塊，改用 `from llama_index.utils.workflow import draw_all_possible_flows`。

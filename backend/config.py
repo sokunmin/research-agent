@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     # ── Secrets ───────────────────────────────────────────────────────────────
     TAVILY_API_KEY: str
     GEMINI_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     MISTRAL_API_KEY: str = ""
 
@@ -14,13 +15,29 @@ class Settings(BaseSettings):
     SLIDE_TEMPLATE_PATH: str       # container path to the PPTX template asset
 
     # ── LiteLLM model IDs ─────────────────────────────────────────────────────
-    LLM_SMART_MODEL: str = "gemini/gemini-2.5-flash"
-    LLM_FAST_MODEL: str = "gemini/gemini-2.5-flash"
+    LLM_SMART_MODEL: str = "groq/openai/gpt-oss-120b"
+    LLM_FAST_MODEL: str = "groq/openai/gpt-oss-20b"
     LLM_VISION_MODEL: str = "gemini/gemini-2.5-flash"
     LLM_VISION_FALLBACK_MODEL: str = "openrouter/google/gemma-3-27b-it:free"
     LLM_EMBED_MODEL: str = "gemini/gemini-embedding-001"
 
     MAX_TOKENS: int = 4096
+
+    # ── LLM concurrency & rate-limit tuning ───────────────────────────────────
+    # smart_llm: outlines_with_layout, slide_gen (ReAct), modify_slides
+    NUM_WORKERS_SMART: int = 1
+    DELAY_SECONDS_SMART: float = 0.0
+    # fast_llm: filter_papers, summary2outline
+    NUM_WORKERS_FAST: int = 2
+    DELAY_SECONDS_FAST: float = 2.0   # Groq RPM=60, 2 workers → 60/60×2=2s
+    # vision_llm: paper2summary, validate_slides
+    NUM_WORKERS_VISION: int = 2
+    DELAY_SECONDS_VISION: float = 12.0  # Gemini RPM=10, 2 workers → 60/10×2=12s
+
+    # ── Paper discovery tuning ────────────────────────────────────────────────
+    TAVILY_MAX_RESULTS: int = 2          # number of seed papers from Tavily
+    NUM_MAX_CITING_PAPERS: int = 10      # max citing papers per seed (was 50)
+    NUM_MAX_FINAL_PAPERS: int = 5        # top-N papers to download after filtering
 
     # ── Optional provider config ───────────────────────────────────────────────
     OPENALEX_API_KEY: str = ""

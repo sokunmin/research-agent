@@ -66,6 +66,7 @@ services:
       --port 8080
       --backend-store-uri sqlite:////mlruns/mlruns.db
       --default-artifact-root /mlartifacts
+      --allowed-hosts "mlflow,localhost,127.0.0.1"
 
 networks:
   app-network:

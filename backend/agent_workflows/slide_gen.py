@@ -267,6 +267,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         """Convert the summary content of one paper to slide outline of one page, mainly
         condense and shorten the elaborated summary content to short sentences or bullet points.
         """
+        await asyncio.sleep(settings.DELAY_SECONDS_FAST)
         ctx.write_event_to_stream(
             Event(
                 msg=WorkflowStreamingEvent(
@@ -516,6 +517,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         self, ctx: Context, ev: SlideGeneratedEvent
     ) -> StopEvent | SlideValidationEvent:
         """Validate the generated slide deck"""
+        await asyncio.sleep(settings.DELAY_SECONDS_VISION)
         async with ctx.store.edit_state() as state:
             state["n_retry"] = state.get("n_retry", 0) + 1
             state["latest_pptx_file"] = Path(ev.pptx_fpath).name
