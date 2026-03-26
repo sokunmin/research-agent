@@ -1,4 +1,16 @@
 ---
+## [2026-03-26] litellm 在 mock 攔截前嘗試 fetch 外部 https:// image URL，導致 pytest hang `[通用: litellm + unittest.mock]`
+原因：`patch("services.multimodal.litellm.completion")` 對純文字 call 有效，但訊息含 `image_url` 且為外部 URL 時，litellm 內部先 fetch 該 URL，此行為發生在 mock 接手之前；`example.com` 無回應導致 test 無限 hang。
+修正：測試中一律改用 image bytes（`image=raw_bytes, image_mimetype="image/jpeg"`），完全不使用外部 URL；fixture 圖片放 `tests/fixtures/`，一次載入為 `_TEST_IMAGE_BYTES` 共用。
+---
+## [2026-03-26] config.py 必填欄位（MLFLOW_TRACKING_URI 等）無 default，本機測試缺值直接 ValidationError `[環境: 無 docker-compose]`
+原因：`MLFLOW_TRACKING_URI`、`WORKFLOW_ARTIFACTS_ROOT`、`SLIDE_TEMPLATE_PATH` 由 docker-compose 環境變數注入，無 default；本機跑 pytest 時 `.env` 未包含這些欄位，`Settings()` 在 import 時直接拋 `ValidationError`，所有 import 該模組的 test 全部 collection error。
+修正：在 `.env` 加入本機 stub 值（`MLFLOW_TRACKING_URI=http://localhost:8080` 等），或在 `conftest.py` 以 `os.environ.setdefault` 補設。
+---
+## [2026-03-26] pydantic BaseSettings v2 對 .env 裡已移除的欄位拋 `extra_forbidden` `[版本: pydantic-settings>=2.0]`
+原因：config.py 移除舊欄位（如 `TAVILY_MAX_RESULTS`、`NUM_MAX_CITING_PAPERS`）後，`.env` 若仍保留這些 key，pydantic v2 預設行為為拒絕並報 `Extra inputs are not permitted`；錯誤訊息不直觀，容易誤判為欄位格式問題。
+修正：每次移除 config 欄位後，同步清理 `.env` 中對應的舊 key；`.env.example` 可作為 canonical reference 確認哪些 key 仍有效。
+---
 ## [2026-03-20] pyalex `work.get("abstract")` 永遠回傳 None，需從 `abstract_inverted_index` 手動重建 `[通用]`
 原因：OpenAlex API 以倒排索引格式儲存 abstract（`{word: [pos, ...]}`），`abstract` 欄位本身為空；pyalex 文件所述的自動重建在 list/singleton 呼叫中均未生效。
 修正：從 `work["abstract_inverted_index"]` 反轉為 `{pos: word}`，按 key 排序後 join 成純文字；約 20% paper 在 OpenAlex 本身無 abstract（資料源限制，非 API 問題）。

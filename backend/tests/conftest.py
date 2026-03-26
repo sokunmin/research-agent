@@ -10,9 +10,6 @@ if _env_file.exists():
     from dotenv import load_dotenv
     load_dotenv(_env_file)
 
-# config.py requires TAVILY_API_KEY (only field with no default after Azure removal)
-os.environ.setdefault("TAVILY_API_KEY", "dummy-tavily-key")
-
 # Fix macOS Python SSL certificate verification (common issue with python.org installer)
 try:
     import certifi
@@ -22,11 +19,14 @@ except ImportError:
     pass
 
 
+_LLM_KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY")
+
+
 @pytest.fixture(autouse=True)
 def skip_llm_without_key(request):
     if request.node.get_closest_marker("llm"):
-        if not os.environ.get("GEMINI_API_KEY"):
-            pytest.skip("GEMINI_API_KEY not set — skipping llm test")
+        if not any(os.environ.get(k) for k in _LLM_KEY_VARS):
+            pytest.skip("No LLM API key set — skipping llm test")
 
 
 @pytest.fixture(autouse=True)
@@ -35,3 +35,12 @@ def skip_docker_unavailable(request):
         result = subprocess.run(["docker", "info"], capture_output=True)
         if result.returncode != 0:
             pytest.skip("Docker not available — skipping docker test")
+
+
+@pytest.fixture(autouse=True)
+def _skip_marker_by_default(request):
+    """test_3_marker.py runs marker models (~3–5 GB download, 10–20 min).
+    Skipped by default; run explicitly with: pytest tests/.../test_3_marker.py
+    """
+    if request.node.path.name == "test_3_marker.py":
+        pytest.skip("Skipped by default (slow — marker models); run file explicitly to enable")
