@@ -36,8 +36,6 @@ from llama_index.core.llms import ImageBlock, TextBlock
 
 def _image_doc_to_content_block(doc: ImageDocument) -> dict:
     """Convert a LlamaIndex ImageDocument to a LiteLLM image_url content block."""
-    if doc.image_url:
-        return {"type": "image_url", "image_url": {"url": doc.image_url}}
     if doc.image_path or doc.image:
         raw: bytes = (
             doc.image if isinstance(doc.image, bytes) else Path(doc.image_path).read_bytes()
@@ -50,8 +48,6 @@ def _image_doc_to_content_block(doc: ImageDocument) -> dict:
 
 def _image_block_to_content_block(block: ImageBlock) -> dict:
     """Convert a LlamaIndex ImageBlock to a LiteLLM image_url content block."""
-    if block.url:
-        return {"type": "image_url", "image_url": {"url": str(block.url)}}
     if block.path:
         raw = Path(str(block.path)).read_bytes()
         b64 = base64.b64encode(raw).decode()

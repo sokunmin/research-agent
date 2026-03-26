@@ -13,8 +13,9 @@ from pathlib import Path
 
 import pytest
 
+import requests
 from agent_workflows.paper_scraping import (
-    download_paper_arxiv,
+    _BROWSER_HEADERS,
     paper2md,
     parse_pdf,
     parse_paper_pdfs,
@@ -32,7 +33,13 @@ def papers_dir():
     pdf_path = PAPERS_DIR / pdf_filename
 
     if not (pdf_path.exists() and pdf_path.stat().st_size > 0):
-        download_paper_arxiv(ARXIV_VIT, PAPERS_DIR.as_posix(), pdf_filename)
+        resp = requests.get(
+            f"https://arxiv.org/pdf/{ARXIV_VIT}",
+            headers=_BROWSER_HEADERS,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        pdf_path.write_bytes(resp.content)
 
     assert pdf_path.exists(), f"PDF not found after download: {pdf_path}"
     return PAPERS_DIR
