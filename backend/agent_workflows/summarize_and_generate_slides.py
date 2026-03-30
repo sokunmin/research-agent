@@ -4,7 +4,6 @@ import uuid
 import click
 from services.llms import llm
 from services.embeddings import embedder
-import logging
 
 from llama_index.core import Settings
 from llama_index.core.workflow import (
@@ -18,16 +17,9 @@ from llama_index.core.workflow import (
 from agent_workflows.events import *
 from agent_workflows.slide_gen import SlideGenerationWorkflow
 from agent_workflows.summary_gen import SummaryGenerationWorkflow
+from utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-if not logger.hasHandlers():
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+logger = get_logger(__name__)
 
 Settings.llm = llm
 Settings.embed_model = embedder
@@ -77,6 +69,8 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
         try:
             async for event in handler.stream_events():
                 logger.debug(f"Relaying event from sub-workflow: {event}")
+                if isinstance(event, StopEvent):
+                    continue
                 ctx.write_event_to_stream(event)
             result = await handler
             logger.debug(f"Sub-workflow completed with result: {result}")
