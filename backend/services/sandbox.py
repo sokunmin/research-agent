@@ -17,6 +17,7 @@ Requires Docker Desktop to be running. Container pool pre-installs python-pptx.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -27,6 +28,10 @@ from llama_index.core.tools import FunctionTool
 
 # Working directory inside every sandbox container
 SANDBOX_DIR = "/sandbox"
+
+# llm-sandbox writes each run() call as <uuid32>.py inside the container workdir and never
+# cleans it up. Filter these execution artifacts out of file listings shown to the LLM.
+_SANDBOX_ARTIFACT_RE = re.compile(r'^[0-9a-f]{32}\.[a-z]+$')
 
 
 @dataclass
@@ -76,7 +81,7 @@ class LlmSandboxToolSpec:
     def run_code(self, code: str) -> str:
         """Execute Python code in the sandbox container and return stdout.
         python-pptx is pre-installed. Files persist at /sandbox/ between calls."""
-        with ArtifactSandboxSession(pool=self._pool) as session:
+        with ArtifactSandboxSession(pool=self._pool, enable_plotting=False) as session:
             result = session.run(code)
         if result.exit_code != 0:
             return f"ERROR (exit_code={result.exit_code}):\n{result.stderr}"
@@ -101,7 +106,7 @@ class LlmSandboxToolSpec:
 
     def list_files(self, remote_dir: str = SANDBOX_DIR) -> list[RemoteFile]:
         """List files in the sandbox directory. Returns RemoteFile objects."""
-        with ArtifactSandboxSession(pool=self._pool) as session:
+        with ArtifactSandboxSession(pool=self._pool, enable_plotting=False) as session:
             result = session.run(
                 f"import os\n"
                 f"entries = [f for f in os.listdir('{remote_dir}') "
@@ -111,7 +116,7 @@ class LlmSandboxToolSpec:
         return [
             RemoteFile(filename=name, file_full_path=f"{remote_dir}/{name}")
             for name in result.stdout.strip().splitlines()
-            if name
+            if name and not _SANDBOX_ARTIFACT_RE.match(name)
         ]
 
     def download_file_to_local(
