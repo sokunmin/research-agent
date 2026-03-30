@@ -10,6 +10,9 @@ Supported model ID formats (LiteLLM):
 """
 from typing import Optional
 
+import os
+import litellm
+
 from llama_index.core.callbacks import CallbackManager
 from llama_index.llms.litellm import LiteLLM
 from llama_index.embeddings.litellm import LiteLLMEmbedding
@@ -27,6 +30,7 @@ class ModelConfig(BaseModel):
     embed_model: str           # embedding model
     relevance_embed_model: str # embedding model for paper relevance pre-screening
     max_tokens: int = 4096
+    disable_think: bool = False  # pass extra_body={"think": False} (Ollama think-mode models)
 
 
 class ModelFactory:
@@ -39,12 +43,17 @@ class ModelFactory:
                   callback_manager: Optional[CallbackManager] = None) -> LiteLLM:
         kw = dict(model=self._config.smart_model, temperature=temperature,
                   max_tokens=self._config.max_tokens)
+        if self._config.disable_think:
+            kw["additional_kwargs"] = {"extra_body": {"think": False}}
         if callback_manager:
             kw["callback_manager"] = callback_manager
         return LiteLLM(**kw)
 
     def fast_llm(self, temperature: float = 0.0) -> LiteLLM:
-        return LiteLLM(model=self._config.fast_model, temperature=temperature)
+        kw = dict(model=self._config.fast_model, temperature=temperature)
+        if self._config.disable_think:
+            kw["additional_kwargs"] = {"extra_body": {"think": False}}
+        return LiteLLM(**kw)
 
     def embed_model(self) -> LiteLLMEmbedding:
         # NOTE: LiteLLMEmbedding uses `model_name`, not `model`
@@ -73,9 +82,44 @@ class ModelFactory:
         return LiteLLMMultiModal(**kw)
 
 
+def _register_ollama_function_calling(config: ModelConfig) -> None:
+    """Dynamically register all local Ollama models as function-calling capable.
+
+    Ollama Modelfiles often omit the {{ tools }} block even when the underlying
+    engine supports tool calls.  LiteLLM's /api/show heuristic then returns
+    supports_function_calling=False, which causes LlamaIndex's
+    FunctionCallingProgram guard to raise before any API call is made.
+
+    Only runs when at least one configured model uses the ollama/ provider to
+    avoid an unnecessary HTTP call in non-Ollama environments.
+
+    Ref: https://docs.litellm.ai/docs/providers/ollama#tool-calling
+    """
+    model_names = [config.fast_model, config.smart_model, config.vision_model]
+    if not any(m.startswith("ollama/") for m in model_names):
+        return
+
+    # Ollama does not support OpenAI-specific params (e.g. parallel_tool_calls)
+    # injected by LlamaIndex's FunctionCallingProgram. Drop them silently.
+    litellm.drop_params = True
+
+    from litellm.llms.ollama.common_utils import OllamaModelInfo
+    api_base = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
+    raw_models = OllamaModelInfo().get_models(api_base=api_base)
+    # get_models() returns bare names (e.g. "qwen3.5:2b") on success, but
+    # silently falls back to prefixed names (e.g. "ollama/llama2") when the
+    # Ollama server is unreachable.  Skip prefixed entries to avoid double-
+    # prefixing and registering stale fallback models.
+    litellm.register_model(model_cost={
+        f"ollama/{name}": {"supports_function_calling": True}
+        for name in raw_models
+        if not name.startswith("ollama/")
+    })
+
+
 def _build() -> ModelFactory:
     from config import settings
-    return ModelFactory(ModelConfig(
+    config = ModelConfig(
         smart_model=settings.LLM_SMART_MODEL,
         fast_model=settings.LLM_FAST_MODEL,
         vision_model=settings.LLM_VISION_MODEL,
@@ -83,7 +127,10 @@ def _build() -> ModelFactory:
         embed_model=settings.LLM_EMBED_MODEL,
         relevance_embed_model=settings.LLM_RELEVANCE_EMBED_MODEL,
         max_tokens=settings.MAX_TOKENS,
-    ))
+        disable_think=settings.LLM_DISABLE_THINK,
+    )
+    _register_ollama_function_calling(config)
+    return ModelFactory(config)
 
 
 model_factory: ModelFactory = _build()
