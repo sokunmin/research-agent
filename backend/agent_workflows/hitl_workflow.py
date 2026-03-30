@@ -25,6 +25,7 @@ class HumanInTheLoopWorkflow(Workflow):
         # mlflow.config.enable_async_logging()
         # mlflow.tracing.enable()
         mlflow.llama_index.autolog()
+        mlflow.litellm.autolog()
         with mlflow.start_run():
             logger.debug(
                 f"{self.__class__.__name__}: MLflow tracking URI {mlflow.get_tracking_uri()}"

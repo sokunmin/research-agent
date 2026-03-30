@@ -1,5 +1,5 @@
 # Project Backlog
-> 最後更新：2026-03-12
+> 最後更新：2026-03-12 (mlflow-v3-upgrade #08 新增)
 
 ## 開發進度
 
@@ -12,6 +12,7 @@
 | 05 | litellm-vlm | - | feat/litellm-vlm | ✅ done | - | - | 2026-03-10 |
 | 06 | azure-cleanup | - | feat/azure-cleanup | ✅ done | - | - | 2026-03-11 |
 | 07 | gen-test-cases | - | feat/gen-test-cases | ✅ done | - | ✅ passed | 2026-03-12 |
+| 08 | mlflow-v3-upgrade | - | feat/mlflow-v3-upgrade | ✅ done | - | ✅ passed | 2026-03-12 |
 
 ## 狀態說明
 - ⬜ `todo`：尚未開始

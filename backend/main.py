@@ -21,8 +21,6 @@ import os
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-os.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = "/mlruns"
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 # Add handler and formatter if not already configured
