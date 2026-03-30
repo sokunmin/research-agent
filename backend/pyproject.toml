@@ -30,12 +30,11 @@ marker-pdf = ">=1.0.0"
 llama-index-storage-docstore-redis = "*"
 llama-index-storage-index-store-redis = "*"
 pyvis = "^0.3.2"
-llama-index-tools-azure-code-interpreter = "*"
+llm-sandbox = {extras = ["docker"], version = "*"}
 python-pptx = "^1.0.2"
 pymupdf = "^1.24.9"
 fastapi = "^0.112.2"
 uvicorn = "^0.30.6"
-azure-cli= "^2.64.0"
 llama-index-tools-tavily-research = "*"
 mlflow = "^2.16.0"
 

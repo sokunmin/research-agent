@@ -5,7 +5,7 @@ Switch providers by changing LLM_*_MODEL env vars in .env — no code changes ne
 Supported model ID formats (LiteLLM):
   gemini/gemini-2.5-flash                           — Google AI Studio (free tier)
   openrouter/meta-llama/llama-3.3-70b-instruct:free — OpenRouter (free tier)
-  azure/gpt-4o                                      — Azure OpenAI via LiteLLM
+  openai/gpt-4o                                     — OpenAI
   anthropic/claude-3-5-sonnet-20241022              — Anthropic
 """
 from dataclasses import dataclass

@@ -14,7 +14,6 @@ services:
       - .env:/app/.env
       - ./data:/app/data
       - ./workflow_artifacts:/app/workflow_artifacts
-      - ~/.azure:/root/.azure
       - ./mlruns:/app/mlruns:rw
       - ./mlartifacts:/app/mlartifacts:rw
 

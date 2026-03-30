@@ -1,4 +1,20 @@
 ---
+## [2026-03-11] `llama-index-core>=0.14` 附帶 `llama-index-workflows`，本地 `workflows/` 被 site-packages 覆蓋 `[版本: llama-index-core>=0.14]`
+原因：`llama-index-workflows` v2.15.1 在 site-packages 安裝同名的 `workflows/` package（含 `__init__.py`），本地 `backend/workflows/`（無 `__init__.py`，namespace package）優先順序低，`from workflows.events import *` 實際取到 LlamaIndex 內部事件，自定義 `SummaryEvent` 等不存在，拋出 `NameError`。`__init__.py` 補救無效（會破壞 `llama_index.core` 自身對 `workflows.context` 的 import）。
+修正：將本地 `workflows/` 改名為不衝突的名稱（本專案改為 `agent_workflows/`），並全局替換所有 `from workflows.` import。
+---
+## [2026-03-11] context7 MCP 不同查詢對同一 API 描述不一致，需多次查詢交叉驗證 `[通用]`
+原因：不同 subagent 查詢 context7 MCP 得到矛盾結果（例如 `update_prompts()` 在第一次查詢被描述為已移除，第二次查詢才確認仍存在），原因可能是搜尋 token 不同導致命中不同文件段落。
+修正：對關鍵 API 存在性有疑問時，至少發起兩次不同角度的 context7 查詢，或直接用 `hasattr()` 在實際環境中驗證，以實際執行結果為準。
+---
+## [2026-03-11] `ReActAgent.update_prompts({"react_header": PromptTemplate(...)})` template 不可含 `{context_str}` `[版本: llama-index-core>=0.14]`
+原因：`react_header` 是固定 header prompt，agent 渲染時不傳入 `context_str` 這個 key，若 PromptTemplate 字串含 `{context_str}` 佔位符則拋出 `KeyError: 'context_str'`。
+修正：`react_header` 的 PromptTemplate 只寫純文字 system prompt，不加任何 `{...}` 佔位符；若需動態變數，改在 `agent.run(prompt, ctx=ctx)` 的 prompt 字串中組合。
+---
+## [2026-03-11] `ReActAgent.from_tools()` / `agent.chat()` 在 llama-index-core 0.14.x 不存在 `[版本: llama-index-core>=0.14]`
+原因：0.14.x 將 ReActAgent 重構為 Workflow-based，`from_tools()` classmethod 與同步 `chat()` 均移除；import 路徑、建構方式、執行方式全部改變，AttributeError 不直觀。
+修正：`from llama_index.core.agent.workflow import ReActAgent`；建構改為 `ReActAgent(tools=tools, llm=llm, timeout=120)`（`max_iterations` → `timeout` 秒）；執行改為 `await agent.run("...")`，腳本層用 `asyncio.run(async_fn())` 包裝；多輪對話需傳入 `ctx=Context(agent)` 保留歷史。
+---
 ## [2026-03-10] LiteLLM 1.80 gemini/text-embedding-004 路由錯誤，正確 model 為 gemini/gemini-embedding-001 `[版本: litellm==1.80]`
 原因：LiteLLM 1.80 對 `gemini/` prefix 的 embedding model 統一使用 `batchEmbedContents` endpoint；但 `text-embedding-004` 已從 Google AI Studio API 移除，只剩 `gemini-embedding-001` 支援 `embedContent`。
 修正：將 `LLM_EMBED_MODEL` 預設值改為 `gemini/gemini-embedding-001`（dim=3072）。

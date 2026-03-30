@@ -3,8 +3,8 @@ from typing import List
 
 from llama_index.core.workflow import Event
 
-from workflows.paper_scraping import Paper, IsCitationRelevant
-from workflows.schemas import *
+from agent_workflows.paper_scraping import Paper, IsCitationRelevant
+from agent_workflows.schemas import *
 
 
 class TavilyResultsEvent(Event):

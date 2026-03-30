@@ -4,11 +4,13 @@ import random
 import shutil
 import string
 import uuid
+from pathlib import Path
+from typing import Optional
 
 import click
 
 from llama_index.core import Settings, SimpleDirectoryReader
-from llama_index.core.agent import ReActAgent
+from llama_index.core.agent.workflow import ReActAgent, AgentStream, ToolCall
 from llama_index.core.output_parsers import PydanticOutputParser
 from llama_index.core.program import (
     FunctionCallingProgram,
@@ -40,20 +42,17 @@ from llama_index.core.workflow import (
     StartEvent,
     StopEvent,
     step,
-    draw_all_possible_flows,
 )
 
 from utils.tools import get_all_layouts_info
 import inspect
-from llama_index.tools.azure_code_interpreter import (
-    AzureCodeInterpreterToolSpec,
-)
+from services.sandbox import LlmSandboxToolSpec, SANDBOX_DIR
 
 from utils.file_processing import pptx2images
-from workflows.events import *
+from agent_workflows.events import *
 import mlflow
 
-from workflows.hitl_workflow import HumanInTheLoopWorkflow
+from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -98,12 +97,9 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         )
         self.workflow_artifacts_path.mkdir(parents=True, exist_ok=True)
 
-        self.azure_code_interpreter = AzureCodeInterpreterToolSpec(
-            pool_management_endpoint=settings.AZURE_DYNAMIC_SESSION_MGMT_ENDPOINT,
+        self.sandbox = LlmSandboxToolSpec(
             local_save_path=self.workflow_artifacts_path.as_posix(),
         )
-        spec_functions = ["code_interpreter", "list_files", "upload_file"]
-        self.azure_code_interpreter.spec_functions = spec_functions
         self.pdf2images_tool = FunctionTool.from_defaults(fn=pptx2images)
         self.save_python_code_tool = FunctionTool.from_defaults(
             fn=self.save_python_code
@@ -114,6 +110,12 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         self.parent_workflow = None
         self.user_input_future = asyncio.Future()
         self.user_input = None
+
+    def __del__(self) -> None:
+        try:
+            self.sandbox.close()
+        except Exception:
+            pass
 
     def copy_final_slide(self):
         """
@@ -170,14 +172,13 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         """Get all layout information"""
         return self.all_layout
 
-    def download_all_files_from_session(self):
-        """Download all files from the Azure session"""
-        remote_files = self.azure_code_interpreter.list_files()
+    def download_all_files_from_session(self) -> list[str]:
+        """Download all files from the sandbox container to the workflow artifacts path."""
         local_files = []
-        for f in remote_files:
-            logger.info(f"Downloading remote file: {f.file_full_path}")
+        for f in self.sandbox.list_files():
             local_path = f"{self.workflow_artifacts_path.as_posix()}/{f.filename}"
-            self.azure_code_interpreter.download_file_to_local(
+            logger.info(f"Downloading sandbox file: {f.file_full_path} → {local_path}")
+            self.sandbox.download_file_to_local(
                 remote_file_path=f.file_full_path,
                 local_file_path=local_path,
             )
@@ -189,37 +190,37 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         with open(f"{self.workflow_artifacts_path}/code.py", "w") as f:
             f.write(code)
 
-    @staticmethod
-    def _agent_thought_to_stream(ctx, agent_task):
-        cur_reasonings = agent_task.extra_state["current_reasoning"]
-        for r in cur_reasonings:
-            ctx.write_event_to_stream(
-                Event(
-                    msg=WorkflowStreamingEvent(
-                        event_type="server_message",
-                        event_sender=inspect.currentframe().f_code.co_name,
-                        event_content={
-                            "message": f"React Agent Reasoning: {r.get_content()}"
-                        },
-                    ).model_dump()
-                )
-            )
+    async def run_react_agent(
+        self, agent: ReActAgent, prompt: str, wf_ctx: Context
+    ) -> None:
+        """Run agent and forward streaming events to the workflow context.
 
-    async def run_react_agent(self, agent, task, ctx):
-        step_output = agent.run_step(task.task_id)
-        # self._agent_thought_to_stream(ctx, task)
-        while not step_output.is_last:
-            step_output = agent.run_step(task.task_id)
-            # self._agent_thought_to_stream(ctx, task)
-        response = agent.finalize_response(task.task_id)
-        ctx.write_event_to_stream(
+        Uses llama-index 0.14.x event streaming API:
+          handler = agent.run(prompt)
+          async for ev in handler.stream_events(): ...
+          response = await handler
+        """
+        handler = agent.run(prompt)
+        async for ev in handler.stream_events():
+            if isinstance(ev, AgentStream) and ev.delta:
+                wf_ctx.write_event_to_stream(
+                    Event(
+                        msg=WorkflowStreamingEvent(
+                            event_type="server_message",
+                            event_sender="react_agent",
+                            event_content={"message": f"Reasoning: {ev.delta}"},
+                        ).model_dump()
+                    )
+                )
+            elif isinstance(ev, ToolCall):
+                logger.info(f"[Tool] {ev.tool_name}({ev.tool_kwargs})")
+        response = await handler
+        wf_ctx.write_event_to_stream(
             Event(
                 msg=WorkflowStreamingEvent(
                     event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={
-                        "message": f"React Agent Final Response: {response}"
-                    },
+                    event_sender="react_agent",
+                    event_content={"message": f"Agent response: {response}"},
                 ).model_dump()
             )
         )
@@ -467,14 +468,13 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                 ).model_dump()
             )
         )
-        agent = ReActAgent.from_tools(
-            tools=self.azure_code_interpreter.to_tool_list() + [self.all_layout_tool],
+        agent = ReActAgent(
+            tools=self.sandbox.to_tool_list() + [self.all_layout_tool],
             llm=new_llm(0.1),
             verbose=True,
-            max_iterations=50,
+            timeout=300,
         )
-
-        prompt = (
+        system_prompt = (
             SLIDE_GEN_PMT.format(
                 json_file_path=ev.outlines_fpath.as_posix(),
                 template_fpath=self.slide_template_path,
@@ -482,20 +482,17 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             )
             + REACT_PROMPT_SUFFIX
         )
-        agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
+        agent.update_prompts({"react_header": PromptTemplate(system_prompt)})
 
-        res = self.azure_code_interpreter.upload_file(
-            local_file_path=self.slide_template_path
-        )
-        logger.info(f"Uploaded file to Azure: {res}")
+        upload_result = self.sandbox.upload_file(local_file_path=self.slide_template_path)
+        logger.info(upload_result)
 
-        # use `agent.create_task` to get the stepwise execution result,
-        # end result is equal to `agent.chat`
-        task = agent.create_task(
+        await self.run_react_agent(
+            agent,
             f"An example of outline item in json is {ev.outline_example.model_dump()},"
-            f" generate a slide deck"
+            f" generate a slide deck",
+            ctx,
         )
-        await self.run_react_agent(agent, task, ctx)
         local_files = self.download_all_files_from_session()
         ctx.write_event_to_stream(
             Event(
@@ -633,33 +630,33 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             )
         )
 
-        slide_pptx_path = f"/mnt/data/{ctx.data['latest_pptx_file']}"
-        logger.info(f"[modify_slides] slide_pptx_path: {slide_pptx_path}")
-        remote_files = self.azure_code_interpreter.list_files()
-        for f in remote_files:
+        # Locate the current pptx in the sandbox (fall back to default path if not found)
+        latest_filename = ctx.data["latest_pptx_file"]
+        slide_pptx_path = f"{SANDBOX_DIR}/{latest_filename}"
+        for f in self.sandbox.list_files():
             if f.filename == self.generated_slide_fname:
                 slide_pptx_path = f.file_full_path
+                break
         modified_pptx_path = f"{Path(slide_pptx_path).stem}_v{ctx.data['n_retry']}.pptx"
-        logger.info(f"[modify_slides] modified_pptx_path: {modified_pptx_path}")
+        logger.info(f"[modify_slides] slide_pptx_path={slide_pptx_path}, modified={modified_pptx_path}")
 
-        agent = ReActAgent.from_tools(
-            tools=self.azure_code_interpreter.to_tool_list() + [self.all_layout_tool],
+        agent = ReActAgent(
+            tools=self.sandbox.to_tool_list() + [self.all_layout_tool],
             llm=new_llm(0.1),
             verbose=True,
-            max_iterations=50,
+            timeout=300,
         )
-        prompt = SLIDE_MODIFICATION_PMT + REACT_PROMPT_SUFFIX
+        agent.update_prompts(
+            {"react_header": PromptTemplate(SLIDE_MODIFICATION_PMT + REACT_PROMPT_SUFFIX)}
+        )
 
-        agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
-        # use `agent.create_task()` to get the stepwise execution result,
-        # end result is equal to `agent.chat()`
-        task = agent.create_task(
-            f"The latest version of the slide deck can be found here: "
-            f"`/mnt/data/{ctx.data['latest_pptx_file']}`.\n"
-            f"The feedback provided is as follows: '{ev.model_dump()}'\n"
-            f"Save the final modified slide deck as `{modified_pptx_path}`."
+        await self.run_react_agent(
+            agent,
+            f"The latest version of the slide deck is at `{slide_pptx_path}`.\n"
+            f"The feedback is: '{ev.model_dump()}'\n"
+            f"Save the modified slide deck as `{modified_pptx_path}`.",
+            ctx,
         )
-        await self.run_react_agent(agent, task, ctx)
 
         self.download_all_files_from_session()
         return SlideGeneratedEvent(
@@ -684,7 +681,6 @@ async def run_workflow(file_dir: str):
     default="./data/summaries_test",
 )
 def main(file_dir: str):
-    draw_all_possible_flows(SlideGenerationWorkflow, filename="slide_gen_flows.html")
     mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
     mlflow.set_experiment("research-agent-slide-gen-wf")
     mlflow.llama_index.autolog()

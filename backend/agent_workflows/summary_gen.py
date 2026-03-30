@@ -19,14 +19,14 @@ from llama_index.core.workflow import (
 )
 
 from utils.file_processing import pdf2images
-from workflows.events import *
-from workflows.hitl_workflow import HumanInTheLoopWorkflow
-from workflows.paper_scraping import (
+from agent_workflows.events import *
+from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow
+from agent_workflows.paper_scraping import (
     get_paper_with_citations,
     process_citation,
     download_relevant_citations,
 )
-from workflows.summary_using_images import (
+from agent_workflows.summary_using_images import (
     summarize_paper_images,
     save_summary_as_markdown,
 )
