@@ -10,9 +10,15 @@ services:
       - "8000:80"
     networks:
       - app-network
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      WORKFLOW_ARTIFACTS_ROOT: /app/workflow_artifacts
+      SLIDE_TEMPLATE_PATH: /app/assets/pptx-template.pptx
+      MLFLOW_TRACKING_URI: http://mlflow:8080
     volumes:
-      - .env:/app/.env
-      - ./data:/app/data
+      - ./assets:/app/assets:ro
       - ./workflow_artifacts:/app/workflow_artifacts
       - ./mlruns:/app/mlruns:rw
       - ./mlartifacts:/app/mlartifacts:rw

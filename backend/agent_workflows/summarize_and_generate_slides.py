@@ -14,7 +14,6 @@ from llama_index.core.workflow import (
     StopEvent,
     Workflow,
     step,
-    draw_all_possible_flows,
 )
 
 from agent_workflows.events import *
@@ -115,6 +114,7 @@ def main(user_query: str):
 
 
 if __name__ == "__main__":
+    from llama_index.utils.workflow import draw_all_possible_flows
     draw_all_possible_flows(
         SummaryAndSlideGenerationWorkflow, filename="summary_slide_gen_flows.html"
     )

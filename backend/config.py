@@ -1,12 +1,17 @@
-from typing import Literal
-
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    # ── Secrets ───────────────────────────────────────────────────────────────
     TAVILY_API_KEY: str
-    OPENALEX_API_KEY: str = ""   # 免費，空值也能用但 rate limit 較低
-    OPENALEX_EMAIL: str = ""     # 建議填寫，進入 polite pool（較高 rate limit）
+    GEMINI_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
+    MISTRAL_API_KEY: str = ""
+
+    # ── Infrastructure — no defaults, injected by docker-compose environment ─
+    MLFLOW_TRACKING_URI: str       # e.g. http://mlflow:8080
+    WORKFLOW_ARTIFACTS_ROOT: str   # container path matching the volume mount
+    SLIDE_TEMPLATE_PATH: str       # container path to the PPTX template asset
 
     # ── LiteLLM model IDs ─────────────────────────────────────────────────────
     LLM_SMART_MODEL: str = "gemini/gemini-2.5-flash"
@@ -15,36 +20,20 @@ class Settings(BaseSettings):
     LLM_VISION_FALLBACK_MODEL: str = "openrouter/google/gemma-3-27b-it:free"
     LLM_EMBED_MODEL: str = "gemini/gemini-embedding-001"
 
-    # ── Provider API keys ─────────────────────────────────────────────────────
-    GEMINI_API_KEY: str = ""
-    OPENROUTER_API_KEY: str = ""
-    MISTRAL_API_KEY: str = ""
-
     MAX_TOKENS: int = 4096
 
-    # vector store
+    # ── Optional provider config ───────────────────────────────────────────────
+    OPENALEX_API_KEY: str = ""
+    OPENALEX_EMAIL: str = ""
+
+    # ── summary_gen_w_qe.py (vector/doc store, alternate workflow path) ───────
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: str = "6333"
-
-    # doc store
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
 
-    # path and file name configuration
-    WORKFLOW_ARTIFACTS_PATH: str = "./workflow_artifacts"
-
-    PAPERS_DOWNLOAD_PATH: str = "data/papers"
-    PAPERS_IMAGES_PATH: str = "data/papers_images"
-    PAPER_SUMMARY_PATH: str = "data/paper_summaries"
-
-    SLIDE_TEMPLATE_PATH: str = "./data/Inmeta 2023 template.pptx"
-    SLIDE_OUTLINE_FNAME: str = "slide_outlines.json"
-    GENERATED_SLIDE_FNAME: str = "paper_summaries.pptx"
-
-    MLFLOW_TRACKING_URI: str = "http://mlflow:8080"
-
     class Config:
-        env_file = ".env"  # relative to execution path
+        env_file = ".env"
 
 
 settings = Settings()

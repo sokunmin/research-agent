@@ -131,7 +131,7 @@ async def submit_user_input(data: dict = Body(...)):
 @app.get("/download_pptx/{workflow_id}")
 async def download_pptx(workflow_id: str):
     file_path = (
-        Path(settings.WORKFLOW_ARTIFACTS_PATH)
+        Path(settings.WORKFLOW_ARTIFACTS_ROOT)
         / "SlideGenerationWorkflow"
         / workflow_id
         / "final.pptx"
@@ -149,7 +149,7 @@ async def download_pptx(workflow_id: str):
 @app.get("/download_pdf/{workflow_id}")
 async def download_pdf(workflow_id: str):
     file_path = (
-        Path(settings.WORKFLOW_ARTIFACTS_PATH)
+        Path(settings.WORKFLOW_ARTIFACTS_ROOT)
         / "SlideGenerationWorkflow"
         / workflow_id
         / "final.pdf"

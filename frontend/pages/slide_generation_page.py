@@ -4,12 +4,10 @@ import logging
 from collections import deque
 
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
 import httpx
 import asyncio
 import threading
 import queue
-import requests
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -185,7 +183,20 @@ def process_messages():
             pass
 
 
-# @st.fragment
+_run_every = None if st.session_state.workflow_complete else "2s"
+
+
+@st.fragment(run_every=_run_every)
+def workflow_display():
+    process_messages()
+    if st.session_state.received_lines:
+        state = "complete" if st.session_state.workflow_complete else "running"
+        with st.status("🤖⚒️ Agent is working...", state=state):
+            for line in st.session_state.received_lines:
+                st.write(line)
+                st.divider()
+
+
 def gather_outline_feedback(placeholder):
     container = placeholder.container()
     with container:
@@ -265,7 +276,7 @@ def gather_outline_feedback(placeholder):
                             f"Submitting approval: {approval_state}, feedback: {user_feedback}"
                         )  # Logging
                         try:
-                            response = requests.post(
+                            response = httpx.post(
                                 "http://backend:80/submit_user_input",
                                 json={
                                     "workflow_id": st.session_state.workflow_id,
@@ -276,7 +287,7 @@ def gather_outline_feedback(placeholder):
                             logging.info(
                                 f"Backend response for submitting approval: {response.status_code}"
                             )
-                        except requests.RequestException as e:
+                        except httpx.HTTPError as e:
                             st.error(f"Failed to submit user input: {str(e)}")
                             return
 
@@ -311,9 +322,6 @@ def gather_outline_feedback(placeholder):
 
 def main():
     st.title("Slide Generation")
-    # Use st_autorefresh to refresh the script every 2 seconds only if workflow is not complete
-    if not st.session_state.workflow_complete:
-        st_autorefresh(interval=2000, limit=None, key="data_refresh")
 
     # Sidebar with form
     with st.sidebar:
@@ -330,8 +338,6 @@ def main():
 
     with left_column:
         st.write("Workflow Executions:")
-        expander_placeholder = st.empty()
-        # expander_placeholder = st.expander("🤖⚒️Agent is working...")
 
     with right_column:
         st.write("Workflow Artifacts:")
@@ -361,33 +367,8 @@ def main():
         else:
             st.write("Background thread is already running.")
 
-    # Process messages from the queue
-    process_messages()
-
-    # Check if the thread is alive
-    if st.session_state.workflow_thread and st.session_state.workflow_thread.is_alive():
-        st.write("Background thread is running.")
-    else:
-        st.write("Background thread is not running.")
-
-    if st.session_state.received_lines:
-        with expander_placeholder.container():
-            # Create or update the expander with the latest truncated line
-            expander = st.expander(st.session_state.expander_label)
-            for line in st.session_state.received_lines:
-                expander.write(line)
-                expander.divider()
-
-        # # make expander scrollable
-        # css = """
-        # <style>
-        #     [data-testid="stExpander"] div:has(>.streamlit-expanderContent) {
-        #         overflow: scroll;
-        #         height: 800px;
-        #     }
-        # </style>
-        # """
-        # st.markdown(css, unsafe_allow_html=True)
+    with left_column:
+        workflow_display()
 
     # Include the user input fragment
     gather_outline_feedback(artifact_render)
@@ -399,16 +380,12 @@ def main():
             download_url_pdf = st.session_state.download_url_pdf
             try:
                 # Fetch the PDF content
-                pdf_response = requests.get(download_url_pdf)
+                pdf_response = httpx.get(download_url_pdf)
                 pdf_response.raise_for_status()
                 st.session_state.pdf_data = pdf_response.content
 
                 st.markdown("### Generated Slide Deck:")
-                # Display the PDF using an iframe
-                st.markdown(
-                    f'<iframe src="data:application/pdf;base64,{base64.b64encode(st.session_state.pdf_data).decode()}" width="100%" height="600px" type="application/pdf"></iframe>',
-                    unsafe_allow_html=True,
-                )
+                st.pdf(st.session_state.pdf_data, height=600)
             except Exception as e:
                 st.error(f"Failed to load the PDF file: {str(e)}")
 
@@ -420,7 +397,7 @@ def main():
             download_url_pptx = st.session_state.download_url_pptx
             try:
                 # Fetch the PPTX content
-                pptx_response = requests.get(download_url_pptx)
+                pptx_response = httpx.get(download_url_pptx)
                 pptx_response.raise_for_status()
                 pptx_data = pptx_response.content
 

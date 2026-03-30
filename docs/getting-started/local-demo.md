@@ -60,7 +60,7 @@ OPENALEX_EMAIL=your@email.com
 
 ```bash
 # 在 dev/ 目錄下執行
-mkdir -p workflow_artifacts mlruns mlartifacts data
+mkdir -p workflow_artifacts mlruns mlartifacts
 
 docker-compose up --build
 ```
@@ -70,7 +70,7 @@ docker-compose up --build
 ```
 backend-1   | INFO:     Uvicorn running on http://0.0.0.0:80
 frontend-1  | You can now view your Streamlit app in your browser.
-mlflow-1    | [INFO] Starting gunicorn 23.0.0
+mlflow-1    | INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
 ```
 
 啟動的服務：
@@ -163,7 +163,7 @@ Summary 完成後，右側會出現 **大綱審核介面**：
 ### 4-6 下載結果
 
 完成後右側會出現：
-- **PDF 預覽**（inline iframe）
+- **PDF 預覽**（內嵌 PDF 檢視器）
 - **Download Generated PPTX** 按鈕
 
 點擊下載 PPTX，即可用 PowerPoint / Keynote / LibreOffice 開啟。
@@ -252,8 +252,6 @@ dev/
 │           ├── paper_summaries.pptx  # 初版投影片
 │           ├── final.pptx            # 最終版本 ← 下載的就是這個
 │           └── final.pdf
-└── data/
-    └── (空，SummaryGen 的 papers 在 workflow_artifacts 內)
 ```
 
 ---
