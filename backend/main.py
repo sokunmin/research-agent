@@ -5,7 +5,6 @@ import asyncio
 from fastapi.responses import StreamingResponse
 import uuid
 import json
-import logging
 from models import SlideGenFileDirectory, ResearchTopic
 from agent_workflows.slide_gen import SlideGenerationWorkflow
 from agent_workflows.summarize_and_generate_slides import SummaryAndSlideGenerationWorkflow
@@ -14,24 +13,16 @@ from agent_workflows.summary_gen import (
     SummaryGenerationDummyWorkflow,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from llama_index.core.workflow import Workflow
+from llama_index.core.workflow import Workflow, StopEvent
 
 import mlflow
 from config import settings
 import os
 from fastapi.responses import FileResponse
 from pathlib import Path
+from utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-# Add handler and formatter if not already configured
-if not logger.hasHandlers():
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+logger = get_logger(__name__)
 
 app = FastAPI()
 workflows = {}  # Store the workflow instances in a dictionary
@@ -73,7 +64,7 @@ async def run_workflow_endpoint(topic: ResearchTopic):
     async def event_generator():
         loop = asyncio.get_running_loop()
         logger.debug(f"event_generator: loop id {id(loop)}")
-        yield f"{json.dumps({'workflow_id': workflow_id})}\n\n"
+        yield f"data: {json.dumps({'workflow_id': workflow_id})}\n\n"
 
         # llama-index-core 0.14.x: stream_events() lives on the Handler returned
         # by Workflow.run(), not on the Workflow instance. Call base Workflow.run()
@@ -83,8 +74,11 @@ async def run_workflow_endpoint(topic: ResearchTopic):
         logger.debug(f"event_generator: Created handler {handler}")
         try:
             async for ev in handler.stream_events():
+                if isinstance(ev, StopEvent):
+                    continue
                 logger.info(f"Sending message to frontend: {ev.msg}")
-                yield f"{ev.msg}\n\n"
+                msg_str = json.dumps(ev.msg) if isinstance(ev.msg, dict) else ev.msg
+                yield f"data: {msg_str}\n\n"
                 await asyncio.sleep(0.1)  # Small sleep to ensure proper chunking
             final_result = await handler
 
@@ -98,11 +92,11 @@ async def run_workflow_endpoint(topic: ResearchTopic):
                 "download_pdf_url": download_pdf_url,
             }
 
-            yield f"{json.dumps({'final_result': final_result_with_url})}\n\n"
+            yield f"data: {json.dumps({'final_result': final_result_with_url})}\n\n"
         except Exception as e:
             error_message = f"Error in workflow: {str(e)}"
             logger.error(error_message)
-            yield f"{json.dumps({'event': 'error', 'message': error_message})}\n\n"
+            yield f"data: {json.dumps({'event': 'error', 'message': error_message})}\n\n"
         finally:
             # Clean up
             workflows.pop(workflow_id, None)
