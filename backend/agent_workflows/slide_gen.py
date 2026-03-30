@@ -9,7 +9,6 @@ from typing import Optional
 
 import click
 
-import logging
 import inspect
 from llama_index.core import (
     Settings,
@@ -53,16 +52,9 @@ from utils.file_processing import pptx2images
 from agent_workflows.events import *
 from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow
 import mlflow
+from utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-if not logger.hasHandlers():
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+logger = get_logger(__name__)
 
 Settings.llm = llm
 Settings.embed_model = embedder
@@ -204,27 +196,11 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         handler = agent.run(prompt)
         async for ev in handler.stream_events():
             if isinstance(ev, AgentStream) and ev.delta:
-                wf_ctx.write_event_to_stream(
-                    Event(
-                        msg=WorkflowStreamingEvent(
-                            event_type="server_message",
-                            event_sender="react_agent",
-                            event_content={"message": f"Reasoning: {ev.delta}"},
-                        ).model_dump()
-                    )
-                )
+                self._emit_message(wf_ctx, "react_agent", message=ev.delta)
             elif isinstance(ev, ToolCall):
                 logger.info(f"[Tool] {ev.tool_name}({ev.tool_kwargs})")
         response = await handler
-        wf_ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender="react_agent",
-                    event_content={"message": f"Agent response: {response}"},
-                ).model_dump()
-            )
-        )
+        self._emit_message(wf_ctx, "react_agent", message=f"Agent response: {response}")
 
     @step(num_workers=1)
     async def get_summaries(self, ctx: Context, ev: StartEvent) -> SummaryEvent:
@@ -236,28 +212,12 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             state["n_retry"] = 0  # keep count of slide validation retries
             state["n_summaries"] = len(markdown_files)
         n_summaries = await ctx.store.get("n_summaries")
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={
-                        "message": f"Reading {n_summaries} summaries from markdown files..."
-                    },
-                ).model_dump()
-            )
-        )
+        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                           message=f"Reading {n_summaries} summaries from markdown files...")
         for i, f in enumerate(markdown_files):
             s = read_summary_content(f)
-            ctx.write_event_to_stream(
-                Event(
-                    msg=WorkflowStreamingEvent(
-                        event_type="server_message",
-                        event_sender=inspect.currentframe().f_code.co_name,
-                        event_content={"message": f"Sending {i}th summaries..."},
-                    ).model_dump()
-                )
-            )
+            self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                               message=f"Sending {i}th summaries...")
             ctx.send_event(SummaryEvent(summary=s))
 
     @step(num_workers=settings.NUM_WORKERS_FAST)
@@ -268,15 +228,8 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         condense and shorten the elaborated summary content to short sentences or bullet points.
         """
         await asyncio.sleep(settings.DELAY_SECONDS_FAST)
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={"message": "Making summary to slide outline..."},
-                ).model_dump()
-            )
-        )
+        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                           message="Making summary to slide outline...")
         llm = new_fast_llm(0.1)
         if isinstance(ev, OutlineFeedbackEvent):
             program = FunctionCallingProgram.from_defaults(
@@ -316,36 +269,18 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
     ) -> OutlineFeedbackEvent | OutlineOkEvent:
         """Present user the original paper summary and the outlines generated, gather feedback from user"""
         # ready = ctx.collect_events(ev, [OutlineEvent] * ctx.data["n_summaries"])
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={"message": "Gathering feedback on the outline..."},
-                ).model_dump()
-            )
-        )
+        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                           message="Gathering feedback on the outline...")
 
         # Send a special event indicating that user input is needed
-        ctx.write_event_to_stream(
-            Event(
-                msg=json.dumps(
-                    {
-                        "event_type": "request_user_input",
-                        "event_sender": inspect.currentframe().f_code.co_name,
-                        "event_content": {
-                            "eid": "".join(
-                                random.choices(
-                                    string.ascii_lowercase + string.digits, k=10
-                                )
-                            ),
-                            "summary": ev.summary,
-                            "outline": ev.outline.dict(),
-                            "message": "Do you approve this outline? If not, please provide feedback.",
-                        },
-                    }
-                )
-            )
+        self._emit_message(
+            ctx,
+            inspect.currentframe().f_code.co_name,
+            event_type="request_user_input",
+            eid="".join(random.choices(string.ascii_lowercase + string.digits, k=10)),
+            summary=ev.summary,
+            outline=ev.outline.dict(),
+            message="Do you approve this outline? If not, please provide feedback.",
         )
         # Initialize the future if it's None
         if self.user_input_future is None:
@@ -403,17 +338,8 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         ready = ctx.collect_events(ev, [OutlineOkEvent] * n_summaries)
         if ready is None:
             return None
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={
-                        "message": "Outlines for all papers are ready! Adding layout info..."
-                    },
-                ).model_dump()
-            )
-        )
+        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                           message="Outlines for all papers are ready! Adding layout info...")
         all_layout_names = [layout["layout_name"] for layout in self.all_layout]
 
         # add layout to outline
@@ -441,18 +367,9 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         with slide_outlines_json.open("w") as f:
             json.dump([o.json() for o in slides_w_layout], f, indent=4)
         # ctx.data["slide_outlines_json"] = slide_outlines_json
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={
-                        "message": f"{len(slides_w_layout)} outlines with layout are ready! "
-                        f"Stored in {slide_outlines_json}"
-                    },
-                ).model_dump()
-            )
-        )
+        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                           message=f"{len(slides_w_layout)} outlines with layout are ready! "
+                           f"Stored in {slide_outlines_json}")
 
         return OutlinesWithLayoutEvent(
             outlines_fpath=slide_outlines_json, outline_example=slides_w_layout[0]
@@ -462,15 +379,8 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
     async def slide_gen(
         self, ctx: Context, ev: OutlinesWithLayoutEvent
     ) -> SlideGeneratedEvent:
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={"message": "Agent is generating slide deck..."},
-                ).model_dump()
-            )
-        )
+        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                           message="Agent is generating slide deck...")
         agent = ReActAgent(
             tools=self.sandbox.to_tool_list() + [self.all_layout_tool],
             llm=new_llm(0.1),
@@ -497,20 +407,15 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             ctx,
         )
         local_files = self.download_all_files_from_session()
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={
-                        "message": f"Agent finished! Downloaded files to local path: {local_files}"
-                    },
-                ).model_dump()
+        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                           message=f"Agent finished! Downloaded files to local path: {local_files}")
+        expected_pptx = self.workflow_artifacts_path / self.generated_slide_fname
+        if not expected_pptx.exists():
+            raise RuntimeError(
+                f"[slide_gen] Agent did not produce expected file: {expected_pptx}. "
+                "Agent may have misunderstood the task or failed to execute run_code."
             )
-        )
-        return SlideGeneratedEvent(
-            pptx_fpath=f"{self.workflow_artifacts_path}/{self.generated_slide_fname}"
-        )
+        return SlideGeneratedEvent(pptx_fpath=expected_pptx.as_posix())
 
     @step(num_workers=settings.NUM_WORKERS_VISION)
     async def validate_slides(
@@ -534,17 +439,8 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         # upload image w. prompt for validation to llm and get structured response
         image_documents = SimpleDirectoryReader(img_dir).load_data()
 
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={
-                        "message": f"{n_retry}th try for validating the generated slide deck..."
-                    },
-                ).model_dump()
-            )
-        )
+        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                           message=f"{n_retry}th try for validating the generated slide deck...")
         needs_modify = []
         for img_doc in image_documents:
             program = MultiModalLLMCompletionProgram.from_defaults(
@@ -572,45 +468,20 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                 )
 
         if not needs_modify:
-            ctx.write_event_to_stream(
-                Event(
-                    msg=WorkflowStreamingEvent(
-                        event_type="server_message",
-                        event_sender=inspect.currentframe().f_code.co_name,
-                        event_content={"message": "The slides are fixed!"},
-                    ).model_dump()
-                )
-            )
+            self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                               message="The slides are fixed!")
             self.copy_final_slide()
             return StopEvent(
                 self.workflow_artifacts_path.joinpath(self.generated_slide_fname)
             )
         else:
             if n_retry < self.max_validation_retries:
-                ctx.write_event_to_stream(
-                    Event(
-                        msg=WorkflowStreamingEvent(
-                            event_type="server_message",
-                            event_sender=inspect.currentframe().f_code.co_name,
-                            event_content={
-                                "message": "The slides are not fixed, retrying..."
-                            },
-                        ).model_dump()
-                    )
-                )
+                self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                                   message="The slides are not fixed, retrying...")
                 return SlideValidationEvent(results=needs_modify)
             else:
-                ctx.write_event_to_stream(
-                    Event(
-                        msg=WorkflowStreamingEvent(
-                            event_type="server_message",
-                            event_sender=inspect.currentframe().f_code.co_name,
-                            event_content={
-                                "message": f"The slides are not fixed after {self.max_validation_retries} retries!"
-                            },
-                        ).model_dump()
-                    )
-                )
+                self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                                   message=f"The slides are not fixed after {self.max_validation_retries} retries!")
                 self.copy_final_slide()
                 return StopEvent(
                     f"The slides are not fixed after {self.max_validation_retries} retries!"
@@ -625,17 +496,8 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         # give agent code_interpreter and get_layout tools
         # use feedback as prompt to agent
         # agent make changes to the slides and save slide
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={
-                        "message": "Modifying the slides based on the feedback..."
-                    },
-                ).model_dump()
-            )
-        )
+        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                           message="Modifying the slides based on the feedback...")
 
         # Locate the current pptx in the sandbox (fall back to default path if not found)
         latest_filename = await ctx.store.get("latest_pptx_file")
