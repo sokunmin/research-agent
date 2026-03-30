@@ -3,12 +3,8 @@ from typing import List
 
 from llama_index.core.workflow import Event
 
-from agent_workflows.paper_scraping import Paper, IsCitationRelevant
+from agent_workflows.paper_scraping import Paper, PaperRelevanceResult
 from agent_workflows.schemas import *
-
-
-class TavilyResultsEvent(Event):
-    results: List[TavilySearchResult]
 
 
 class PaperEvent(Event):
@@ -17,11 +13,7 @@ class PaperEvent(Event):
 
 class FilteredPaperEvent(Event):
     paper: Paper
-    is_relevant: IsCitationRelevant
-
-
-class FilteredPapersEvent(Event):
-    paper: Paper
+    relevance: PaperRelevanceResult   # is_relevant: bool, similarity_score: float
 
 
 class Paper2SummaryDispatcherEvent(Event):

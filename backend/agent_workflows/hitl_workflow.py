@@ -1,7 +1,8 @@
 import asyncio
 import mlflow
 from config import settings
-from llama_index.core.workflow import Workflow
+from llama_index.core.workflow import Context, Event, Workflow
+from agent_workflows.schemas import WorkflowStreamingEvent
 import logging
 
 
@@ -17,6 +18,18 @@ if not logger.hasHandlers():
 
 
 class HumanInTheLoopWorkflow(Workflow):
+    def _emit_message(self, ctx: Context, sender: str, message: str) -> None:
+        """Write a server_message event to the workflow stream."""
+        ctx.write_event_to_stream(
+            Event(
+                msg=WorkflowStreamingEvent(
+                    event_type="server_message",
+                    event_sender=sender,
+                    event_content={"message": message},
+                ).model_dump()
+            )
+        )
+
     async def run(self, *args, **kwargs):
         self.loop = asyncio.get_running_loop()  # Store the event loop
         mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)

@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # ── Secrets ───────────────────────────────────────────────────────────────
-    TAVILY_API_KEY: str
+    TAVILY_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     GROQ_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
@@ -35,9 +35,16 @@ class Settings(BaseSettings):
     DELAY_SECONDS_VISION: float = 12.0  # Gemini RPM=10, 2 workers → 60/10×2=12s
 
     # ── Paper discovery tuning ────────────────────────────────────────────────
-    TAVILY_MAX_RESULTS: int = 2          # number of seed papers from Tavily
-    NUM_MAX_CITING_PAPERS: int = 10      # max citing papers per seed (was 50)
     NUM_MAX_FINAL_PAPERS: int = 5        # top-N papers to download after filtering
+    PAPER_CANDIDATE_LIMIT: int = 100         # max candidates fetched from OpenAlex
+    PAPER_CANDIDATE_MIN_CITATIONS: int = 50  # minimum citation count filter
+    PAPER_CANDIDATE_YEAR_WINDOW: int = 3     # publication recency window (years)
+
+    # ── Relevance filter ──────────────────────────────────────────────────────
+    LLM_RELEVANCE_EMBED_MODEL: str = "ollama/nomic-embed-text"
+    # Embedding model used for Stage 1 relevance pre-screening.
+    # Must be the same model family used during threshold calibration.
+    # Run via local Ollama; isolated from the general-purpose embed model.
 
     # ── Optional provider config ───────────────────────────────────────────────
     OPENALEX_API_KEY: str = ""
