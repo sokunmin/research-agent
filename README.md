@@ -26,6 +26,19 @@ quantitative benchmarks.
 
 ---
 
+## Contents
+
+- [System Architecture](#system-architecture)
+- [What I Changed From the Original](#what-i-changed-from-the-original)
+- [PDF Parsing Tool Evaluation](#pdf-parsing-tool-evaluation)
+- [Experiments](#experiments)
+  - [Part 1 — Paper Discovery Pipeline](#part-1--paper-discovery-pipeline)
+  - [Part 2 — Slide Generation Agent](#part-2--slide-generation-agent)
+- [Setup](#setup)
+- [Roadmap](#roadmap)
+
+---
+
 ## System Architecture
 
 **Before (original) → After (this fork):**
@@ -362,10 +375,10 @@ regardless of how well Stage 2 is tuned.
 
 #### Experiment 3 — Threshold Analysis for Production Routing
 
-**Goal:** The two-stage filter uses ground-truth labels to decide which papers
-go to Stage 2 during experiments. In production, labels are unavailable —
-routing must rely solely on the Stage-1 cosine similarity score. This
-experiment determines the score band that should trigger Stage-2 LLM review.
+**Goal:** The experiments use ground-truth labels to route papers to Stage 2.
+In production, labels are unavailable — routing must rely solely on the
+Stage-1 cosine similarity score. This experiment determines the score band
+that should trigger Stage-2 LLM review.
 
 ROC analysis on the 120-paper benchmark (AUC = 0.921):
 
@@ -436,15 +449,10 @@ paper in the pool.
 ### Part 2 — Slide Generation Agent
 
 The slide generation step uses a LlamaIndex ReAct Agent that writes and executes
-Python (python-pptx) inside a Docker sandbox container via four tools: execute
-code, list files, upload file, and get available slide layouts. Two steps are
-agent-driven: generating the PPTX from scratch, and applying human feedback to
-modify an existing PPTX.
-
-During initial testing, agents would output Python code as plain text instead of
-calling the execute-code tool — meaning no file was actually produced. This
-experiment series identifies the root cause and the best model and prompt
-strategy for each task.
+python-pptx code inside a Docker sandbox container. During initial testing,
+agents would output code as plain text instead of calling the tool — no file was
+actually produced. The following experiments find the root cause and best
+configuration.
 
 ---
 
@@ -524,48 +532,25 @@ schema) from local Ollama models. A systematic comparison of 5 methods across
 360 LLM calls (2 models × 4 prompts × 3 slide types × 3 runs) identified the
 root cause of a production bug and reliable alternatives.
 
-**Background — the 5 methods and how they differ:**
+The 5 methods differ in where schema enforcement happens:
 
-LlamaIndex provides multiple approaches to structured output, each enforcing the
-schema at a different layer:
-
-- **FunctionCallingProgram** — injects the Pydantic schema as a tool definition
-  into the LLM request (function-calling spec). The LLM must "call" that tool
-  with arguments matching the schema. Enforcement is server-side at the LLM
-  provider level. Only works with models that natively support the function-calling
-  API (OpenAI, Anthropic, Mistral, etc.); incompatible with most local Ollama
-  models.
-
-- **LLMTextCompletionProgram** — embeds the schema description in the prompt
-  text and asks the model to produce matching JSON. The response is parsed
-  client-side by a Pydantic output parser. Compatible with any LLM, but success
-  depends entirely on the model following the prompt instruction correctly.
-
-- **Ollama `format` parameter** (via LiteLLM `additional_kwargs`) — passes the
-  Pydantic JSON schema directly to the Ollama server. Ollama enforces valid JSON
-  at the token-sampling level using grammar-constrained decoding — before any
-  tokens are returned to the client. This makes the output independent of how
-  the prompt is written.
-
-- **`as_structured_llm()`** — a LlamaIndex wrapper that delegates to the
-  function-calling API for capable providers, or falls back to the Ollama
-  `format` parameter for local models. The actual enforcement mechanism depends
-  on the backing LLM's declared capabilities.
-
-- **`astructured_predict()` / `structured_predict()`** — the highest-level
-  LlamaIndex API: automatically dispatches to function-calling if supported,
-  otherwise falls back to text completion with client-side parsing. The caller
-  does not choose the enforcement mechanism; LlamaIndex resolves it per model.
+```
+FunctionCallingProgram   → LLM provider API        ← fails for Ollama
+LLMTextCompletionProgram → client-side parser       ← prompt-sensitive
+Ollama format parameter  → Ollama server (grammar)  ← prompt-independent ✓
+as_structured_llm()      → delegates to one above
+structured_predict()     → delegates to one above
+```
 
 **Results:**
 
-| Method | Where structure is enforced | gemma3:4b | qwen3.5:4b |
-|---|---|---|---|
-| FunctionCallingProgram | LLM provider's function-calling API | **0% (all prompts)** | **0% (all prompts)** |
-| LLMTextCompletionProgram | Client-side Pydantic parser | 0–100% | 100% |
-| **Ollama format parameter** | **Ollama server, token-sampling level** | **100% (all prompts)** | **100% (all prompts)** |
-| as_structured_llm() | Delegates to one of the above | 0–100% | 100% |
-| structured_predict() | Delegates to one of the above | 0–100% | 100% |
+| Method | gemma3:4b | qwen3.5:4b |
+|---|---|---|
+| FunctionCallingProgram | **0% (all prompts)** | **0% (all prompts)** |
+| LLMTextCompletionProgram | 0–100% | 100% |
+| **Ollama format parameter** | **100% (all prompts)** | **100% (all prompts)** |
+| as_structured_llm() | 0–100% | 100% |
+| structured_predict() | 0–100% | 100% |
 
 `FunctionCallingProgram` fails unconditionally for both models: Ollama returns
 `{"properties": {...}}` — the schema definition itself, not populated values.
