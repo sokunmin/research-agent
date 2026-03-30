@@ -1,4 +1,8 @@
 ---
+## [2026-03-12] LlamaIndex `Workflow` base class 無法直接實例化 — `WorkflowConfigurationError: no @step accepts StartEvent` `[版本: llama-index-workflows>=2.x]`
+原因：`Workflow.__init__` 驗證至少要有一個 `@step` 接受 `StartEvent`，直接實例化 base class（如 `HumanInTheLoopWorkflow`）沒有任何 step，立即拋出 `WorkflowConfigurationError`。
+修正：測試中建立 concrete subclass，加入 dummy `@step async def handle_start(self, ev: StartEvent) -> StopEvent`，再實例化 subclass 執行測試。
+---
 ## [2026-03-12] macOS Python pytest 執行時 `ssl.SSLCertVerificationError` — HTTPS 下載失敗 `[環境: macOS + python.org Python + poetry venv]`
 原因：python.org 安裝的 Python 不連結 macOS Keychain 憑證，poetry venv 執行時 `SSL_CERT_FILE` 為空，`urllib` 無法驗證任何 HTTPS 憑證（包含 arxiv.org）。
 修正：在 `tests/conftest.py` 最頂端加 `import certifi; os.environ.setdefault("SSL_CERT_FILE", certifi.where())`，讓所有測試繼承 certifi CA bundle。
