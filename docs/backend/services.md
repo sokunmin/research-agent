@@ -22,10 +22,11 @@ backend/services/
 ```python
 from services.model_factory import model_factory
 
-llm  = model_factory.smart_llm()          # LiteLLM（高能力模型）
-fast = model_factory.fast_llm()           # LiteLLM（快速/低成本模型）
-vlm  = model_factory.vision_llm()         # LiteLLMMultiModal（視覺模型）
-emb  = model_factory.embed_model()        # LiteLLMEmbedding
+llm  = model_factory.smart_llm()              # LiteLLM（高能力模型）
+fast = model_factory.fast_llm()               # LiteLLM（快速/低成本模型）
+vlm  = model_factory.vision_llm()             # LiteLLMMultiModal（視覺模型）
+emb  = model_factory.embed_model()            # LiteLLMEmbedding（通用）
+rel  = model_factory.relevance_embed_model()  # LiteLLMEmbedding（論文相關性用，本地 Ollama）
 ```
 
 `ModelConfig` 欄位（對應 config.py）：
@@ -36,7 +37,8 @@ emb  = model_factory.embed_model()        # LiteLLMEmbedding
 | `fast_model` | `LLM_FAST_MODEL` | 快速/低成本 LLM |
 | `vision_model` | `LLM_VISION_MODEL` | 視覺模型 |
 | `vision_fallback_model` | `LLM_VISION_FALLBACK_MODEL` | VLM 備援模型，空字串則停用 |
-| `embed_model` | `LLM_EMBED_MODEL` | 嵌入模型 |
+| `embed_model` | `LLM_EMBED_MODEL` | 通用嵌入模型（LlamaIndex Settings.embed_model） |
+| `relevance_embed_model` | `LLM_RELEVANCE_EMBED_MODEL` | 論文相關性 Stage-1 embedding，與通用 embed_model 隔離 |
 | `max_tokens` | `MAX_TOKENS` | 最大輸出 token |
 
 ---
@@ -63,7 +65,8 @@ from services.llms import llm, vlm, new_llm, new_fast_llm, new_vlm
 
 | Step | LLM | 理由 |
 |------|-----|------|
-| 論文過濾（`filter_papers`） | `new_fast_llm` | 大量並行呼叫，成本優先 |
+| 查詢改寫（`discover_candidate_papers`） | `new_fast_llm` | 改寫 user query 為學術搜尋語 |
+| 論文過濾 Stage-2（`filter_papers`） | `new_fast_llm`（選擇性） | 僅 borderline 論文（約 41%）；Stage-1 使用本地 embedding |
 | Outline 生成（`summary2outline`） | `new_fast_llm` | 結構化輸出，token 量適中 |
 | Layout 選擇（`outlines_with_layout`） | `new_llm` | 需要較強推理 |
 | Slide 生成 ReAct Agent（`slide_gen`） | `new_llm` | 複雜工具呼叫 |

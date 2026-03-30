@@ -10,7 +10,8 @@ frontend/
 ├── pages/
 │   ├── main_page.py                 # Home 頁（目前為空白頁）
 │   └── slide_generation_page.py     # 主要功能頁面
-├── utils/                           # 工具函式（如有）
+├── utils/
+│   └── layout.py                    # set_streamlit_page_config_once()（防重複呼叫的包裝）
 ├── Dockerfile
 └── pyproject.toml
 ```
@@ -65,6 +66,7 @@ Streamlit 的 `session_state` 跨 rerun 保持狀態。以下是 `slide_generati
 | `approval_state` | `int \| None` | `None` | thumbs feedback 狀態（0=👎, 1=👍） |
 | `pending_user_inputs` | `deque` | `deque()` | 排隊中尚未顯示的 outline 審核請求 |
 | `prompt_counter` | `int` | `0` | 用於生成唯一 widget key，避免 Streamlit key 衝突 |
+| `final_result` | `dict \| None` | *(未初始化)* | workflow 完成時由 `process_messages()` 寫入，含 `download_pptx_url` 和 `download_pdf_url` |
 
 ## 相關文件
 

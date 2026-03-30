@@ -2,9 +2,9 @@
 
 Research Agent 是一個自動化研究與簡報生成系統。你輸入一個研究主題，它會：
 
-1. 透過 **Tavily** 搜尋相關 arXiv 論文關鍵字
-2. 從 **OpenAlex** 取得論文與引用（免費，無需 API key）
-3. 用 **LiteLLM**（預設 Gemini AI Studio 免費層）過濾相關論文、下載 PDF、生成摘要
+1. 用 **LLM 改寫查詢語**，直接查詢 **OpenAlex** 全文搜尋（免費，無需 API key）
+2. 用 **2-stage 相關性過濾**（本地 embedding + 選擇性 LLM）篩選論文
+3. 透過 4-strategy fallback 下載 PDF，用 **VLM** 生成摘要
 4. 讓你審核每張投影片大綱（Human-in-the-Loop）
 5. 用 **ReAct Agent + Docker sandbox** 生成 PPTX，並自動驗證與修正
 6. 輸出可下載的 `.pptx` / `.pdf`
@@ -27,9 +27,10 @@ User query → Paper search (OpenAlex) → Filter & Download → Summarize (VLM)
 
 | 服務 | 用途 | 費用 |
 |------|------|------|
-| Tavily API | 論文關鍵字搜尋 | 免費層可用 |
-| Google AI Studio | Gemini LLM + Embedding（預設） | **免費層**（10 RPM, 250 RPD） |
-| OpenAlex | 論文搜尋與引用 | 完全免費 |
+| Groq | smart_llm + fast_llm（預設） | **免費層**（RPM=60） |
+| Google AI Studio | Gemini vision_llm + embedding（預設） | **免費層**（10 RPM, 250 RPD） |
+| OpenAlex | 論文搜尋 | 完全免費 |
+| Ollama（本地） | 論文相關性 Stage-1 embedding（`nomic-embed-text`） | 免費（本地運行） |
 
 > 可透過 `LLM_*_MODEL` env var 切換任意 [LiteLLM 支援的 provider](https://docs.litellm.ai/docs/providers)（OpenAI、Anthropic、OpenRouter 等）。
 
@@ -55,17 +56,22 @@ cp .env.example .env
 編輯 `.env`，填入以下欄位（詳細說明見 [`docs/infrastructure/configuration.md`](../infrastructure/configuration.md)）：
 
 ```env
-# 必填
-TAVILY_API_KEY=your_tavily_key
+# Groq（預設 smart_llm / fast_llm，免費，RPM=60）
+GROQ_API_KEY=your_groq_key      # console.groq.com 取得
 
-# Gemini（預設 LLM provider，免費）
-GEMINI_API_KEY=your_gemini_key   # aistudio.google.com 取得
+# Gemini（預設 vision_llm + embedding，免費）
+GEMINI_API_KEY=your_gemini_key  # aistudio.google.com 取得
 
 # 建議填寫（進入 OpenAlex polite pool，提高 rate limit）
 OPENALEX_EMAIL=your@email.com
 ```
 
-其餘設定均有預設值，使用 Gemini 免費層無需額外設定。
+> **Note:** 論文相關性過濾需要本地 Ollama 服務，並預先下載 `nomic-embed-text` 模型：
+> ```bash
+> ollama pull nomic-embed-text
+> ```
+
+其餘設定均有預設值，不需額外調整。
 
 ## Step 3 — 啟動服務
 

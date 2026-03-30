@@ -1,4 +1,38 @@
 ---
+## [2026-03-28] `FunctionCallingProgram` + Ollama 模型（via LiteLLM）回傳 `{"properties": {...}}` 包裝，Pydantic 5 fields missing，success rate 0% `[版本: litellm 1.82.0 + llama-index-llms-litellm 0.6.3 / 模型: gemma3:4b, qwen3.5:4b]`
+原因：Ollama 模型在 function calling 呼叫中將 JSON Schema 的 `"properties"` 結構原樣輸出（schema 定義層），而非填入實際值（arguments 層）；即使透過 `litellm.register_model()` 宣告 `supports_function_calling=True` 使呼叫能到達 API，模型行為本身仍輸出錯誤格式，導致 LlamaIndex Pydantic 解析時所有 required fields 皆 missing。
+修正：`slide_gen.py` 的 `outlines_with_layout` step 將 `FunctionCallingProgram` 換為 `LLMTextCompletionProgram`（不走 tool/function calling API，改走 prompt 內嵌 JSON schema 路徑，對任何 LLM 均相容）；若僅使用 Ollama，可改在 `LiteLLM` 的 `additional_kwargs` 傳入 `{"format": SlideOutlineWithLayout.model_json_schema()}`（Ollama server-side constrained generation），兩者均可達 100% success rate；cloud provider（Groq、Gemini）的 `FunctionCallingProgram` 呼叫不受影響，可透過 `config.py` flag 區分路徑。
+---
+## [2026-03-27] `ArtifactSandboxSession` init noise 污染 LLM tool observations，ReActAgent 無限 loop `[通用: llm-sandbox + ReActAgent]`
+原因：`ArtifactSandboxSession` 預設 `enable_plotting=True`，在每個 `session.run()` 的 stdout 前插入 "Python plot detection setup complete\n"；同時每次 `run()` 都在 `/sandbox/` 建立 UUID 命名的 `.py` 執行檔但從不清除，導致 `list_files` 回傳大量 UUID 殘檔。兩者共同污染 LLM tool observations，ReActAgent 誤判環境狀態後無限呼叫 `list_files`。
+修正：(1) `run_code()` 與 `list_files()` 中的 `ArtifactSandboxSession` 呼叫均加 `enable_plotting=False`；(2) 在 `list_files()` 加 `_SANDBOX_ARTIFACT_RE = re.compile(r'^[0-9a-f]{32}\.[a-z]+$')` 過濾器，從結果中移除所有 UUID 執行產物。驗證：`run_code` 回傳乾淨 stdout；空 sandbox 時 `list_files_str` 回傳 `'(no files in /sandbox)'`。
+影響檔案：`backend/services/sandbox.py`
+---
+## [2026-03-27] SSE 格式不符 W3C spec 且 `"Reasoning: "` prefix 重複拼接，Streamlit 顯示亂碼 `[通用: FastAPI SSE + Streamlit]`
+原因：`run_react_agent()` 對每個 streaming token delta 都拼接 `"Reasoning: "` prefix，前端收到後 concatenate 成 "Reasoning: ThoughtReasoning: :Reasoning:  I..." 亂碼；同時 SSE yield 格式為裸 JSON 字串，不符 W3C SSE `data: ...\n\n` 規格，與 Vercel AI SDK 不相容。
+修正：(1) `main.py` 所有 SSE yield 改為 `f"data: {msg_str}\n\n"`；(2) `slide_gen.py` 移除 `"Reasoning: "` prefix，改用 `_emit_message()` helper 直接傳遞 `ev.delta`；(3) `slide_generation_page.py` SSE 解析改為先 strip `data:` prefix 再 JSON.loads。戰略理由：對齊 W3C SSE 規格為未來遷移至 Vercel AI SDK 鋪路（Vercel AI SDK 是唯一同時支援 HITL 與自訂 workflow progress event 的前端選項）。
+影響檔案：`backend/main.py`、`backend/agent_workflows/slide_gen.py`、`frontend/pages/slide_generation_page.py`
+---
+## [2026-03-27] Ollama 本地 LLM token-by-token streaming 在 Streamlit st.status 造成逐字顯示 `[環境: Ollama local LLM + Streamlit ≥1.55]`
+原因：Ollama 以單 token 為單位 streaming（`AgentStream.delta` 每次一個詞），Streamlit 升級後 `st.expander`（收合）換成 `st.status(expanded=True)`，每個 token 各佔一行並帶分隔線，數百行暴露給使用者；cloud LLM（Gemini/Groq）以詞組為單位送 chunk 故舊版無此問題。
+修正：frontend `get_stream_data()` 將 `event_sender == "react_agent"` 的事件改送 `("reasoning", msg)` 至 queue；`process_messages()` 以 `+=` concatenate 到 `current_reasoning`（而非 append 至 `received_lines`）；`workflow_display()` 新增獨立 `st.code` 區塊顯示累積 reasoning，每 2s rerun 時呈現完整句子而非逐字。
+---
+## [2026-03-26] `run_subworkflow` 轉發 StopEvent 至 parent context，main.py 無 guard 導致 SSE 連線中斷 `[通用]`
+原因：`handler.stream_events()` 設計上會 yield `StopEvent` 作為終止信號；`run_subworkflow` 無條件 `ctx.write_event_to_stream(event)` 將其注入 parent stream，`main.py` 又無條件存取 `ev.msg`（`StopEvent` 無此欄位），拋出 `AttributeError`，SSE generator 進入 except block → workflow 從 dict 移除，前端連線中斷
+修正：`run_subworkflow` 加 `if isinstance(event, StopEvent): continue` 過濾非 user-facing event；`main.py` event loop 加 `hasattr(ev, 'msg')` guard，避免單一 event 異常炸掉整條 SSE 連線
+---
+## [2026-03-26] Ollama qwen3.5 觸發 `FunctionCallingProgram` "does not support function calling API" `[版本: litellm 1.82.0 + llama-index-llms-litellm 0.6.3]`
+原因：LiteLLM 以 `/api/show` 回傳的 Modelfile template 是否含 `"tools"` 字串判斷 function calling 支援；qwen3.5 的 template 只有 `{{ .Prompt }}`，不含 `tools`，導致 `is_function_calling_model=False`，LlamaIndex 的 `FunctionCallingProgram.from_defaults()` 在發 API 前就 raise。
+修正：`model_factory.py` 的 `_build()` 呼叫 `_register_ollama_function_calling()`，用 `OllamaModelInfo().get_models()` 動態列出所有本地 Ollama models，透過 `litellm.register_model()` 顯式宣告 `supports_function_calling=True`；過濾掉已有 `ollama/` prefix 的 fallback entries 避免 offline 時雙重 prefix。
+---
+## [2026-03-26] `OllamaModelInfo.get_models()` Ollama offline 時靜默回傳 `['ollama/llama2']` 而非空 list `[通用]`
+原因：LiteLLM 刻意設計 graceful degradation，`/api/tags` 失敗時 fallback 到 `litellm.models_by_provider["ollama"]`（hardcoded `["llama2"]`）並加 `ollama/` prefix；不 raise exception，有 unit test 驗證此行為。
+修正：呼叫後過濾掉已帶 `ollama/` prefix 的項目（`if not name.startswith("ollama/")`），offline 時 register 空 dict，避免注入錯誤的 `ollama/ollama/llama2`。
+---
+## [2026-03-26] `LiteLLMMultiModal` AttributeError: rate_limiter，llama-index-core 版本漂移所致 `[版本: llama-index-core>=0.14.19]`
+原因：`llms/callbacks.py` wrapper 在 0.14.19 新增 `if _self.rate_limiter is not None:`，同時套用到 `BaseLLM`（有此 field）和 `MultiModalLLM`（無此 field）；Dockerfile 缺 `poetry.lock`，docker build 自由解析到 0.14.19，本地 lock 鎖在 0.14.15，環境不一致使問題只在 docker 觸發。
+修正：`LiteLLMMultiModal` 加 `rate_limiter: Optional[Any] = Field(default=None, exclude=True)`；Dockerfile 改為 `COPY pyproject.toml poetry.lock /app/` 鎖定版本。
+---
 ## [2026-03-26] litellm 在 mock 攔截前嘗試 fetch 外部 https:// image URL，導致 pytest hang `[通用: litellm + unittest.mock]`
 原因：`patch("services.multimodal.litellm.completion")` 對純文字 call 有效，但訊息含 `image_url` 且為外部 URL 時，litellm 內部先 fetch 該 URL，此行為發生在 mock 接手之前；`example.com` 無回應導致 test 無限 hang。
 修正：測試中一律改用 image bytes（`image=raw_bytes, image_mimetype="image/jpeg"`），完全不使用外部 URL；fixture 圖片放 `tests/fixtures/`，一次載入為 `_TEST_IMAGE_BYTES` 共用。
