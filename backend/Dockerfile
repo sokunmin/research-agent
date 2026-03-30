@@ -24,7 +24,7 @@ RUN apt-get update && \
 
 ENV PYTHONPATH=/usr/lib/libreoffice/program
 
-COPY pyproject.toml /app/
+COPY pyproject.toml poetry.lock /app/
 
 RUN pip install poetry
 

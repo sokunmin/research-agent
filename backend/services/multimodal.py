@@ -75,6 +75,10 @@ class LiteLLMMultiModal(MultiModalLLM):
     max_tokens: int = Field(default=4096, description="Max output tokens")
     extra_kwargs: dict = Field(default_factory=dict, description="Additional kwargs for LiteLLM")
     fallback_models: list = Field(default_factory=list, description="Fallback model IDs tried on 429/error, e.g. ['openrouter/google/gemma-3-27b-it:free']")
+    # llama-index-core ≥0.14.19: llms/callbacks.py wrapper checks `self.rate_limiter` on any
+    # LLM object that goes through the callback system. MultiModalLLM doesn't inherit from
+    # BaseLLM so it has no such field — declare it here to stay compatible.
+    rate_limiter: Optional[Any] = Field(default=None, exclude=True)
 
     @property
     def metadata(self) -> MultiModalLLMMetadata:
