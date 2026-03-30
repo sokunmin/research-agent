@@ -1,8 +1,7 @@
 """
 LiteLLMMultiModal — LlamaIndex-compatible VLM backed by LiteLLM.
 
-Inherits from LlamaIndex's MultiModalLLM abstract base class so it works as a
-drop-in replacement for AzureOpenAIMultiModal in:
+Inherits from LlamaIndex's MultiModalLLM abstract base class and is compatible with:
   - MultiModalLLMCompletionProgram.from_defaults(multi_modal_llm=...)  [uses complete()/acomplete()]
   - await vlm.acomplete(prompt, image_documents=[...])                 [uses acomplete()]
 

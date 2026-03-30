@@ -7,9 +7,9 @@ import uuid
 import json
 import logging
 from models import SlideGenFileDirectory, ResearchTopic
-from workflows.slide_gen import SlideGenerationWorkflow
-from workflows.summarize_and_generate_slides import SummaryAndSlideGenerationWorkflow
-from workflows.summary_gen import (
+from agent_workflows.slide_gen import SlideGenerationWorkflow
+from agent_workflows.summarize_and_generate_slides import SummaryAndSlideGenerationWorkflow
+from agent_workflows.summary_gen import (
     SummaryGenerationWorkflow,
     SummaryGenerationDummyWorkflow,
 )

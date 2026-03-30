@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 from llama_index.core import Settings, SimpleDirectoryReader
-from llama_index.core.agent import ReActAgent
+from llama_index.core.agent.workflow import ReActAgent
 from llama_index.core.output_parsers import PydanticOutputParser
 from llama_index.core.program import (
     FunctionCallingProgram,
@@ -35,17 +35,12 @@ from llama_index.core.workflow import (
     StopEvent,
     Workflow,
     step,
-    draw_all_possible_flows,
 )
 
 from utils.tools import get_all_layouts_info
 import inspect
-from llama_index.tools.azure_code_interpreter import (
-    AzureCodeInterpreterToolSpec,
-)
-
 from utils.file_processing import pptx2images
-from workflows.events import *
+from agent_workflows.events import *
 
 logging.basicConfig(
     stream=sys.stdout,

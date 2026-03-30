@@ -7,9 +7,11 @@
 import re
 from pathlib import Path
 
+import asyncio
+
 import click
 import qdrant_client
-from llama_index.core.agent import ReActAgent
+from llama_index.core.agent.workflow import ReActAgent
 from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.llms import LLM
 from llama_index.core.node_parser import (
@@ -215,17 +217,15 @@ def create_agent(file_dir: Path, force_reingest: bool):
     )
     save_tool = FunctionTool.from_defaults(fn=save_paper_sumamry)
 
-    # chat_formatter = ReActChatFormatter(context=SUMMARIZE_PAPER_PMT)
-    agent = ReActAgent.from_tools(
-        [query_tool, save_tool],
+    agent = ReActAgent(
+        tools=[query_tool, save_tool],
         llm=llm,
-        # react_chat_formatter=chat_formatter,
-        max_iterations=30,
         verbose=True,
+        timeout=300,
     )
     prompt = SUMMARIZE_PAPER_PMT + REACT_PROMPT_SUFFIX
-    agent.update_prompts({"agent_worker:system_prompt": PromptTemplate(prompt)})
-    agent.chat(f"I want a summary of paper {file_dir}")
+    agent.update_prompts({"react_header": PromptTemplate(prompt)})
+    asyncio.run(agent.run(f"I want a summary of paper {file_dir}"))
 
 
 @click.command()

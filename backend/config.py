@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     # ── LiteLLM model IDs ─────────────────────────────────────────────────────
     LLM_SMART_MODEL: str = "gemini/gemini-2.5-flash"
     LLM_FAST_MODEL: str = "gemini/gemini-2.5-flash"
-    LLM_VISION_MODEL: str = "gemini/gemini-2.5-flash"   # used in Phase 4
+    LLM_VISION_MODEL: str = "gemini/gemini-2.5-flash"
     LLM_EMBED_MODEL: str = "gemini/gemini-embedding-001"
 
     # ── Provider API keys ─────────────────────────────────────────────────────
@@ -19,15 +19,7 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     MISTRAL_API_KEY: str = ""
 
-    # ── Azure OpenAI — optional; VLM still uses it until Phase 4 ─────────────
-    AZURE_OPENAI_ENDPOINT: str = ""
-    AZURE_OPENAI_API_KEY: str = ""
-    AZURE_OPENAI_API_VERSION: str = ""
-    AZURE_OPENAI_GPT4O_MODEL: str = ""
-    AZURE_OPENAI_GPT4O_MINI_MODEL: str = ""
-    AZURE_OPENAI_EMBEDDING_MODEL: str = ""
     MAX_TOKENS: int = 4096
-    AZURE_DYNAMIC_SESSION_MGMT_ENDPOINT: str = ""
 
     # vector store
     QDRANT_HOST: str = "localhost"

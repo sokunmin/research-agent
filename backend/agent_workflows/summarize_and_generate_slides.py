@@ -17,10 +17,10 @@ from llama_index.core.workflow import (
     draw_all_possible_flows,
 )
 
-from workflows.events import *
+from agent_workflows.events import *
 
-from workflows.slide_gen import SlideGenerationWorkflow
-from workflows.summary_gen import SummaryGenerationWorkflow
+from agent_workflows.slide_gen import SlideGenerationWorkflow
+from agent_workflows.summary_gen import SummaryGenerationWorkflow
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
