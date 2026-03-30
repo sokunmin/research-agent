@@ -7,8 +7,8 @@ from llama_index.core import Settings
 from tavily import TavilyClient
 
 from config import settings
-from services.llms import llm_gpt4o, new_gpt4o_mini
-from services.embeddings import aoai_embedder
+from services.llms import llm, new_fast_llm
+from services.embeddings import embedder
 import logging
 from llama_index.core.workflow import (
     Context,
@@ -27,7 +27,7 @@ from workflows.paper_scraping import (
     download_relevant_citations,
 )
 from workflows.summary_using_images import (
-    get_summary_from_gpt4o,
+    summarize_paper_images,
     save_summary_as_markdown,
 )
 
@@ -43,8 +43,8 @@ if not logger.hasHandlers():
     logger.addHandler(handler)
 
 
-Settings.llm = llm_gpt4o
-Settings.embed_model = aoai_embedder
+Settings.llm = llm
+Settings.embed_model = embedder
 
 
 class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
@@ -104,7 +104,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         # deduplicate papers
         papers = list({p.entry_id: p for p in papers}.values())
         ctx.data["n_all_papers"] = len(papers)
-        logger.info(f"papers found on ss: {[p.title for p in papers]}")
+        logger.info(f"papers found: {[p.title for p in papers]}")
         for paper in papers:
             ctx.write_event_to_stream(
                 Event(
@@ -121,7 +121,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
 
     @step(pass_context=True, num_workers=4)
     async def filter_papers(self, ctx: Context, ev: PaperEvent) -> FilteredPaperEvent:
-        llm = new_gpt4o_mini(temperature=0.0)
+        llm = new_fast_llm(temperature=0.0)
         _, response = await process_citation(
             0, ctx.data["research_topic"], ev.paper, llm
         )
@@ -189,7 +189,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         self, ctx: Context, ev: Paper2SummaryEvent
     ) -> SummaryStoredEvent:
         pdf2images(ev.pdf_path, ev.image_output_dir)
-        summary_txt = await get_summary_from_gpt4o(ev.image_output_dir)
+        summary_txt = await summarize_paper_images(ev.image_output_dir)
         save_summary_as_markdown(summary_txt, ev.summary_path)
         ctx.write_event_to_stream(
             Event(

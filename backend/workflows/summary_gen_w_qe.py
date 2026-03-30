@@ -28,8 +28,8 @@ from llama_index.core import (
 from llama_index.core import Settings
 from config import settings
 from prompts.prompts import SUMMARIZE_PAPER_PMT, REACT_PROMPT_SUFFIX
-from services.llms import llm_gpt4o
-from services.embeddings import aoai_embedder
+from services.llms import llm
+from services.embeddings import embedder
 from utils.visualization import visualize_nodes_with_attributes
 import logging
 import sys
@@ -43,8 +43,8 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-Settings.llm = llm_gpt4o
-Settings.embed_model = aoai_embedder
+Settings.llm = llm
+Settings.embed_model = embedder
 
 
 def fname_to_collection_name(fname: str):
@@ -200,7 +200,7 @@ def create_agent(file_dir: Path, force_reingest: bool):
     toc_file = list(file_dir.glob("*.json"))[0]
     toc_md = toc_json_to_markdown(toc_file)
     logging.info(f"Creating query engine for '{file_dir}'")
-    query_engine = create_qe(file_dir, llm_gpt4o, force_reingest)
+    query_engine = create_qe(file_dir, llm, force_reingest)
     logging.info(f"Creating agent for querying '{file_dir}'")
     query_tool = QueryEngineTool(
         query_engine=query_engine,
@@ -218,7 +218,7 @@ def create_agent(file_dir: Path, force_reingest: bool):
     # chat_formatter = ReActChatFormatter(context=SUMMARIZE_PAPER_PMT)
     agent = ReActAgent.from_tools(
         [query_tool, save_tool],
-        llm=llm_gpt4o,
+        llm=llm,
         # react_chat_formatter=chat_formatter,
         max_iterations=30,
         verbose=True,
@@ -250,7 +250,7 @@ def main(parsed_paper_dir: str, force_reingest: bool):
         create_agent(f, force_reingest)
 
     # create_agent(file_name)
-    # query_engine = parse_and_create_qe(Path(file_name), llm_gpt4o)
+    # query_engine = parse_and_create_qe(Path(file_name), llm)
     # response = query_engine.query("What is the dataset used in this work?")
     # print(response.metadata)
     # print(response.response)

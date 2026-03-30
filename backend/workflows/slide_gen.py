@@ -27,12 +27,12 @@ from prompts.prompts import (
     MODIFY_SUMMARY2OUTLINE_PMT,
 )
 from services.llms import (
-    llm_gpt4o,
-    new_gpt4o,
-    new_gpt4o_mini,
-    new_mm_gpt4o,
+    llm,
+    new_llm,
+    new_fast_llm,
+    new_vlm,
 )
-from services.embeddings import aoai_embedder
+from services.embeddings import embedder
 import logging
 from llama_index.core import PromptTemplate
 from llama_index.core.workflow import (
@@ -65,8 +65,8 @@ if not logger.hasHandlers():
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-Settings.llm = llm_gpt4o
-Settings.embed_model = aoai_embedder
+Settings.llm = llm
+Settings.embed_model = embedder
 
 
 def read_summary_content(file_path: Path):
@@ -274,7 +274,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                 ).model_dump()
             )
         )
-        llm = new_gpt4o_mini(0.1)
+        llm = new_fast_llm(0.1)
         if isinstance(ev, OutlineFeedbackEvent):
             program = FunctionCallingProgram.from_defaults(
                 llm=llm,
@@ -413,7 +413,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         all_layout_names = [layout["layout_name"] for layout in self.all_layout]
 
         # add layout to outline
-        llm = new_gpt4o(0.1)
+        llm = new_llm(0.1)
         program = FunctionCallingProgram.from_defaults(
             llm=llm,
             output_cls=SlideOutlineWithLayout,
@@ -469,7 +469,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         )
         agent = ReActAgent.from_tools(
             tools=self.azure_code_interpreter.to_tool_list() + [self.all_layout_tool],
-            llm=new_gpt4o(0.1),
+            llm=new_llm(0.1),
             verbose=True,
             max_iterations=50,
         )
@@ -547,7 +547,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                 output_parser=PydanticOutputParser(SlideValidationResult),
                 image_documents=[img_doc],
                 prompt_template_str=SLIDE_VALIDATION_PMT,
-                multi_modal_llm=new_mm_gpt4o(),
+                multi_modal_llm=new_vlm(),
                 verbose=True,
             )
             response = program()
@@ -644,7 +644,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
 
         agent = ReActAgent.from_tools(
             tools=self.azure_code_interpreter.to_tool_list() + [self.all_layout_tool],
-            llm=new_gpt4o(0.1),
+            llm=new_llm(0.1),
             verbose=True,
             max_iterations=50,
         )
