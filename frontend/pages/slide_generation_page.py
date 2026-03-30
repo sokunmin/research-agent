@@ -68,6 +68,9 @@ if "pending_user_inputs" not in st.session_state:
 if "prompt_counter" not in st.session_state:
     st.session_state.prompt_counter = 0
 
+if "current_reasoning" not in st.session_state:
+    st.session_state.current_reasoning = ""
+
 
 async def fetch_streaming_data(url: str, payload: dict = None):
     async with httpx.AsyncClient(timeout=1200.0) as client:
@@ -95,7 +98,10 @@ async def get_stream_data(url, payload, message_queue, user_input_event):
     async for data in fetch_streaming_data(url, payload):
         if data:
             try:
-                data_json = json.loads(data)
+                data = data.strip()
+                if not data or not data.startswith("data:"):
+                    continue
+                data_json = json.loads(data[len("data:"):].strip())
                 if "workflow_id" in data_json:
                     # Send workflow_id to main thread
                     message_queue.put(("workflow_id", data_json["workflow_id"]))
@@ -115,8 +121,11 @@ async def get_stream_data(url, payload, message_queue, user_input_event):
                     user_input_event.clear()
                     continue
                 else:
-                    # Send the line to the main thread
-                    message_queue.put(("message", format_workflow_info(data_json)))
+                    if event_sender == "react_agent":
+                        msg = event_content.get("message", "") if event_content else ""
+                        message_queue.put(("reasoning", msg))
+                    else:
+                        message_queue.put(("message", format_workflow_info(data_json)))
             except json.JSONDecodeError:  # todo: is this necessary?
                 message_queue.put(("message", data))
         if data_json and "final_result" in data_json or "final_result" in str(data):
@@ -161,6 +170,11 @@ def process_messages():
 
                     # Increment the prompt counter
                     st.session_state.prompt_counter += 1
+
+                    # Fragment re-renders only itself; force full app rerun so
+                    # gather_outline_feedback() (outside the fragment) can see
+                    # the updated user_input_required state and render buttons.
+                    st.rerun()
             elif msg_type == "message":
                 st.session_state.received_lines.append(content)
                 truncated_line = (
@@ -169,6 +183,8 @@ def process_messages():
                     else content
                 )
                 st.session_state.expander_label = truncated_line
+            elif msg_type == "reasoning":
+                st.session_state.current_reasoning += content
             elif msg_type == "final_result":
                 st.session_state.final_result = content
                 st.session_state.download_url_pptx = content.get("download_pptx_url")
@@ -189,12 +205,30 @@ _run_every = None if st.session_state.workflow_complete else "2s"
 @st.fragment(run_every=_run_every)
 def workflow_display():
     process_messages()
-    if st.session_state.received_lines:
-        state = "complete" if st.session_state.workflow_complete else "running"
-        with st.status("🤖⚒️ Agent is working...", state=state):
+
+    thread = st.session_state.get("workflow_thread")
+    is_running = thread is not None and thread.is_alive()
+    is_complete = st.session_state.workflow_complete
+
+    # Nothing to show if no workflow has been started yet
+    if not is_running and not is_complete and not st.session_state.received_lines:
+        return
+
+    state = "complete" if is_complete else "running"
+    label = "✅ Agent finished!" if is_complete else "🤖⚒️ Agent is working..."
+
+    with st.status(label, state=state, expanded=not is_complete) as status:
+        if not st.session_state.received_lines and not st.session_state.current_reasoning:
+            st.write("⏳ Waiting for agent to start...")
+        else:
             for line in st.session_state.received_lines:
                 st.write(line)
                 st.divider()
+            if st.session_state.current_reasoning:
+                st.caption("💭 Agent thinking:")
+                st.code(st.session_state.current_reasoning, language=None)
+        if is_complete:
+            status.update(label="✅ Agent finished!", state="complete", expanded=False)
 
 
 def gather_outline_feedback(placeholder):
@@ -364,6 +398,7 @@ def main():
             )
             st.session_state.workflow_thread.start()
             st.session_state.received_lines = []
+            st.session_state.current_reasoning = ""
         else:
             st.write("Background thread is already running.")
 
