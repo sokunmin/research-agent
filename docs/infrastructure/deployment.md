@@ -30,11 +30,11 @@
     ┌──────┴──────────────┐
     │ Docker socket       │ 外部 API
     ▼                     ▼
-┌──────────────────┐  ┌─────────────────────────────┐
-│   llm-sandbox    │  │     LiteLLM Provider        │
-│ (container pool) │  │  (Gemini / OpenRouter / 等) │
-└──────────────────┘  │  Tavily / OpenAlex          │
-                      └─────────────────────────────┘
+┌──────────────────┐  ┌─────────────────────────────┐  ┌─────────────────────┐
+│   llm-sandbox    │  │     LiteLLM Provider        │  │  Ollama（本機）      │
+│ (container pool) │  │  (Groq / Gemini / 等)       │  │  nomic-embed-text   │
+└──────────────────┘  │  OpenAlex                   │  │  (論文相關性 Stage-1)│
+                      └─────────────────────────────┘  └─────────────────────┘
 ```
 
 ## docker-compose 服務清單
@@ -48,7 +48,7 @@
 | Network | `app-network` |
 | Restart | `on-failure`（僅補捉啟動失敗，不在 mid-run crash 後重啟） |
 | Depends on | `mlflow`（`service_healthy`） |
-| Healthcheck | `GET /`，interval 5s，timeout 3s，retries 5，start_period 15s |
+| Healthcheck | `GET /`，interval 60s，timeout 3s，retries 3，start_period 15s |
 
 **環境變數注入：**
 
@@ -85,10 +85,12 @@
 |------|-----|
 | Image | `ghcr.io/mlflow/mlflow:v3.10.0` |
 | Host port | `8080` |
-| Backend store | SQLite (`./mlruns/mlruns.db`) |
-| Start command | `mlflow server --host 0.0.0.0 --port 8080` |
+| Backend store | SQLite (`/mlruns/mlruns.db`，volume 掛載至 `./mlruns`) |
+| Artifact root | `/mlartifacts`（volume 掛載至 `./mlartifacts`） |
+| Start command | `mlflow server --host 0.0.0.0 --port 8080 --backend-store-uri sqlite:////mlruns/mlruns.db --default-artifact-root /mlartifacts --allowed-hosts "mlflow,localhost,127.0.0.1"` |
+| Env var | `MLFLOW_LOGGING_LEVEL=WARNING` |
 | Restart | `unless-stopped`（資料持久化在 volume，重啟安全） |
-| Healthcheck | `GET /health`，interval 10s，timeout 5s，retries 5，start_period 20s |
+| Healthcheck | `GET /health`，interval 30s，timeout 5s，retries 3，start_period 20s |
 
 ## 服務啟動順序
 
@@ -130,10 +132,12 @@ docker-compose up -d --no-deps backend
 └── workflow_artifacts/
     ├── SummaryGenerationWorkflow/
     │   └── <workflow_id>/
-    │       └── data/
-    │           ├── papers/              # 下載的論文 PDF
-    │           ├── papers_images/       # PDF 轉圖片（給 VLM 視覺分析用）
-    │           └── paper_summaries/     # Markdown 格式摘要
+    │       ├── papers/                  # 下載的論文 PDF（ArXiv ID 或 OpenAlex ID 命名）
+    │       └── papers_images/           # PDF 轉圖片 + Markdown 摘要
+    │           ├── <paper_stem>/        # 每篇論文的頁面圖片（給 VLM 視覺分析用）
+    │           │   ├── page_1.png
+    │           │   └── page_2.png
+    │           └── <paper_stem>.md      # 對應論文的 Markdown 摘要
     └── SlideGenerationWorkflow/
         └── <workflow_id>/
             ├── slide_outlines.json   # 投影片大綱 JSON
@@ -163,3 +167,9 @@ poetry run uvicorn main:app --reload --port 8000
 ```
 
 > 本機執行時，Docker Desktop 仍需在背景執行，供 `LlmSandboxToolSpec` 使用。
+>
+> 同時需確認 Ollama 已在背景執行並已下載 embedding 模型：
+> ```bash
+> ollama pull nomic-embed-text
+> ollama serve
+> ```

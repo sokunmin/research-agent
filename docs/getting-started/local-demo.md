@@ -11,6 +11,7 @@
 | 工具 | 說明 |
 |------|------|
 | Docker Desktop | 必須在背景執行，整個 demo 期間不可關閉 |
+| Ollama | 本地 embedding 服務，論文相關性過濾使用 |
 | Git | clone 專案用 |
 | API Keys | 見下方 Step 1 |
 
@@ -18,8 +19,8 @@
 
 | 服務 | 取得方式 | 費用 |
 |------|---------|------|
-| **Tavily** | https://tavily.com → Sign up | 免費層可用 |
-| **Google AI Studio (Gemini)** | https://aistudio.google.com → Get API key | **完全免費**（10 RPM / 250 RPD） |
+| **Groq** | https://console.groq.com → Create API Key | **免費層**（RPM=60） |
+| **Google AI Studio (Gemini)** | https://aistudio.google.com → Get API key | **完全免費**（10 RPM / 250 RPD），視覺模型用 |
 
 > OpenAlex（論文資料庫）完全免費，無需 API key。
 
@@ -34,16 +35,33 @@ cd research-agent/dev
 
 ---
 
-## Step 2 — 設定環境變數
+## Step 2 — 準備 Ollama embedding 模型
+
+論文相關性過濾的 Stage-1 使用本地 Ollama（`nomic-embed-text`），需提前下載：
+
+```bash
+ollama pull nomic-embed-text
+```
+
+確認 Ollama 服務已在背景執行：
+
+```bash
+ollama serve   # 若尚未啟動
+```
+
+---
+
+## Step 3 — 設定環境變數
 
 ```bash
 cp .env.example .env
 ```
 
-用編輯器開啟 `.env`，填入以下兩個必填欄位：
+用編輯器開啟 `.env`，填入以下欄位：
 
 ```env
-TAVILY_API_KEY=tvly-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# LLM providers
+GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 GEMINI_API_KEY=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # 建議填入（提高 OpenAlex API rate limit）
@@ -56,7 +74,7 @@ OPENALEX_EMAIL=your@email.com
 
 ---
 
-## Step 3 — 建立資料目錄並啟動服務
+## Step 4 — 建立資料目錄並啟動服務
 
 ```bash
 # 在 dev/ 目錄下執行
@@ -83,13 +101,13 @@ mlflow-1    | INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to 
 
 ---
 
-## Step 4 — 開始 Demo
+## Step 5 — 開始 Demo
 
-### 4-1 開啟前端
+### 5-1 開啟前端
 
 瀏覽器開啟 **http://localhost:8501**，點擊左側導覽列 **🧾 Slide Generation**。
 
-### 4-2 輸入研究主題
+### 5-2 輸入研究主題
 
 在左側 sidebar 的輸入框填入研究主題，例如：
 
@@ -104,23 +122,22 @@ attention mechanism in transformer models
 
 點擊 **Submit** 開始執行。
 
-### 4-3 觀察 Agent 執行過程
+### 5-3 觀察 Agent 執行過程
 
 右側主區域會開始顯示進度訊息（每 2 秒更新一次）：
 
 ```
-[tavily_query] Querying Tavily with: 'arxiv papers about the state of the art of attention...'
-[get_paper_with_citations] Found related paper: Attention Is All You Need
-[get_paper_with_citations] Found related paper: ...
+[discover_candidate_papers] Searching papers on: attention mechanism in transformer models
+[discover_candidate_papers] Found 87 candidate papers
 [filter_papers] Filtering papers for relevance...
-[download_papers] Downloading filtered relevant papers: Attention Is All You Need | ...
-[paper2summary] Summarizing paper: Attention Is All You Need.pdf
+[download_papers] Downloading 5 relevant papers: Attention Is All You Need | ...
+[paper2summary] Summarizing: 1706.03762.pdf
 ...
 ```
 
 **整個 Summary 階段約需 5–10 分鐘**，取決於論文數量與 API 速度。
 
-### 4-4 審核投影片大綱（Human-in-the-Loop）
+### 5-4 審核投影片大綱（Human-in-the-Loop）
 
 Summary 完成後，右側會出現 **大綱審核介面**：
 
@@ -145,7 +162,7 @@ Summary 完成後，右側會出現 **大綱審核介面**：
 
 > 每篇論文各會出現一次審核，有幾篇論文就需審核幾次（最多 5 篇）。
 
-### 4-5 等待投影片生成
+### 5-5 等待投影片生成
 
 大綱全部核准後，Agent 會進入 Slide Generation 階段：
 
@@ -160,7 +177,7 @@ Summary 完成後，右側會出現 **大綱審核介面**：
 
 **此階段約需 3–8 分鐘**。
 
-### 4-6 下載結果
+### 5-6 下載結果
 
 完成後右側會出現：
 - **PDF 預覽**（內嵌 PDF 檢視器）
@@ -170,7 +187,7 @@ Summary 完成後，右側會出現 **大綱審核介面**：
 
 ---
 
-## Step 5 — 查看 MLflow 追蹤記錄（選用）
+## Step 6 — 查看 MLflow 追蹤記錄（選用）
 
 開啟 **http://localhost:8080**，可以看到每次 workflow run 的：
 
@@ -203,29 +220,59 @@ Error response from daemon: Cannot connect to the Docker daemon
 
 **解法**：啟動 Docker Desktop，等待鯨魚圖示變成綠色後重試。
 
-### Gemini API 達到 rate limit
+### Ollama 服務未啟動
+
+```
+Connection refused: ollama/nomic-embed-text
+```
+
+**解法**：確認 Ollama 已在背景執行，並已下載模型：
+
+```bash
+ollama serve
+ollama pull nomic-embed-text
+```
+
+### Gemini API 達到 rate limit（Vision LLM）
 
 ```
 429 Too Many Requests
 ```
 
-**解法**：免費層限制 10 RPM / 250 RPD。若遇到此錯誤：
-1. 等待 1 分鐘後前端會自動繼續（workflow 有 retry 機制）
-2. 或在 `.env` 改用 OpenRouter 免費模型：
+**說明**：vision_llm 預設使用 Gemini（10 RPM）。Workflow 有 `DELAY_SECONDS_VISION=12s` 保護，正常情況下不會觸發。若仍遇到：
+1. 等待 1 分鐘後前端會自動繼續（workflow 有 retry + fallback 機制）
+2. 或在 `.env` 降低並行度：
    ```env
-   LLM_SMART_MODEL=openrouter/meta-llama/llama-3.3-70b-instruct:free
-   LLM_FAST_MODEL=openrouter/meta-llama/llama-3.3-70b-instruct:free
-   LLM_VISION_MODEL=openrouter/google/gemini-2.0-flash-exp:free
+   NUM_WORKERS_VISION=1
+   DELAY_SECONDS_VISION=12.0
+   ```
+3. 或切換到 OpenRouter 備援：
+   ```env
+   LLM_VISION_FALLBACK_MODEL=openrouter/google/gemma-3-27b-it:free
    OPENROUTER_API_KEY=your_key
    ```
 
-### 找不到 ArXiv PDF
+### Groq API 達到 rate limit（Smart/Fast LLM）
 
 ```
-No ArXiv ID for '...', skipping.
+429 Too Many Requests
 ```
 
-**說明**：部分論文沒有 ArXiv 版本，系統會自動跳過，不影響整體流程。只要有至少 1 篇成功下載即可繼續。
+**解法**：Groq 免費層 RPM=60，通常不會觸發。若遇到可切換到 OpenRouter：
+
+```env
+LLM_SMART_MODEL=openrouter/meta-llama/llama-3.3-70b-instruct:free
+LLM_FAST_MODEL=openrouter/meta-llama/llama-3.3-70b-instruct:free
+OPENROUTER_API_KEY=your_key
+```
+
+### PDF 下載失敗
+
+```
+All download strategies exhausted for '...'
+```
+
+**說明**：系統使用 4-strategy fallback 下載（ArXiv API → ArXiv direct → PyAlex → OA URL），若全部失敗表示該論文目前無法取得。系統會自動跳過，不影響整體流程。只要有至少 1 篇成功下載即可繼續。
 
 ### 前端沒有更新進度
 

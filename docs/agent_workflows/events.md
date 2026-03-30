@@ -18,9 +18,8 @@
 
 | Event 類別 | 欄位 | 說明 |
 |-----------|------|------|
-| `TavilyResultsEvent` | `results: List[TavilySearchResult]` | Tavily 搜尋結果，包含論文標題與連結 |
-| `PaperEvent` | `paper: Paper` | 單篇論文（fan-out，每篇發一個） |
-| `FilteredPaperEvent` | `paper: Paper`, `is_relevant: IsCitationRelevant` | 過濾後的論文，含相關性評分 |
+| `PaperEvent` | `paper: Paper` | 單篇候選論文（fan-out，每篇發一個） |
+| `FilteredPaperEvent` | `paper: Paper`, `relevance: PaperRelevanceResult` | 過濾後的論文，含相關性結果（`is_relevant: bool`, `similarity_score: float`） |
 | `Paper2SummaryDispatcherEvent` | `papers_path: str` | 已下載 PDF 的目錄路徑 |
 | `Paper2SummaryEvent` | `pdf_path: Path`, `image_output_dir: Path`, `summary_path: Path` | 單篇論文待摘要任務（fan-out） |
 | `SummaryStoredEvent` | `fpath: Path` | 摘要已儲存完成，回傳 .md 路徑 |
@@ -55,26 +54,23 @@
   StartEvent (user_query)
        │
        ▼
-  [tavily_query]
-       │
-       ▼
-  TavilyResultsEvent
-       │
-       ▼
-  [get_paper_with_citations] (OpenAlex)
+  [discover_candidate_papers]
+  fast_llm 改寫查詢語 → OpenAlex 全文搜尋（is_oa, citations>50, 近 3 年）
        │ fan-out
        ├──► PaperEvent (paper 1)
        ├──► PaperEvent (paper 2)
        └──► PaperEvent (paper N)
             │
-            ▼  (num_workers=4)
-       [filter_papers] (new_fast_llm)
+            ▼  (num_workers=NUM_WORKERS_FAST)
+       [filter_papers]
+       Stage 1: embedding similarity (Ollama local)
+       Stage 2: fast_llm 驗證（僅 borderline ~41%）
             │
             ▼
        FilteredPaperEvent × N
-            │ collect all N
+            │ collect all N，過濾 is_relevant=True，依 similarity_score 排序，取前 N
             ▼
-       [download_papers] (ArXiv PDF)
+       [download_papers] (4-strategy fallback: ArXiv API → ArXiv direct → PyAlex → OA URL)
             │
             ▼
        Paper2SummaryDispatcherEvent
@@ -83,7 +79,7 @@
             ├──► Paper2SummaryEvent (pdf 2)
             └──► Paper2SummaryEvent (pdf M)
                  │
-                 ▼  (num_workers=4)
+                 ▼  (num_workers=NUM_WORKERS_VISION, delay=DELAY_SECONDS_VISION)
             [paper2summary] (PDF → images → VLM)
                  │
                  ▼
