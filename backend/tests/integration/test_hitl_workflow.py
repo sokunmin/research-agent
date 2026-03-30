@@ -22,14 +22,14 @@ class TestEmitMessage:
         """_emit_message() calls ctx.write_event_to_stream exactly once."""
         wf = _ConcreteWorkflow()
         ctx = MagicMock()
-        wf._emit_message(ctx, "my_step", "hello world")
+        wf._emit_message(ctx, "my_step", message="hello world")
         ctx.write_event_to_stream.assert_called_once()
 
     def test_event_has_correct_sender_and_message(self):
         """Emitted event carries correct event_sender and message content."""
         wf = _ConcreteWorkflow()
         ctx = MagicMock()
-        wf._emit_message(ctx, "discover_papers", "Found 42 papers")
+        wf._emit_message(ctx, "discover_papers", message="Found 42 papers")
         msg = ctx.write_event_to_stream.call_args[0][0].msg
         assert msg["event_type"] == "server_message"
         assert msg["event_sender"] == "discover_papers"

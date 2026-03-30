@@ -6,7 +6,6 @@ import click
 from config import settings
 from services.llms import llm, new_fast_llm
 from services.embeddings import embedder
-import logging
 from llama_index.core import Settings
 from llama_index.core.llms import ChatMessage
 from llama_index.core.tools import FunctionTool
@@ -32,17 +31,9 @@ from agent_workflows.summary_using_images import (
 )
 from prompts.prompts import ACADEMIC_QUERY_REFORMULATION_PMT
 from services.model_factory import model_factory
+from utils.logger import get_logger
 
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-if not logger.hasHandlers():
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+logger = get_logger(__name__)
 
 
 Settings.llm = llm
@@ -104,7 +95,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         async with ctx.store.edit_state() as state:
             state["research_topic"] = topic
 
-        self._emit_message(ctx, "discover_candidate_papers", f"Searching papers on: {topic}")
+        self._emit_message(ctx, "discover_candidate_papers", message=f"Searching papers on: {topic}")
 
         search_query = await _generate_search_query(topic, new_fast_llm(temperature=0.0))
         logger.info(f"Search query reformulated: '{topic}' → '{search_query}'")
@@ -117,7 +108,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
             state["n_all_papers"] = len(papers)
 
         self._emit_message(
-            ctx, "discover_candidate_papers", f"Found {len(papers)} candidate papers"
+            ctx, "discover_candidate_papers", message=f"Found {len(papers)} candidate papers"
         )
         for paper in papers:
             ctx.send_event(PaperEvent(paper=paper))
@@ -152,7 +143,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
 
         self._emit_message(
             ctx, "download_papers",
-            f"Downloading {len(top_papers)} relevant papers: "
+            message=f"Downloading {len(top_papers)} relevant papers: "
             f"{' | '.join(e.paper.title for e in top_papers)}",
         )
         download_paper_pdfs(
@@ -185,7 +176,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         self, ctx: Context, ev: Paper2SummaryEvent
     ) -> SummaryStoredEvent:
         await asyncio.sleep(settings.DELAY_SECONDS_VISION)
-        self._emit_message(ctx, "paper2summary", f"Summarizing: {ev.pdf_path.name}")
+        self._emit_message(ctx, "paper2summary", message=f"Summarizing: {ev.pdf_path.name}")
         pdf2images(ev.pdf_path, ev.image_output_dir)
         summary_txt = await summarize_paper_images(ev.image_output_dir)
         save_summary_as_markdown(summary_txt, ev.summary_path)
@@ -202,7 +193,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         if missing:
             logger.warning(f"Missing summary files: {missing}")
 
-        self._emit_message(ctx, "finish", f"All {len(ready)} paper summaries stored.")
+        self._emit_message(ctx, "finish", message=f"All {len(ready)} paper summaries stored.")
         logger.info(f"All {len(ready)} paper summaries stored.")
         return StopEvent(result=self.paper_summary_path.as_posix())
 
