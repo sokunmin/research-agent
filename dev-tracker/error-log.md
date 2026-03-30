@@ -1,4 +1,16 @@
 ---
+## [2026-03-12] macOS Python pytest 執行時 `ssl.SSLCertVerificationError` — HTTPS 下載失敗 `[環境: macOS + python.org Python + poetry venv]`
+原因：python.org 安裝的 Python 不連結 macOS Keychain 憑證，poetry venv 執行時 `SSL_CERT_FILE` 為空，`urllib` 無法驗證任何 HTTPS 憑證（包含 arxiv.org）。
+修正：在 `tests/conftest.py` 最頂端加 `import certifi; os.environ.setdefault("SSL_CERT_FILE", certifi.where())`，讓所有測試繼承 certifi CA bundle。
+---
+## [2026-03-12] LlamaIndex `ChatMessage(content="text").content` 回傳 content blocks list 而非字串 `[版本: llama-index-core>=0.13（含 0.14.x）]`
+原因：0.13+ 統一用 content blocks 格式儲存訊息，即使只傳 plain string，`ChatMessage.content` 也回傳 `[{"type": "text", "text": "..."}]`，而非原始字串，導致 `assert sent["content"] == "ping"` 失敗。
+修正：測試中用 `isinstance(content, list)` 判斷後取出 text block 再比對，或改為 `assert "ping" in str(sent["content"])`。
+---
+## [2026-03-12] LlamaIndex `ImageDocument(image_url=...)` 建構子發 HTTP 請求驗證 URL 可存取性 `[版本: llama-index-core>=0.13（含 0.14.x）]`
+原因：0.13+ 的 `ImageDocument.__init__` 對 `image_url` 欄位執行 validator，實際發 HTTP request 確認 URL 回傳圖片，假 URL（如 `https://example.com/img.jpg`）直接拋出 `ValueError: The specified URL is not an accessible image`，unit test 無法使用假 URL。
+修正：unit test 改用 `types.SimpleNamespace(image_url=..., image=None, image_path=None, image_mimetype=None)` mock interface，完全繞過 LlamaIndex validator。
+---
 ## [2026-03-11] `llama-index-core>=0.14` 附帶 `llama-index-workflows`，本地 `workflows/` 被 site-packages 覆蓋 `[版本: llama-index-core>=0.14]`
 原因：`llama-index-workflows` v2.15.1 在 site-packages 安裝同名的 `workflows/` package（含 `__init__.py`），本地 `backend/workflows/`（無 `__init__.py`，namespace package）優先順序低，`from workflows.events import *` 實際取到 LlamaIndex 內部事件，自定義 `SummaryEvent` 等不存在，拋出 `NameError`。`__init__.py` 補救無效（會破壞 `llama_index.core` 自身對 `workflows.context` 的 import）。
 修正：將本地 `workflows/` 改名為不衝突的名稱（本專案改為 `agent_workflows/`），並全局替換所有 `from workflows.` import。
