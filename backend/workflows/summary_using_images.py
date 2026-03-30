@@ -8,16 +8,12 @@ from prompts.prompts import SUMMARIZE_PAPER_PMT
 from services.llms import new_vlm, new_llm
 import sys
 from llama_index.core import Settings
-from utils.tokens import calculate_cost
-import tiktoken
+from utils.tokens import calculate_cost, setup_token_counter
 from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
 
 Settings.llm = new_llm()
 
-token_counter = TokenCountingHandler(
-    tokenizer=tiktoken.encoding_for_model(Settings.llm.model).encode,
-    # verbose=True
-)
+token_counter = setup_token_counter(Settings.llm.model)
 Settings.callback_manager = CallbackManager([token_counter])
 Settings.llm.callback_manager = Settings.callback_manager
 
