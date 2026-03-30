@@ -8,10 +8,6 @@ import click
 from llama_index.core import Settings, SimpleDirectoryReader
 from llama_index.core.agent.workflow import ReActAgent
 from llama_index.core.output_parsers import PydanticOutputParser
-from llama_index.core.program import (
-    FunctionCallingProgram,
-    MultiModalLLMCompletionProgram,
-)
 from llama_index.core.tools import FunctionTool
 
 from config import settings

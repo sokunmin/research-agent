@@ -127,13 +127,17 @@ summary2outline_requirements = """
 SUMMARY2OUTLINE_PMT = (
     """
 You are an AI specialized in generating PowerPoint slide outlines based on the content provided.
-You will receive a markdown string that contains the summary of papers and 
+You will receive a markdown string that contains the summary of papers and
 you will generate a slide outlines for each paper.
 Requirements:"""
     + summary2outline_requirements
     + """
 
-Here is the markdown content: {summary} 
+Here is the markdown content: {summary}
+
+Output the following fields:
+- title: the slide title text
+- content: the slide body text with bullet points
 """
 )
 
@@ -146,46 +150,67 @@ The feedback provided is: '''{feedback}'''.
 Please modify the outline based on the feedback and provide the updated outline, respecting
  the original requirements:"""
     + summary2outline_requirements
+    + """
+
+Output the following fields:
+- title: the slide title text
+- content: the slide body text with bullet points
+"""
 )
 
 AUGMENT_LAYOUT_PMT = """
-You are an AI that selects slide layout from a template for the slide text given.
-You will receive a page content with title and main text.
-Your task is to select the appropriate layout and information such as index of the placeholder for the page 
- based on what type of the content it is (e.g. is it topic overview/agenda, 
- or actual content, or thank you message).
-For content slides, make sure to 
- - choose a layout that has content placeholder (also referred to as 'Plassholder for innhold') 
- after the title placeholder
- - choose the content placeholder that is large enough for the text content
- 
-The following layout are available: {available_layout_names} with their detailed information:
+You are an AI that selects the most appropriate slide layout for given slide content.
+You will receive a slide with a title and main text body.
+
+Select the layout and placeholder indices based on the content type
+(e.g. agenda/overview, regular content, title slide, or closing/thank-you slide).
+
+For content slides:
+ - choose a layout that has a content placeholder (also referred to as 'Plassholder for innhold') after the title placeholder
+ - choose the content placeholder that is large enough for the text
+
+The following layouts are available: {available_layout_names} with their detailed information:
 {available_layouts}
 
 Here is the slide content:
 {slide_content}
+
+Output the following fields:
+- title: the slide title text (copy verbatim from input)
+- content: the slide body text (copy verbatim from input)
+- layout_name: the exact name string of the chosen layout (must match one of the available layout names exactly)
+- idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout
+- idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout
 """
 
 SLIDE_GEN_PMT = """
-You are an AI that generate slide deck from a given slide outlines and uses the
- template file provided. Write python-pptx code for generating the slide deck by loop over the slide 
- outlines provided.
-You will be provided with a json file `{json_file_path}` that contains a list of slide outlines
- and layout to use from the template.
-The template file is located at `{template_fpath}`.
-If you can't find those files at remote location, you need to upload them.
-Respond user with the python code that generates the slide deck.
+You are an AI code executor that generates a PowerPoint slide deck using python-pptx.
 
-Requirement:
-- If there is no front page or 'thank you' page, create them by using the related layout template in the
- layout information provided, DO NOT assume the index of the layout for them
-- If the placeholder chosen has text auto_size set to TEXT_TO_FIT_SHAPE, make sure to set the
- text to fit the shape (use MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE) and DO NOT set a font size
-- One slide page per outline item that you are given, fill in all the title and content you are given
-- Use layout and text box index according to what is given in each of the slide content item 
-- Vary the content layout of the slides to make the presentation engaging
-- Generate the python code before you try to execute it
-- Save the final slide pptx file with name `{generated_slide_fname}`
+Your ONLY job is to write Python code and execute it using the `run_code` tool.
+Do NOT explain, describe, or ask the user questions. Just write and execute the code.
+
+Input files available in the sandbox:
+- Slide outlines JSON: `{json_file_path}` (list of slide outline objects with layout info)
+- PPTX template: `{template_fpath}`
+
+Steps you MUST follow in order:
+1. Use `run_code` to read and print `{json_file_path}` so you understand the structure.
+2. Use `run_code` to execute python-pptx code that generates the slide deck.
+3. Use `list_files` to confirm `{generated_slide_fname}` exists in the sandbox.
+4. If the file does not exist, fix and re-run the code.
+5. When `{generated_slide_fname}` is confirmed present, output: "Done. {generated_slide_fname} has been saved."
+
+Requirements for the generated code:
+- Load the template from `{template_fpath}` using Presentation()
+- Loop over all items in `{json_file_path}`; create one slide per outline item
+- Match each slide to its layout by layout_name from the JSON
+- Fill title using idx_title_placeholder index, content using idx_content_placeholder index
+- If there is no front page or 'thank you' slide, add them using the appropriate layout
+- If a placeholder has auto_size=TEXT_TO_FIT_SHAPE, use MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE and do NOT set font size
+- Save the final file as `{generated_slide_fname}` using prs.save()
+
+CRITICAL: You MUST use `run_code` to actually execute the code. Do not output code as text only.
+CRITICAL: Task is complete only when `list_files` confirms `{generated_slide_fname}` exists.
 
 """
 # - For each key heading in the paper summary, create a different text box in the slide
