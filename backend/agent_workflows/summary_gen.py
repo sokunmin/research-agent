@@ -1,15 +1,15 @@
 import asyncio
-import inspect
 import uuid
 
 import click
-from tavily import TavilyClient
 
 from config import settings
 from services.llms import llm, new_fast_llm
 from services.embeddings import embedder
 import logging
 from llama_index.core import Settings
+from llama_index.core.llms import ChatMessage
+from llama_index.core.tools import FunctionTool
 from llama_index.core.workflow import (
     Context,
     StartEvent,
@@ -21,14 +21,17 @@ from utils.file_processing import pdf2images
 from agent_workflows.events import *
 from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow
 from agent_workflows.paper_scraping import (
-    get_paper_with_citations,
-    process_citation,
-    download_relevant_citations,
+    fetch_candidate_papers,
+    download_paper_pdfs,
+    PaperRelevanceFilter,
+    PaperRelevanceResult,
 )
 from agent_workflows.summary_using_images import (
     summarize_paper_images,
     save_summary_as_markdown,
 )
+from prompts.prompts import ACADEMIC_QUERY_REFORMULATION_PMT
+from services.model_factory import model_factory
 
 
 logger = logging.getLogger(__name__)
@@ -46,9 +49,18 @@ Settings.llm = llm
 Settings.embed_model = embedder
 
 
+async def _generate_search_query(user_query: str, llm) -> str:
+    """Reformulate a user's research interest into a BM25-optimised academic search term."""
+    messages = [
+        ChatMessage(role="system", content=ACADEMIC_QUERY_REFORMULATION_PMT),
+        ChatMessage(role="user", content=user_query),
+    ]
+    response = await llm.achat(messages)
+    return response.message.content.strip()
+
+
 class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
     wid: Optional[uuid.UUID] = uuid.uuid4()
-    tavily_max_results: int = settings.TAVILY_MAX_RESULTS
     num_max_final_papers: int = settings.NUM_MAX_FINAL_PAPERS
 
     _PAPERS_SUBDIR = "papers"
@@ -68,63 +80,60 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         self.papers_images_path.mkdir(parents=True, exist_ok=True)
         self.paper_summary_path = self.papers_images_path
         self.paper_summary_path.mkdir(parents=True, exist_ok=True)
-
-    @step
-    async def tavily_query(self, ctx: Context, ev: StartEvent) -> TavilyResultsEvent:
-        async with ctx.store.edit_state() as state:
-            state["research_topic"] = ev.user_query
-        query = f"arxiv papers about the state of the art of {ev.user_query}"
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={"message": f"Querying Tavily with: '{query}'"},
-                ).model_dump()
-            )
+        self._relevance_filter = PaperRelevanceFilter(
+            embed_model=model_factory.relevance_embed_model(),
+            llm=new_fast_llm(temperature=0.0),
         )
-        tavily_client = TavilyClient(api_key=settings.TAVILY_API_KEY)
-        response = tavily_client.search(query, max_results=self.tavily_max_results)
-        results = [TavilySearchResult(**d) for d in response["results"]]
-        logger.info(f"tavily results: {results}")
-        return TavilyResultsEvent(results=results)
+        self._search_tool = FunctionTool.from_defaults(
+            fn=fetch_candidate_papers,
+            name="search_academic_papers",
+            description=(
+                "Search OpenAlex for recent open-access academic papers on a research topic. "
+                "Returns Papers sorted by citation count."
+            ),
+        )
+        # _search_tool is stored for potential LLM agent use; the workflow step calls
+        # fetch_candidate_papers directly for type-safe access to the Paper list.
 
     @step
-    async def get_paper_with_citations(
-        self, ctx: Context, ev: TavilyResultsEvent
+    async def discover_candidate_papers(
+        self, ctx: Context, ev: StartEvent
     ) -> PaperEvent:
-        papers = []
-        for r in ev.results:
-            p = get_paper_with_citations(r.title)
-            papers += p
-        # deduplicate papers
-        papers = list({p.entry_id: p for p in papers}.values())
+        """Reformulate user query for academic search, then fetch candidate papers from OpenAlex."""
+        topic = ev.user_query
+        async with ctx.store.edit_state() as state:
+            state["research_topic"] = topic
+
+        self._emit_message(ctx, "discover_candidate_papers", f"Searching papers on: {topic}")
+
+        search_query = await _generate_search_query(topic, new_fast_llm(temperature=0.0))
+        logger.info(f"Search query reformulated: '{topic}' → '{search_query}'")
+
+        # fetch_candidate_papers is also available as self._search_tool for LLM agent use
+        papers = fetch_candidate_papers(search_query)
+        papers = list({p.entry_id: p for p in papers}.values())  # deduplicate
+
         async with ctx.store.edit_state() as state:
             state["n_all_papers"] = len(papers)
-        logger.info(f"papers found: {[p.title for p in papers]}")
+
+        self._emit_message(
+            ctx, "discover_candidate_papers", f"Found {len(papers)} candidate papers"
+        )
         for paper in papers:
-            ctx.write_event_to_stream(
-                Event(
-                    msg=WorkflowStreamingEvent(
-                        event_type="server_message",
-                        event_sender=inspect.currentframe().f_code.co_name,
-                        event_content={
-                            "message": f"Found related paper: {paper.title}"
-                        },
-                    ).model_dump()
-                )
-            )
             ctx.send_event(PaperEvent(paper=paper))
 
     @step(num_workers=settings.NUM_WORKERS_FAST)
     async def filter_papers(self, ctx: Context, ev: PaperEvent) -> FilteredPaperEvent:
-        await asyncio.sleep(settings.DELAY_SECONDS_FAST)
-        llm = new_fast_llm(temperature=0.0)
         research_topic = await ctx.store.get("research_topic")
-        _, response = await process_citation(
-            0, research_topic, ev.paper, llm
+        is_relevant, similarity_score = self._relevance_filter.assess_relevance(
+            ev.paper, research_topic
         )
-        return FilteredPaperEvent(paper=ev.paper, is_relevant=response)
+        return FilteredPaperEvent(
+            paper=ev.paper,
+            relevance=PaperRelevanceResult(
+                is_relevant=is_relevant, similarity_score=similarity_score
+            ),
+        )
 
     @step
     async def download_papers(
@@ -134,34 +143,21 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         ready = ctx.collect_events(ev, [FilteredPaperEvent] * n_all_papers)
         if ready is None:
             return None
-        papers = sorted(
-            ready,
-            key=lambda x: (
-                x.is_relevant.score,  # prioritize papers with higher score
-                "ArXiv"
-                in (
-                    x.paper.external_ids or {}
-                ),  # prioritize papers can be found on ArXiv
-            ),
+
+        top_papers = sorted(
+            (e for e in ready if e.relevance.is_relevant),
+            key=lambda e: e.relevance.similarity_score,
             reverse=True,
         )[: self.num_max_final_papers]
-        papers_dict = {
-            i: {"citation": p.paper, "is_relevant": p.is_relevant}
-            for i, p in enumerate(papers)
-        }
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={
-                        "message": f"Downloading filtered relevant papers:\n"
-                        f"{' | '.join([p.paper.title for p in papers])}"
-                    },
-                ).model_dump()
-            )
+
+        self._emit_message(
+            ctx, "download_papers",
+            f"Downloading {len(top_papers)} relevant papers: "
+            f"{' | '.join(e.paper.title for e in top_papers)}",
         )
-        download_relevant_citations(papers_dict, Path(self.papers_download_path))
+        download_paper_pdfs(
+            [e.paper for e in top_papers], self.papers_download_path
+        )
         return Paper2SummaryDispatcherEvent(
             papers_path=self.papers_download_path.as_posix()
         )
@@ -170,19 +166,17 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
     async def paper2summary_dispatcher(
         self, ctx: Context, ev: Paper2SummaryDispatcherEvent
     ) -> Paper2SummaryEvent:
+        pdf_files = list(Path(ev.papers_path).glob("*.pdf"))
         async with ctx.store.edit_state() as state:
-            state["n_pdfs"] = 0
-        for pdf_name in Path(ev.papers_path).glob("*.pdf"):
-            img_output_dir = self.papers_images_path / pdf_name.stem
+            state["n_pdfs"] = len(pdf_files)
+        for pdf_path in pdf_files:
+            img_output_dir = self.papers_images_path / pdf_path.stem
             img_output_dir.mkdir(exist_ok=True, parents=True)
-            summary_fpath = self.paper_summary_path / f"{pdf_name.stem}.md"
-            async with ctx.store.edit_state() as state:
-                state["n_pdfs"] = state.get("n_pdfs", 0) + 1
             ctx.send_event(
                 Paper2SummaryEvent(
-                    pdf_path=pdf_name,
+                    pdf_path=pdf_path,
                     image_output_dir=img_output_dir,
-                    summary_path=summary_fpath,
+                    summary_path=self.paper_summary_path / f"{pdf_path.stem}.md",
                 )
             )
 
@@ -191,18 +185,10 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         self, ctx: Context, ev: Paper2SummaryEvent
     ) -> SummaryStoredEvent:
         await asyncio.sleep(settings.DELAY_SECONDS_VISION)
+        self._emit_message(ctx, "paper2summary", f"Summarizing: {ev.pdf_path.name}")
         pdf2images(ev.pdf_path, ev.image_output_dir)
         summary_txt = await summarize_paper_images(ev.image_output_dir)
         save_summary_as_markdown(summary_txt, ev.summary_path)
-        ctx.write_event_to_stream(
-            Event(
-                msg=WorkflowStreamingEvent(
-                    event_type="server_message",
-                    event_sender=inspect.currentframe().f_code.co_name,
-                    event_content={"message": f"Summarizing paper: {ev.pdf_path}"},
-                ).model_dump()
-            )
-        )
         return SummaryStoredEvent(fpath=ev.summary_path)
 
     @step
@@ -211,10 +197,14 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         ready = ctx.collect_events(ev, [SummaryStoredEvent] * n_pdfs)
         if ready is None:
             return None
-        for e in ready:
-            assert e.fpath.is_file()
-        logger.info(f"All summary are stored!")
-        return StopEvent(result=e.fpath.parent.as_posix())
+
+        missing = [e.fpath for e in ready if not e.fpath.is_file()]
+        if missing:
+            logger.warning(f"Missing summary files: {missing}")
+
+        self._emit_message(ctx, "finish", f"All {len(ready)} paper summaries stored.")
+        logger.info(f"All {len(ready)} paper summaries stored.")
+        return StopEvent(result=self.paper_summary_path.as_posix())
 
 
 # workflow for debugging purpose

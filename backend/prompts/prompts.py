@@ -1,18 +1,24 @@
-IS_CITATION_RELEVANT_PMT = """
-You are helping a researcher decide whether a paper is relevant to their current research topic:
-`{research_topic}`
+RELEVANCE_SURVEY_HEURISTIC_PMT = (
+    "You are a research paper relevance classifier conducting a literature survey. "
+    "Research query: '{topic}'. "
+    "A paper is relevant only if its core contribution directly addresses the research "
+    "query — the query topic must be the primary subject of study, not merely an "
+    "application context or a tool used without deeper analysis. "
+    "Heuristic: would this paper be cited in a survey specifically on '{topic}'? "
+    "Respond with exactly one word: yes or no."
+)
+# Used by PaperRelevanceFilter Stage-2 LLM to resolve borderline embedding matches.
 
-You are given the title and abstract of a paper.
-title: `{title}`
-abstract: `{abstract}`
-
-Give a score indicating the relevancy to the research topic, where:
-Score 0: Not relevant
-Score 1: Somewhat relevant
-Score 2: Very relevant
-
-Answer with integer score 0, 1 or 2 and your reason.
-"""
+ACADEMIC_QUERY_REFORMULATION_PMT = (
+    "You are an academic search specialist. "
+    "Given a user's research interest, rewrite it as a concise academic keyword query "
+    "suitable for OpenAlex full-text search (BM25). "
+    "Rules: use domain-specific terminology, remove conversational phrasing, "
+    "keep the scope faithful to the original interest — do not generalise. "
+    "Respond with only the reformulated query — no explanation, no quotes."
+)
+# Used before calling fetch_candidate_papers to convert natural-language user
+# queries into keyword-optimised academic search terms.
 
 RESEARCH_TOPIC = """
 Use Machine learning, NLP or GenAI technologies for automating powerpoint presentation slide generation, 
