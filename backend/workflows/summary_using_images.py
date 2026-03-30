@@ -5,14 +5,14 @@ import logging
 from llama_index.core import SimpleDirectoryReader
 
 from prompts.prompts import SUMMARIZE_PAPER_PMT
-from services.llms import new_mm_gpt4o, new_gpt4o
+from services.llms import new_vlm, new_llm
 import sys
 from llama_index.core import Settings
 from utils.tokens import calculate_cost
 import tiktoken
 from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
 
-Settings.llm = new_gpt4o()
+Settings.llm = new_llm()
 
 token_counter = TokenCountingHandler(
     tokenizer=tiktoken.encoding_for_model(Settings.llm.model).encode,
@@ -29,8 +29,8 @@ logging.basicConfig(
 )
 
 
-async def get_summary_from_gpt4o(img_dir):
-    llm = new_mm_gpt4o()
+async def summarize_paper_images(img_dir):
+    llm = new_vlm()
     image_documents = SimpleDirectoryReader(img_dir).load_data()
 
     response = await llm.acomplete(
@@ -86,7 +86,7 @@ def track_cost() -> None:
 def main(folder_path, output_dir):
     # get all subdirs
     for subdir in Path(folder_path).iterdir():
-        summary_txt = get_summary_from_gpt4o(subdir)
+        summary_txt = summarize_paper_images(subdir)
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         output_file = Path(output_dir) / f"{subdir.name}.md"
         save_summary_as_markdown(summary_txt, output_file)

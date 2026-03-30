@@ -24,8 +24,8 @@ from prompts.prompts import (
     SLIDE_MODIFICATION_PMT,
     MODIFY_SUMMARY2OUTLINE_PMT,
 )
-from services.llms import llm_gpt4o, new_gpt4o, new_gpt4o_mini, mm_gpt4o
-from services.embeddings import aoai_embedder
+from services.llms import llm, new_llm, new_fast_llm, vlm
+from services.embeddings import embedder
 import logging
 import sys
 from llama_index.core import PromptTemplate
@@ -54,8 +54,8 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-Settings.llm = llm_gpt4o
-Settings.embed_model = aoai_embedder
+Settings.llm = llm
+Settings.embed_model = embedder
 
 
 class ResearchAgentWorkflow(Workflow):

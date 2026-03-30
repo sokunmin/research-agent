@@ -2,9 +2,8 @@ from llama_index.llms.azure_openai import AzureOpenAI
 from llama_index.multi_modal_llms.azure_openai import AzureOpenAIMultiModal
 
 from config import settings
-from llama_index.llms.anthropic import Anthropic
 
-llm_gpt4o = AzureOpenAI(
+llm = AzureOpenAI(
     azure_deployment=settings.AZURE_OPENAI_GPT4O_MODEL,
     model=settings.AZURE_OPENAI_GPT4O_MODEL,  # this name will be used in trace
     temperature=0.0,
@@ -14,7 +13,7 @@ llm_gpt4o = AzureOpenAI(
     api_version=settings.AZURE_OPENAI_API_VERSION,
 )
 
-mm_gpt4o = AzureOpenAIMultiModal(
+vlm = AzureOpenAIMultiModal(
     azure_deployment=settings.AZURE_OPENAI_GPT4O_MODEL,
     model=settings.AZURE_OPENAI_GPT4O_MODEL,  # this name will be used in trace
     temperature=0.0,
@@ -25,7 +24,7 @@ mm_gpt4o = AzureOpenAIMultiModal(
 )
 
 
-def new_mm_gpt4o(temperature=0.0, callback_manager=None):
+def new_vlm(temperature=0.0, callback_manager=None):
     return AzureOpenAIMultiModal(
         azure_deployment=settings.AZURE_OPENAI_GPT4O_MODEL,
         model=settings.AZURE_OPENAI_GPT4O_MODEL,  # this name will be used in trace
@@ -38,7 +37,7 @@ def new_mm_gpt4o(temperature=0.0, callback_manager=None):
     )
 
 
-def new_gpt4o(temperature=0.0):
+def new_llm(temperature=0.0):
     return AzureOpenAI(
         azure_deployment=settings.AZURE_OPENAI_GPT4O_MODEL,
         model=settings.AZURE_OPENAI_GPT4O_MODEL,  # this name will be used in trace
@@ -49,7 +48,7 @@ def new_gpt4o(temperature=0.0):
     )
 
 
-def new_gpt4o_mini(temperature=0.0):
+def new_fast_llm(temperature=0.0):
     return AzureOpenAI(
         azure_deployment=settings.AZURE_OPENAI_GPT4O_MINI_MODEL,
         model=settings.AZURE_OPENAI_GPT4O_MINI_MODEL,  # this name will be used in trace
@@ -58,11 +57,3 @@ def new_gpt4o_mini(temperature=0.0):
         api_key=settings.AZURE_OPENAI_API_KEY,
         api_version=settings.AZURE_OPENAI_API_VERSION,
     )
-
-
-# def new_claude_sonnet(temperature=0.0):
-#     return Anthropic(model=settings.CLAUDE_MODEL_NAME,
-#                      api_key=settings.ANTHROPIC_API_KEY,
-#                      temperature=temperature,
-#                      max_tokens=8192,
-#                      )

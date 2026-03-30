@@ -43,18 +43,13 @@ class IsCitationRelevant(BaseModel):
     reason: str
 
 
+# ── OpenAlex module-level config ─────────────────────────────────────────────
+
+pyalex.config.email = settings.OPENALEX_EMAIL
+if settings.OPENALEX_API_KEY:
+    pyalex.config.api_key = settings.OPENALEX_API_KEY
+
 # ── OpenAlex helpers ──────────────────────────────────────────────────────────
-
-def _reconstruct_abstract(inverted_index: Optional[dict]) -> str:
-    """OpenAlex stores abstracts as inverted index; rebuild plain text."""
-    if not inverted_index:
-        return ""
-    pos_map: dict[int, str] = {}
-    for word, positions in inverted_index.items():
-        for pos in positions:
-            pos_map[pos] = word
-    return " ".join(pos_map[i] for i in sorted(pos_map))
-
 
 def _extract_arxiv_id(work: dict) -> Optional[str]:
     """Extract ArXiv paper ID from OpenAlex work locations list."""
@@ -66,7 +61,8 @@ def _extract_arxiv_id(work: dict) -> Optional[str]:
     return None
 
 
-def openalex_result_to_paper(result: dict) -> Paper:
+def _work_to_paper(result: dict) -> Paper:
+    """Convert an OpenAlex Work dict to the Paper model."""
     authors = [
         a["author"]["display_name"]
         for a in result.get("authorships", [])
@@ -82,7 +78,7 @@ def openalex_result_to_paper(result: dict) -> Paper:
         entry_id=result["id"],
         title=result.get("title") or "",
         authors=authors,
-        summary=_reconstruct_abstract(result.get("abstract_inverted_index")),
+        summary=result.get("abstract") or "",
         published=result.get("publication_date"),
         primary_category=field,
         link=result.get("doi"),
@@ -91,33 +87,31 @@ def openalex_result_to_paper(result: dict) -> Paper:
     )
 
 
-def search_paper_openalex(query: str, limit: int = 1) -> List[Paper]:
-    pyalex.config.email = settings.OPENALEX_EMAIL
+def search_papers(query: str, limit: int = 1) -> List[Paper]:
     results = Works().search_filter(title_and_abstract=query).get(per_page=limit)
-    return [openalex_result_to_paper(r) for r in results]
+    return [_work_to_paper(r) for r in results]
 
 
-def get_citations_openalex(paper: Paper, limit: int = 50) -> List[Paper]:
+def get_citing_papers(paper: Paper, limit: int = 50) -> List[Paper]:
     """Return papers that cite *paper* (incoming citations)."""
-    pyalex.config.email = settings.OPENALEX_EMAIL
     results = Works().filter(cites=paper.entry_id).get(per_page=limit)
     papers = []
     for r in results:
         try:
-            papers.append(openalex_result_to_paper(r))
+            papers.append(_work_to_paper(r))
         except Exception as e:
             logging.warning(f"Error parsing citation '{r.get('title')}': {e}")
     return papers
 
 
 def get_paper_with_citations(query: str, limit: int = 1) -> List[Paper]:
-    """Search OpenAlex for *query*, then collect its incoming citations."""
-    papers = search_paper_openalex(query, limit=limit)
+    """Search for *query*, then collect its incoming citations."""
+    papers = search_papers(query, limit=limit)
     if not papers:
         logging.warning(f"No papers found for query: '{query}'")
         return []
     logging.info(f"Found paper: {papers[0].title}")
-    citations = get_citations_openalex(papers[0])
+    citations = get_citing_papers(papers[0])
     logging.info(f"Found {len(citations)} citations")
     citations.append(papers[0])
     return citations
@@ -144,7 +138,7 @@ async def process_citation(i, research_topic, citation, llm):
 async def filter_relevant_citations(
     research_topic: str, citations: List[Paper]
 ) -> Dict[str, Any]:
-    llm = llms.new_gpt4o_mini(temperature=0.0)
+    llm = llms.new_fast_llm(temperature=0.0)
     tasks = [
         process_citation(i, research_topic, citation, llm)
         for i, citation in enumerate(citations)

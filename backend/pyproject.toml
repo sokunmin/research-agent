@@ -8,7 +8,6 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
 jupyter = "^1.0.0"
-scholarly = "^1.7.11"
 fake-useragent = "^1.5.1"
 free-proxy = "^1.1.1"
 python-dotenv = "^1.0.1"

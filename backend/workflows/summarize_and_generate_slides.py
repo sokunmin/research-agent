@@ -4,8 +4,8 @@ import uuid
 import click
 from llama_index.core import Settings
 
-from services.llms import llm_gpt4o
-from services.embeddings import aoai_embedder
+from services.llms import llm
+from services.embeddings import embedder
 import logging
 
 from llama_index.core.workflow import (
@@ -32,8 +32,8 @@ if not logger.hasHandlers():
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-Settings.llm = llm_gpt4o
-Settings.embed_model = aoai_embedder
+Settings.llm = llm
+Settings.embed_model = embedder
 
 
 class SummaryAndSlideGenerationWorkflow(Workflow):
