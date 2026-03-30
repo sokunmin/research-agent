@@ -14,6 +14,7 @@ from typing import Optional
 from llama_index.core.callbacks import CallbackManager
 from llama_index.llms.litellm import LiteLLM
 from llama_index.embeddings.litellm import LiteLLMEmbedding
+from services.multimodal import LiteLLMMultiModal
 
 
 @dataclass
@@ -26,7 +27,7 @@ class ModelConfig:
 
 
 class ModelFactory:
-    """Provider-agnostic LLM/Embedding factory. VLM is handled by services/multimodal.py (Phase 4)."""
+    """Provider-agnostic LLM/Embedding factory backed by LiteLLM."""
 
     def __init__(self, config: ModelConfig):
         self._config = config
@@ -46,13 +47,25 @@ class ModelFactory:
         # NOTE: LiteLLMEmbedding uses `model_name`, not `model`
         return LiteLLMEmbedding(model_name=self._config.embed_model)
 
+    def vision_llm(
+        self,
+        temperature: float = 0.0,
+        callback_manager: Optional[CallbackManager] = None,
+    ) -> LiteLLMMultiModal:
+        return LiteLLMMultiModal(
+            model=self._config.vision_model,
+            temperature=temperature,
+            max_tokens=self._config.max_tokens,
+            callback_manager=callback_manager,
+        )
+
 
 def _build() -> ModelFactory:
     from config import settings
     return ModelFactory(ModelConfig(
         smart_model=settings.LLM_SMART_MODEL,
         fast_model=settings.LLM_FAST_MODEL,
-        vision_model=settings.LLM_VISION_MODEL,  # stored but used only in Phase 4
+        vision_model=settings.LLM_VISION_MODEL,
         embed_model=settings.LLM_EMBED_MODEL,
         max_tokens=settings.MAX_TOKENS,
     ))
