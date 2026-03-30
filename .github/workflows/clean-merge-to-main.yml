@@ -1,0 +1,98 @@
+name: Clean Merge to Main
+
+# 由 git-pr-description skill 透過 gh workflow run 觸發
+# 不直接對 main 操作，而是建立 clean release branch → 開 PR → 等人工 review merge
+on:
+  workflow_dispatch:
+    inputs:
+      pr_title:
+        description: 'PR Title'
+        required: true
+        type: string
+      pr_body:
+        description: 'PR Body (markdown)'
+        required: true
+        type: string
+
+jobs:
+  clean-merge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout dev branch
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Setup git identity
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          # Suppress co-author trailer added by some git tools
+          git config trailer.co-authored-by.ifexists doNothing
+
+      - name: Create clean release branch
+        id: clean_branch
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          CLEAN_BRANCH="release/clean-${SHORT_SHA}"
+          echo "name=${CLEAN_BRANCH}" >> $GITHUB_OUTPUT
+
+          git checkout -b "${CLEAN_BRANCH}"
+
+          # 移除 dev-tracker 與 poc（只在存在時才 commit）
+          REMOVED=""
+          if [ -d "dev-tracker" ]; then
+            git rm -rf dev-tracker/
+            REMOVED="dev-tracker"
+          fi
+          if [ -d "poc" ]; then
+            git rm -rf poc/
+            REMOVED="${REMOVED:+$REMOVED, }poc"
+          fi
+
+          if [ -n "$REMOVED" ]; then
+            git commit -m "chore(release): remove ${REMOVED} before merging to main"
+            echo "removed=${REMOVED}" >> $GITHUB_OUTPUT
+          else
+            echo "removed=none" >> $GITHUB_OUTPUT
+          fi
+
+          git push origin "${CLEAN_BRANCH}"
+
+      - name: Create PR to main
+        id: create_pr
+        run: |
+          PR_URL=$(gh pr create \
+            --base main \
+            --head "${{ steps.clean_branch.outputs.name }}" \
+            --title "${{ inputs.pr_title }}" \
+            --body "${{ inputs.pr_body }}")
+          echo "url=${PR_URL}" >> $GITHUB_OUTPUT
+          echo "PR created: ${PR_URL}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge (if repo allows)
+        # 若 repo 已開啟「Allow auto-merge」且 branch protection 設定 required checks，
+        # 會在所有 checks 通過後自動 merge。
+        # 若 repo 未開啟此功能，此步驟會 fail-safe 跳過（不影響整體流程）。
+        continue-on-error: true
+        run: |
+          gh pr merge --auto --merge "${{ steps.create_pr.outputs.url }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## ✅ Clean PR Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 項目 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Clean Branch | \`${{ steps.clean_branch.outputs.name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| dev-tracker / poc 已移除 | ${{ steps.clean_branch.outputs.removed }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PR | ${{ steps.create_pr.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
