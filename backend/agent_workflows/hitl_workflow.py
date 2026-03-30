@@ -1,31 +1,29 @@
 import asyncio
 import mlflow
+from typing import Literal
 from config import settings
 from llama_index.core.workflow import Context, Event, Workflow
 from agent_workflows.schemas import WorkflowStreamingEvent
-import logging
+from utils.logger import get_logger
 
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-if not logger.hasHandlers():
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+logger = get_logger(__name__)
 
 
 class HumanInTheLoopWorkflow(Workflow):
-    def _emit_message(self, ctx: Context, sender: str, message: str) -> None:
-        """Write a server_message event to the workflow stream."""
+    def _emit_message(
+        self,
+        ctx: Context,
+        sender: str,
+        event_type: Literal["server_message", "request_user_input"] = "server_message",
+        **event_content,
+    ) -> None:
+        """Write a streaming event to the workflow stream."""
         ctx.write_event_to_stream(
             Event(
                 msg=WorkflowStreamingEvent(
-                    event_type="server_message",
+                    event_type=event_type,
                     event_sender=sender,
-                    event_content={"message": message},
+                    event_content=event_content,
                 ).model_dump()
             )
         )
