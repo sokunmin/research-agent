@@ -1,3 +1,12 @@
+## [2026-03-15] `draw_all_possible_flows` 從 `llama_index.core.workflow` 移至 `llama_index.utils.workflow` `[版本: llama-index-workflows>=2.9.0]`
+原因：llama-index-workflows 2.9.0 起，`drawing.py` 中的舊函數 raise error，且 `llama_index.core.workflow.__init__.py` 不再 export `draw_all_possible_flows`，造成頂層 import 時 `ImportError`。
+修正：從 `[tool.poetry.dependencies]` 新增 `llama-index-utils-workflow = ">=0.9.5"`；將 `draw_all_possible_flows` 的 import 從模組頂層移入 `if __name__ == "__main__":` 區塊，改用 `from llama_index.utils.workflow import draw_all_possible_flows`。
+影響檔案：`backend/agent_workflows/summarize_and_generate_slides.py`、`backend/agent_workflows/summary_gen.py`。
+
+## [2026-03-15] `docker-compose build` 通過不代表 backend runtime import 正常 `[驗收流程盲點]`
+原因：`docker-compose build` 只建立 image（執行 Dockerfile），不執行 Python import。Backend 的 `ImportError` 只會在 container 啟動執行 `uvicorn main:app` 時才觸發。若 `.env` 未設定導致 backend 也 crash，容易誤判為「env 問題」而忽略真正的 `ImportError`。
+修正：驗收流程改為 `docker-compose up --build`（全服務啟動），確認 backend log 出現 `Uvicorn running` 且無 `ImportError`，再以 `curl http://localhost:8000/` 驗證健康狀態。不可只跑 `docker-compose build`。
+
 ---
 ## [2026-03-12] LlamaIndex `Workflow` base class 無法直接實例化 — `WorkflowConfigurationError: no @step accepts StartEvent` `[版本: llama-index-workflows>=2.x]`
 原因：`Workflow.__init__` 驗證至少要有一個 `@step` 接受 `StartEvent`，直接實例化 base class（如 `HumanInTheLoopWorkflow`）沒有任何 step，立即拋出 `WorkflowConfigurationError`。

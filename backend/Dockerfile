@@ -2,16 +2,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install unoconv, LibreOffice, and necessary dependencies
+# Install LibreOffice and necessary dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        unoconv \
         libreoffice-core \
         libreoffice-writer \
         libreoffice-calc \
         libreoffice-impress \
         libreoffice-common \
-        python3-uno \
         fonts-dejavu \
         fonts-liberation && \
     apt-get clean && \

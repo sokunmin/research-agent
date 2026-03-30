@@ -15,7 +15,6 @@ from llama_index.core.workflow import (
     StartEvent,
     StopEvent,
     step,
-    draw_all_possible_flows,
 )
 
 from utils.file_processing import pdf2images
@@ -52,26 +51,22 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
     tavily_max_results: int = 2
     n_max_final_papers: int = 5
 
+    _PAPERS_SUBDIR = "papers"
+    _IMAGES_SUBDIR = "papers_images"
+
     def __init__(self, wid: Optional[uuid.UUID] = uuid.uuid4(), *args, **kwargs):
         self.wid = wid
         super().__init__(*args, **kwargs)
-        class_name = self.__class__.__name__
         self.workflow_artifacts_path = (
-            Path(settings.WORKFLOW_ARTIFACTS_PATH)
-            .joinpath(class_name)
-            .joinpath(str(self.wid))
+            Path(settings.WORKFLOW_ARTIFACTS_ROOT)
+            / self.__class__.__name__
+            / str(self.wid)
         )
-        self.papers_download_path = self.workflow_artifacts_path.joinpath(
-            settings.PAPERS_DOWNLOAD_PATH
-        )
+        self.papers_download_path = self.workflow_artifacts_path / self._PAPERS_SUBDIR
         self.papers_download_path.mkdir(parents=True, exist_ok=True)
-        self.papers_images_path = self.workflow_artifacts_path.joinpath(
-            settings.PAPERS_IMAGES_PATH
-        )
+        self.papers_images_path = self.workflow_artifacts_path / self._IMAGES_SUBDIR
         self.papers_images_path.mkdir(parents=True, exist_ok=True)
-        self.paper_summary_path = self.workflow_artifacts_path.joinpath(
-            settings.PAPERS_IMAGES_PATH
-        )
+        self.paper_summary_path = self.papers_images_path
         self.paper_summary_path.mkdir(parents=True, exist_ok=True)
 
     @step(pass_context=True)
@@ -252,6 +247,7 @@ def main(user_query: str):
 
 if __name__ == "__main__":
     # os.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = "/mlruns"
+    from llama_index.utils.workflow import draw_all_possible_flows
     draw_all_possible_flows(
         SummaryGenerationWorkflow, filename="summary_gen_flows.html"
     )

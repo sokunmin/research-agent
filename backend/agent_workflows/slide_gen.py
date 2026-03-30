@@ -82,18 +82,19 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
     wid: Optional[uuid.UUID] = uuid.uuid4()
     max_validation_retries: int = 2
     slide_template_path: str = settings.SLIDE_TEMPLATE_PATH
-    generated_slide_fname: str = settings.GENERATED_SLIDE_FNAME
-    slide_outlines_fname: str = settings.SLIDE_OUTLINE_FNAME
+
+    _GENERATED_SLIDE_FNAME = "paper_summaries.pptx"
+    _SLIDE_OUTLINE_FNAME = "slide_outlines.json"
 
     def __init__(self, wid: Optional[uuid.UUID] = uuid.uuid4(), *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.wid = wid
-        class_name = self.__class__.__name__
-        # s = "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
+        self.generated_slide_fname = self._GENERATED_SLIDE_FNAME
+        self.slide_outlines_fname = self._SLIDE_OUTLINE_FNAME
         self.workflow_artifacts_path = (
-            Path(settings.WORKFLOW_ARTIFACTS_PATH)
-            .joinpath(class_name)
-            .joinpath(str(self.wid))
+            Path(settings.WORKFLOW_ARTIFACTS_ROOT)
+            / self.__class__.__name__
+            / str(self.wid)
         )
         self.workflow_artifacts_path.mkdir(parents=True, exist_ok=True)
 
@@ -120,7 +121,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
     def copy_final_slide(self):
         """
         Go through all the pptx files in self.workflow_artifacts_path, find the final file
-        and copy it to settings.WORKFLOW_ARTIFACTS_PATH as final.pptx.
+        and copy it to settings.WORKFLOW_ARTIFACTS_ROOT as final.pptx.
         """
         pptx_files = list(
             self.workflow_artifacts_path.glob(

@@ -1,5 +1,5 @@
 # Project Backlog
-> 最後更新：2026-03-12 (mlflow-v3-upgrade #08 新增)
+> 最後更新：2026-03-15 (dependency-cleanup #09 完成)
 
 ## 開發進度
 
@@ -13,6 +13,7 @@
 | 06 | azure-cleanup | - | feat/azure-cleanup | ✅ done | - | - | 2026-03-11 |
 | 07 | gen-test-cases | - | feat/gen-test-cases | ✅ done | - | ✅ passed | 2026-03-12 |
 | 08 | mlflow-v3-upgrade | - | feat/mlflow-v3-upgrade | ✅ done | - | ✅ passed | 2026-03-12 |
+| 09 | dependency-cleanup | - | feat/dependency-cleanup | ✅ done | - | - | 2026-03-15 |
 
 ## 狀態說明
 - ⬜ `todo`：尚未開始
