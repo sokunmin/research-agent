@@ -1,540 +1,631 @@
-# Layout Prompt Engineering Results
+# Layout Selection Prompt Engineering — Experiment Report (Updated Run)
 
-**Date:** 2026-03-29
-**Test script:** `layout_prompt_eng_test.py`
-**Raw results:** `layout_prompt_eng_results.json`
-**Output log:** `layout_prompt_eng_output.txt`
+**Date:** 2026-03-31
+**Script:** `poc/agent-behavior-test/layout_selection_prompt_eng.py`
+**Results file:** `poc/agent-behavior-test/layout_prompt_eng_results.json`
+**Console log:** `poc/agent-behavior-test/layout_prompt_eng_output_new.txt`
 
 ---
 
-## 1. Background
+## 1. Experiment Overview
 
 ### Problem
 
-The research agent pipeline generates PowerPoint presentations from academic papers. A critical step — called `outlines_with_layout` — requires selecting the correct slide layout for each slide from a 12-layout PPTX template. If the model always defaults to `TITLE_AND_BODY`, the resulting deck looks visually uniform: every slide is a content slide with title + body, missing proper cover slides, section breaks, quote cards, and closing slides.
+The PPTX generation pipeline converts research papers into slide decks. For each slide, an LLM must select one of 12 slide layouts from a PowerPoint template. The selected layout determines which placeholders exist on the slide (title placeholder, content placeholder, photo placeholder, etc.). A wrong layout choice causes structural breakage: wrong placeholder indices, visual errors, or runtime crashes when the slide generator attempts to access a non-existent placeholder.
 
-**The layout selection task:** Given a slide's title and body text, select the correct layout name from the 12 available layouts (e.g. `TITLE_SLIDE`, `SECTION_HEADER_CENTER`, `QUOTE`) and identify the correct placeholder indices.
+This experiment tests 6 prompt engineering strategies (P0–P5) to determine which most reliably guides LLMs to correct layout selection across all 12 layout types.
 
-### What Previous Experiments Found
+### Pipeline context
 
-**From `augment-results.md` (2026-03-28):**
-- `FunctionCallingProgram` (METHOD_A) fails for ALL Ollama models — must use `LLMTextCompletionProgram`.
-- Prompt quality matters for `gemma3:4b`: the original `AUGMENT_LAYOUT_PMT` prompt (without field descriptions) causes 0% structured output success. Adding explicit field descriptions (Prompt 2) brings it to 100% parse success.
-- METHOD_C (Ollama `format` param with JSON schema) achieves 100% parse success for all prompts, but this experiment focuses on layout *selection* accuracy, not just parse success.
+```
+Paper summary
+    → SlideOutline {title, content}               (one object per slide)
+    → outlines_with_layout step                   (this experiment's focus)
+    → SlideOutlineWithLayout {title, content, layout_name,
+                               idx_title_placeholder, idx_content_placeholder}
+    → slide_gen ReAct agent
+    → .pptx file
+```
 
-**From `layout_name_test.md` / `layout_name_test_v2_output.txt` (2026-03-29):**
-These are the critical baseline results that this experiment improves upon:
+The `outlines_with_layout` step calls an LLM to fill in the `SlideOutlineWithLayout` schema. The experiment tests whether different prompt engineering strategies improve the accuracy of `layout_name` selection.
 
-| Model | Appropriate Rate (baseline prompt) |
-|---|---|
-| `gemma3:4b` | 6/18 (33.3%) |
-| `gpt-oss:20b-cloud` | 10/18 (55.6%) |
-| `ministral-3:14b-cloud` | 12/18 (66.7%) |
+### Note on P0 — added after initial run
 
-**Universally failed slide types with the baseline prompt:**
-- `cover/title_slide`: 0/9 across all 3 models — all chose `TITLE_AND_BODY` instead of `TITLE_SLIDE`
-- `closing_slide`: 0/9 across all 3 models — all chose `TITLE_AND_BODY` instead of `TITLE_SLIDE`/`SECTION_HEADER_CENTER`
+P0 (`P0_baseline`) was run separately after the initial P1–P5 experiment. Its results have now been merged into this report. P0 tests the verbatim production prompt (`AUGMENT_LAYOUT_PMT` from `backend/prompts/prompts.py`) — the prompt currently deployed in the pipeline — against the same 12 slide types and 3 models used for P1–P5. This establishes a true production baseline against which P1–P5 improvements can be measured. All P0 numbers in this report come from `layout_prompt_eng_results_P0_baseline.json`.
 
-The baseline `AUGMENT_LAYOUT_PMT` is a generic instruction with no routing rules, no explicit negative constraints, and no chain-of-thought structure. The diagnosis from `layout_name_test.md` §7.6 is: "the current prompt does not give models enough guidance to distinguish cover/closing slides from content slides."
+### What this experiment adds (changes from previous run)
 
-**This experiment** tests 4 prompt engineering strategies specifically designed to fix these failures. The baseline prompt results are NOT re-run here — see `layout_name_test.md` for baseline comparisons.
+This is an updated run incorporating three changes from the previous experiment version:
 
-### Related Files
+**Change 1 — Schema fix (`schemas.py`):**
+`idx_title_placeholder` and `idx_content_placeholder` changed from required `str` to `Optional[str] = None`. A `field_validator` (`coerce_int_to_str`) was added to coerce integer outputs to string before Pydantic validation. This fixes the validation failure that occurred for layouts with no text placeholders (`THREE_PHOTO`, `FULL_PHOTO`, `BLANK`) in the previous run — where the model returning `null` or an integer caused an immediate Pydantic error, forcing `success=False` regardless of whether the `layout_name` was correct.
 
-- `layout_name_test.md` — baseline single-prompt, 3-model layout selection test
-- `layout_name_test_v2_output.txt` — raw baseline output
-- `augment-results.md` — structured output method comparison (FunctionCallingProgram vs LLMTextCompletionProgram)
-- `test_cloud_models.md` — cloud model capabilities (function calling, think mode, availability)
-- `layout_prompt_eng_test.py` — this experiment's test script
-- `layout_prompt_eng_results.json` — raw run data (all results)
+**Change 2 — `OUTPUT_FIELDS` prompt block:**
+Added a CRITICAL instruction explicitly telling the LLM to output `null` (not a number, not a string) for `idx_title_placeholder` and `idx_content_placeholder` when the chosen layout is `THREE_PHOTO`, `FULL_PHOTO`, or `BLANK`.
+
+**Change 3 — `P4_negative_examples` prompt redesigned:**
+Rule count reduced from 19 to 8. All "Use instead:" guidance removed from every rule (the model derives the correct layout from `LAYOUT_DESCRIPTIONS`). Photo-vs-photo cross rules removed. Explicit preconditions and exception clauses added to the `TITLE_SLIDE` rule (short attribution text is not "substantial text") and the `BLANK` rule (any text content — even "Thank You" — means BLANK is wrong). Rationale: fewer, more precise rules with no redirect shortcuts reduce inter-rule interference for small models.
+
+### What the experiment measures
+
+For each (model × prompt × slide_type) combination: `appropriate_rate` (layout_name in expected set), `success_rate` (valid parseable response without Pydantic error), and elapsed time.
 
 ---
 
-## 2. Experiment Setup
+## 2. Setup
 
-### Template File
+### Template and layout names
 
-`/Users/chunming/MyWorkSpace/agent_workspace/research-agent/dev/assets/template-en.pptx`
+**Template file:** `assets/template-en.pptx` — fully English layout names. Previous versions of the template used Chinese mixed with English names (e.g., `項目符號` → `BULLET_LIST`, `照片-一頁三張` → `THREE_PHOTO`, `空白` → `BLANK`). These were renamed to ASCII uppercase before this experiment series began.
 
-### Available Layouts (12 total, read dynamically from template)
+Layout names are read dynamically at runtime via `get_all_layouts_info()`. The 12 layouts confirmed from the template:
 
-| # | Layout Name | Placeholders (idx, name pattern) | Role |
-|---|---|---|---|
-| 1 | `TITLE_SLIDE` | (0, title), (1, subtitle), (12, footer) | Opening cover or closing slide |
-| 2 | `TITLE_AND_BODY` | (1, body), (0, title), (12, footer) | Standard content slide |
-| 3 | `QUOTE` | (1, main), (2, attribution), (12, footer) | Large-format quote display |
-| 4 | `PHOTO_LANDSCAPE` | (2, photo), (0, title), (1, caption), (12, footer) | Landscape photo slide |
-| 5 | `SECTION_HEADER_CENTER` | (0, title), (12, footer) | Section divider (centered) |
-| 6 | `PHOTO_PORTRAIT` | (2, photo), (0, title), (1, caption), (12, footer) | Portrait photo slide |
-| 7 | `SECTION_HEADER_TOP` | (0, title), (12, footer) | Section divider (top) |
-| 8 | `CONTENT_WITH_PHOTO` | (2, photo), (0, title), (1, content), (12, footer) | Text + photo side-by-side |
-| 9 | `項目符號` | (1, body), (0, title), (12, footer) | Bullet-list content slide |
-| 10 | `照片 - 一頁三張` | (2,3,4, photos), (12, footer) | Three-photo layout |
-| 11 | `FULL_PHOTO` | (2, photo), (12, footer) | Full-bleed photo |
-| 12 | `空白` | (12, footer) | Blank slide |
+| # | Layout Name |
+|---|-------------|
+| 1 | TITLE_SLIDE |
+| 2 | TITLE_AND_BODY |
+| 3 | QUOTE |
+| 4 | PHOTO_LANDSCAPE |
+| 5 | SECTION_HEADER_CENTER |
+| 6 | PHOTO_PORTRAIT |
+| 7 | SECTION_HEADER_TOP |
+| 8 | CONTENT_WITH_PHOTO |
+| 9 | BULLET_LIST |
+| 10 | THREE_PHOTO |
+| 11 | FULL_PHOTO |
+| 12 | BLANK |
 
-### Models Tested
+### Method: LLMTextCompletionProgram
 
-| Label | LiteLLM Model Name | Provider | additional_kwargs | Notes |
-|---|---|---|---|---|
-| `gemma3:4b` | `ollama/gemma3:4b` | Ollama (local M1) | `{}` | Local 4B, worst in baseline |
-| `ministral-3:14b-cloud` | `ollama/ministral-3:14b-cloud` | Ollama → Mistral cloud | `{}` | Best in baseline (12/18), no think mode |
-| `gpt-oss:20b-cloud` | `ollama/gpt-oss:20b-cloud` | Ollama → OpenAI cloud | `{}` | 2nd in baseline (10/18), think mode always on |
+`LLMTextCompletionProgram` (LlamaIndex) is used exclusively. `FunctionCallingProgram` is excluded because Ollama models do not support the native `tool_calls` API — confirmed in a prior experiment (augment-results experiment). `LLMTextCompletionProgram` uses prompt-based JSON extraction compatible with all Ollama models.
 
-**Why no Groq models?** The `.env` configures `LLM_FAST_MODEL` and `LLM_SMART_MODEL` using Ollama cloud routing. The cloud models tested here (`ministral-3:14b-cloud`, `gpt-oss:20b-cloud`) are the same logical models accessed via Ollama's transparent cloud proxy. Groq models would require `groq/` prefix and separate API routing; since the baseline experiment only tested Ollama-routed models, we continue with the same model set for direct comparability.
+### Models
 
-### Method
+| Label | Full name | Status |
+|-------|-----------|--------|
+| `gemma3:4b` | `ollama/gemma3:4b` | Available — ran (local, M1 MacBook) |
+| `ministral-3:14b-cloud` | `ollama/ministral-3:14b-cloud` | Available — ran (cloud via Ollama routing) |
 
-**`LLMTextCompletionProgram`** (LlamaIndex) for all models and all prompts.
+Both models were available and contributed results. No models were skipped. A third model (`ollama/gpt-oss:20b-cloud`) mentioned in the script file header was removed from the `MODELS` list and did not run (unavailable in the previous run). Groq models are excluded — the `.env` uses Ollama-based routing for this task.
 
-`FunctionCallingProgram` is explicitly excluded — it fails for all Ollama models due to missing `tool_calls` support (confirmed in `augment-results.md`).
+### Run configuration
 
+- `N_RUNS = 3` per (model × prompt × slide_type)
+- `temperature = 0.1`
+- `max_tokens = 2048`
+- Execution: sequential only — Ollama does not support parallel requests
+- Total planned calls (P1–P5): 2 models × 5 prompts × 12 slide types × 3 runs = **360**
+- P0 calls executed separately: 2 models × 1 prompt × 12 slide types × 3 runs = **72**
+- Total calls executed: **432** (360 P1–P5 + 72 P0, all completed, no errors)
+
+---
+
+## 3. Schema Changes (vs Previous Run)
+
+### SlideOutlineWithLayout — before and after
+
+**Before (previous run):**
 ```python
-program = LLMTextCompletionProgram.from_defaults(
-    llm=LiteLLM(model=model_name, temperature=0.1, max_tokens=2048),
-    output_cls=SlideOutlineWithLayout,
-    prompt_template_str=prompt_template,
-    verbose=False,
+idx_title_placeholder: str = Field(..., description="...")
+idx_content_placeholder: str = Field(..., description="...")
+```
+
+**After (this run):**
+```python
+idx_title_placeholder: Optional[str] = Field(
+    default=None,
+    description="Index of the title placeholder in the page layout. None if the layout has no title placeholder (e.g. THREE_PHOTO, FULL_PHOTO, BLANK)."
 )
-response = program(
-    slide_content=json.dumps(slide_outline),
-    available_layout_names=json.dumps(AVAILABLE_LAYOUT_NAMES),
-    available_layouts=json.dumps(AVAILABLE_LAYOUTS, indent=2),
+idx_content_placeholder: Optional[str] = Field(
+    default=None,
+    description="Index of the content placeholder in the page layout. None if the layout has no content placeholder (e.g. THREE_PHOTO, FULL_PHOTO, BLANK, SECTION_HEADER_CENTER, SECTION_HEADER_TOP)."
 )
+
+@field_validator('idx_title_placeholder', 'idx_content_placeholder', mode='before')
+@classmethod
+def coerce_int_to_str(cls, v):
+    if isinstance(v, int):
+        return str(v)
+    return v
 ```
 
-### Run Configuration
+### Why these changes matter
 
-| Parameter | Value |
-|---|---|
-| N_RUNS | 3 per (model × prompt × slide_type) |
-| Temperature | 0.1 |
-| max_tokens | 2048 |
-| Execution | Sequential only (no asyncio.gather) |
-| Total LLM calls | 3 models × 4 prompts × 6 slide_types × 3 runs = 216 |
+In the previous run, layouts `THREE_PHOTO`, `FULL_PHOTO`, and `BLANK` have no title or content text placeholders. The model had no valid integer-as-string to return for these non-existent placeholders. When the model returned `null` (the semantically correct response), Pydantic rejected it because the field was typed as `str` (not `Optional[str]`), producing a validation error and `success=False`. When the model returned an integer (e.g., `0`, `12`), Pydantic again rejected it because integers do not coerce to `str` automatically in Pydantic v2. The result was that these three layouts almost always produced `success=False` in the previous run, regardless of whether the `layout_name` field was correct.
 
-### Slide Test Cases (identical to `layout_name_test_v2.py`)
+The `Optional[str] = None` change allows the model to output `null` (JSON `null`) for these fields without a validation error. The `coerce_int_to_str` validator additionally catches cases where the model outputs an integer (e.g., `0`) and coerces it to `"0"` before Pydantic validation — preventing validation errors when the model does not follow the null instruction. Note that even when coercion succeeds, the resulting index string may still be wrong at runtime if the layout has no such placeholder; however, this is a separate runtime concern from validation correctness.
 
-| Label | Title | Content (summary) | Expected Layout(s) |
-|---|---|---|---|
-| `cover/title_slide` | "Attention Is All You Need" | "A Research Presentation / Presented by: John Smith" | `TITLE_SLIDE` |
-| `academic_content` | "Transformer Architecture" | 4 bullet points on self-attention, etc. | `TITLE_AND_BODY` or `項目符號` |
-| `section_header` | "Chapter 2: Methodology" | "" (empty body) | `SECTION_HEADER_CENTER` or `SECTION_HEADER_TOP` |
-| `bullet_list` | "Key Findings" | 4 bullet points on BLEU score improvements | `項目符號` or `TITLE_AND_BODY` |
-| `closing_slide` | "Thank You" | "Questions and Discussion / Contact: research@example.com" | `TITLE_SLIDE` or `SECTION_HEADER_CENTER` |
-| `quote_slide` | "Inspiration" | `"The measure of intelligence..." — Albert Einstein` | `QUOTE` |
-
-**Scoring:**
-- `layout_appropriate = True` if the chosen layout name is in the expected set for that slide type
-- `layout_valid = True` if the chosen layout name exists in the template (valid name)
+The `idx_content_placeholder` field description also lists `SECTION_HEADER_CENTER` and `SECTION_HEADER_TOP` as layouts with no content placeholder — these layouts have only a title placeholder and no body text area.
 
 ---
 
-## 3. Prompt Variants
+## 4. Shared Prompt Components
 
-All 4 prompts are NEW strategies not tested in previous experiments. The baseline `AUGMENT_LAYOUT_PMT` is not included here.
+All P1–P5 prompt variants include the same two shared blocks, appended into the prompt template. **P0 does not use these blocks — it is self-contained with its own output instructions.**
 
-### PROMPT_1: Decision-Tree Routing (`P1_decision_tree`)
+### LAYOUT_DESCRIPTIONS
 
-**Rationale:** The baseline prompt gives generic instructions with no routing logic. All models fail cover/closing slides because there are no explicit rules telling them which layouts to use for those roles. A decision tree provides an if/then dispatch the model can follow literally.
+Included verbatim in every prompt. Describes all 12 layouts with three sub-fields per layout:
 
-**Hypothesis:** Explicit routing rules will fix cover_slide (→ TITLE_SLIDE) and closing_slide (→ TITLE_SLIDE/SECTION_HEADER_CENTER) which failed universally in the baseline.
+- **Use for:** the presentation purpose of the layout (e.g., "Opening cover slide of the presentation, OR closing thank-you/Q&A slide")
+- **Structure:** the placeholder arrangement (e.g., "Large title + subtitle area. NO body content area.", "Three photo placeholders. NO title, NO text content area.")
+- **Signals:** observable text patterns that indicate this layout (e.g., `— Author Name` attribution format, `"[Image 1: ...] [Image 2: ...] [Image 3: ...]"` for THREE_PHOTO, empty title and content for BLANK)
 
-**Design:**
-```
-STEP 1 — Identify the slide role using this decision tree:
-  A. If body is a direct quote with attribution → role = QUOTE_SLIDE
-  B. Else if title starts with "Chapter"/"Section" or body is empty → role = SECTION_BREAK
-  C. Else if title is "Thank You"/"Conclusion"/"Q&A" or content is closing message → role = CLOSING_SLIDE
-  D. Else if body has "Presented by:" or "Author:" with no bullets → role = TITLE_COVER
-  E. Else if body has bullet points → role = CONTENT_SLIDE
-  F. Else → role = CONTENT_SLIDE
+### OUTPUT_FIELDS
 
-STEP 2 — Select layout based on role:
-  QUOTE_SLIDE → QUOTE
-  SECTION_BREAK → SECTION_HEADER_CENTER or SECTION_HEADER_TOP
-  CLOSING_SLIDE → TITLE_SLIDE or SECTION_HEADER_CENTER
-  TITLE_COVER → TITLE_SLIDE
-  CONTENT_SLIDE → TITLE_AND_BODY or 項目符號
-```
+Appended to every prompt template. Specifies 5 output fields:
 
-**Known limitation:** gemma3:4b may return the role label (`TITLE_COVER`) as the layout name instead of the actual layout name (`TITLE_SLIDE`). This is a hallucination risk for small models with multi-step instructions.
+1. `title` — copy verbatim from input
+2. `content` — copy verbatim from input
+3. `layout_name` — must exactly match one of the 12 available layout names
+4. `idx_title_placeholder` — numeric index as string; `null` if the layout has no title placeholder
+5. `idx_content_placeholder` — numeric index as string; `null` if the layout has no content placeholder
+
+**CRITICAL instruction added in this run:** For layouts `THREE_PHOTO`, `FULL_PHOTO`, and `BLANK`, both `idx_title_placeholder` and `idx_content_placeholder` MUST be `null` (not a number, not a string). The prompt states: "These layouts have NO title or content placeholders. Outputting any number here is incorrect and will cause a runtime error."
 
 ---
 
-### PROMPT_2: Negative Examples (`P2_negative_examples`)
+## 5. Prompt Variants
 
-**Rationale:** All three models exhibit TITLE_AND_BODY bias. The failure mode is always the same: default to TITLE_AND_BODY. Explicit "DO NOT use X for Y" constraints directly counter the bias without requiring complex reasoning steps.
+### P0 — Original Production Baseline (AUGMENT_LAYOUT_PMT)
 
-**Hypothesis:** Negative constraints are the most direct way to break TITLE_AND_BODY bias without risking hallucination of intermediate labels.
-
-**Design:**
-```
-LAYOUT SELECTION RULES:
-
-USE TITLE_SLIDE when:
-  - Opening/cover slide (author attribution present)
-  - Closing/thank-you slide ("Thank You", "Q&A", "Questions")
-
-USE SECTION_HEADER_CENTER or SECTION_HEADER_TOP when:
-  - Body is empty or very short (no bullet points)
-  - Title begins with "Chapter", "Section", "Part"
-
-USE QUOTE when:
-  - Body contains a quotation with attribution (— Author)
-
-USE TITLE_AND_BODY or 項目符號 when:
-  - Slide has multiple bullet points
-  - Body is substantive academic/technical content
-
-DO NOT use TITLE_AND_BODY for:
-  - Opening cover slides with author attribution
-  - Chapter/section transition slides with empty body
-  - Closing/thank-you slides
-  - Slides whose body is a quoted sentence with attribution
-```
+**ID:** `P0_baseline`
+**Strategy:** Verbatim copy of `AUGMENT_LAYOUT_PMT` from `backend/prompts/prompts.py` — the actual prompt currently deployed in production for the `outlines_with_layout` step. No additional blocks are appended. The prompt provides a short task description, a reference to "content placeholder (also referred to as 'Plassholder for innhold')", the list of available layout names, the raw template layout details, and a minimal 5-field output instruction.
+**Rationale:** True production baseline: no layout descriptions, no routing rules, no negative constraints. Measures the current deployed prompt's layout selection accuracy against the full 12-layout test set. Establishes the floor that P1–P5 must beat.
+**Key feature:** This prompt does NOT use the shared `LAYOUT_DESCRIPTIONS` or `OUTPUT_FIELDS` blocks used by P1–P5. It is self-contained with its own output instructions. The `idx_title_placeholder` and `idx_content_placeholder` fields are described as required strings with no null instruction — the model has no guidance for layouts with no text placeholders (e.g., `THREE_PHOTO`, `FULL_PHOTO`, `BLANK`). Contains Norwegian legacy text `"Plassholder for innhold"` from the original Norwegian template, kept verbatim to reflect the real production state.
+**Important:** Because P0 does not include the `OUTPUT_FIELDS` null instruction, the model receives no guidance to output `null` for `idx_title_placeholder`/`idx_content_placeholder` on visual-only layouts. However, the schema fix (`Optional[str] = None` + `coerce_int_to_str`) means validation still succeeds even when the model outputs an incorrect integer or string.
 
 ---
 
-### PROMPT_3: Chain-of-Thought (`P3_chain_of_thought`)
+### P1 — Baseline (Descriptions Only)
 
-**Rationale:** Previous prompts ask for the final answer directly. Chain-of-thought explicitly asks the model to classify the slide type first, then select the layout, then verify. Making reasoning explicit may improve accuracy on ambiguous slides by forcing the model to commit to a slide type classification before picking a layout.
-
-**Hypothesis:** CoT reasoning steps give models a chance to self-correct before outputting the final layout.
-
-**Design:**
-```
-Before selecting a layout, REASON STEP BY STEP:
-
-1. What type of slide is this? Choose one:
-   - "cover": opening title page (author attribution, "Presented by")
-   - "section_break": chapter/section divider (empty or near-empty body)
-   - "closing": thank-you, Q&A, or conclusion slide
-   - "quote": body is a quoted sentence with attribution
-   - "content": substantive bullet-point content
-
-2. Based on the slide type, which layout is most appropriate?
-   cover → TITLE_SLIDE
-   section_break → SECTION_HEADER_CENTER or SECTION_HEADER_TOP
-   closing → TITLE_SLIDE or SECTION_HEADER_CENTER
-   quote → QUOTE
-   content → TITLE_AND_BODY or 項目符號
-
-3. Confirm: does the chosen layout exist in the available layout list?
-```
+**ID:** `P1_baseline`
+**Strategy:** Provide all 12 `LAYOUT_DESCRIPTIONS` with no additional routing guidance.
+**Rationale:** Establishes the floor. Measures how well models select layouts from descriptions alone, without any explicit classification rules.
+**Structure:** Task instruction + `LAYOUT_DESCRIPTIONS` + available layout names + layout details from template + slide content + `OUTPUT_FIELDS`. No additional guidance.
 
 ---
 
-### PROMPT_4: Minimal Layout List (`P4_minimal_layout`)
+### P2 — Decision-Tree Routing
 
-**Rationale:** The full layout list of 12 includes 6 photo/visual layouts (`PHOTO_LANDSCAPE`, `PHOTO_PORTRAIT`, `CONTENT_WITH_PHOTO`, `照片 - 一頁三張`, `FULL_PHOTO`, `空白`) that are irrelevant for text-based academic slides. The 3 Chinese-named layouts may be invisible to English-trained models (see `layout_name_test.md` §8.3). Providing only the 6 core text layouts with explicit English role descriptions reduces the choice space and adds semantic grounding for non-ASCII names.
-
-**Hypothesis:** A smaller, well-described layout list reduces decision noise and makes Chinese-named layouts like `項目符號` usable by English models.
-
-**Design:**
-```
-AVAILABLE TEXT LAYOUTS (choose from these 6 for text slides):
-
-1. TITLE_SLIDE — Opening cover OR closing thank-you slide
-2. TITLE_AND_BODY — Standard academic/technical content slide
-3. 項目符號 (bullet list layout) — Bullet-point content slide
-4. SECTION_HEADER_CENTER — Section divider, centered, no body content
-5. SECTION_HEADER_TOP — Section divider, top-aligned, no body content
-6. QUOTE — Large-format quote display with attribution
-```
+**ID:** `P2_decision_tree`
+**Strategy:** A 13-step if/then decision tree (STEP 1) classifies the slide into a semantic role (e.g., `BLANK`, `THREE_PHOTO`, `TITLE_COVER`, `CONTENT_SLIDE`). A lookup table (STEP 2) maps each role to one or more valid layout names.
+**Rationale:** The baseline prompt has no routing rules. Models fail on cover and closing slides because the only guidance is the descriptions. Explicit dispatch through a priority-ordered decision tree forces the model to apply conditions in the correct order.
+**Key feature:** Tree is evaluated top-down, stopping at first match. Restrictive conditions (`BLANK`, `FULL_PHOTO`, `THREE_PHOTO`) appear first; generic fallbacks (`CONTENT_SLIDE`) appear last. Followed by `LAYOUT_DESCRIPTIONS` for full context.
 
 ---
 
-## 4. Results
+### P3 — Positive Examples
 
-### 4.1 `gemma3:4b` (local, 4B parameters)
-
-| Prompt | cover/title | academic | section_header | bullet_list | closing | quote | **Overall** | Avg Elapsed |
-|---|---|---|---|---|---|---|---|---|
-| P1 Decision-Tree Routing | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **15/18** | 11.7s |
-| P2 Negative Examples | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 11.6s |
-| P3 Chain-of-Thought | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | **12/18** | 11.7s |
-| P4 Minimal Layout List | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | **12/18** | 11.3s |
-
-**Baseline (from layout_name_test.md):** 6/18 (33.3%)
-
-**P1 failure detail:** gemma3:4b returned `TITLE_COVER` (the role label from Step 1) as the layout_name for cover/title_slide, instead of `TITLE_SLIDE`. The model hallucinated the intermediate role label as the final answer — a known risk of multi-step prompts with small models.
-
-**P3 failure detail:** gemma3:4b chose `CONTENT_WITH_PHOTO` for academic_content and bullet_list slides (all 6 runs). The CoT prompt's mention of "content" as a slide type caused the model to mis-associate with `CONTENT_WITH_PHOTO` layout name.
-
-**P4 failure detail:** gemma3:4b chose `TITLE_SLIDE` for section_header slides (all 3 runs). With a reduced layout list, it could not distinguish "section divider with no body" from "title/cover slide." It also reverted to TITLE_AND_BODY bias for cover/title_slide.
-
-**P2 success:** All 18/18 correct. The negative constraint "DO NOT use TITLE_AND_BODY for opening cover slides" directly forced the correct TITLE_SLIDE choice. The explicit positive rules for each slide type were simple enough for the 4B model to follow without hallucination.
+**ID:** `P3_positive_examples`
+**Strategy:** One semantic `USE <LAYOUT> when:` rule per layout, describing purpose and content type in natural language. No negative constraints, no decision tree, no reasoning steps.
+**Rationale:** Semantic rules describe intent rather than surface text patterns, which generalises better across paper types and domains. Keeping the prompt purely positive avoids conflicting constraints.
+**Key feature:** Each rule is 2–4 lines describing purpose and content type. For example: "USE TITLE_SLIDE when: The slide is the opening cover page of the presentation / The slide introduces the paper with its title, author, or institutional information / The slide is the closing thank-you, Q&A, or conclusion page / The content is presentational rather than informational." Followed by `LAYOUT_DESCRIPTIONS`.
 
 ---
 
-### 4.2 `ministral-3:14b-cloud` (cloud, 14B parameters)
+### P4 — Negative Examples (Redesigned)
 
-| Prompt | cover/title | academic | section_header | bullet_list | closing | quote | **Overall** | Avg Elapsed |
-|---|---|---|---|---|---|---|---|---|
-| P1 Decision-Tree Routing | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.9s |
-| P2 Negative Examples | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.1s |
-| P3 Chain-of-Thought | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.0s |
-| P4 Minimal Layout List | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 1.9s |
+**ID:** `P4_negative_examples`
+**Strategy:** 8 explicit "WRONG: Choosing X when Y — Why wrong: [structural reason]" rules. No "Use instead:" redirects. The model derives the correct layout from `LAYOUT_DESCRIPTIONS` after eliminating wrong choices.
+**Rationale:** Negative constraints directly target the model's default bias toward `TITLE_AND_BODY`. Structural signals (empty body, bullet points, image references, attribution lines) are domain-agnostic and applicable to any paper type. Providing no redirect means the model must reason from descriptions rather than following a shortcut lookup.
 
-**Baseline (from layout_name_test.md):** 12/18 (66.7%)
+**Changes from previous version (19-rule → 8-rule):**
+- **Rule count:** 19 WRONG rules → 8 WRONG rules
+- **"Use instead:" removed entirely:** All "Use instead:" guidance removed from every rule. The previous version provided a redirect (e.g., "WRONG: ... Use instead: TITLE_SLIDE"). The new version omits this — the model must consult `LAYOUT_DESCRIPTIONS` to find the correct layout.
+- **Photo-vs-photo cross rules removed:** Rules like "don't use PHOTO_LANDSCAPE for a portrait image" were removed. These created inter-rule interference for small models without improving accuracy.
+- **Exception clauses added:** The `TITLE_SLIDE` rule adds an exception: "Short attribution lines ('Presented by:', author names, institution names) are NOT substantial text and do NOT make this rule apply." The `BLANK` rule adds: "any text content — even 'Thank You', contact info, a single sentence — means BLANK is wrong."
+- **Explicit preconditions:** Each rule now states the structural precondition (e.g., "body is empty or very short — fewer than 10 characters") rather than relying on the model's interpretation.
 
-All 4 prompts achieved perfect 18/18. The model also showed a preference for `項目符號` over `TITLE_AND_BODY` for bullet-point content slides across P1, P3, P4 — demonstrating it understands Chinese-named layouts when prompted clearly. P4 produced the fastest latency (1.9s avg) due to the shorter prompt with fewer tokens.
-
----
-
-### 4.3 `gpt-oss:20b-cloud` (cloud, 20B parameters, think mode always on)
-
-| Prompt | cover/title | academic | section_header | bullet_list | closing | quote | **Overall** | Avg Elapsed |
-|---|---|---|---|---|---|---|---|---|
-| P1 Decision-Tree Routing | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.8s |
-| P2 Negative Examples | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.8s |
-| P3 Chain-of-Thought | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.7s |
-| P4 Minimal Layout List | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 1/3 | **16/18** | 2.8s |
-
-**Baseline (from layout_name_test.md):** 10/18 (55.6%)
-
-**P4 failure detail:** For quote_slide, run 2 was a parse failure ("Could not extract json string from output") and run 3 chose `TITLE_AND_BODY`. The reduced layout list in P4 coincided with a parse instability — likely the model's think-mode reasoning conflicted with the structured output format under a shorter/simpler prompt. Run 1 correctly chose `QUOTE`.
-
-P1, P2, and P3 all achieved 18/18. The think mode (always active, cannot be disabled per `test_cloud_models.md`) did not impair performance — the internal reasoning may have helped on the harder slide types.
+**8 rules cover:**
+1. TITLE_AND_BODY or BULLET_LIST when body contains any image/figure/visual reference
+2. TITLE_AND_BODY or BULLET_LIST for opening cover slide (author attribution, "Presented by:", etc.)
+3. TITLE_AND_BODY or BULLET_LIST for closing slide (short ceremonial content)
+4. TITLE_AND_BODY or BULLET_LIST when body is empty or very short
+5. TITLE_AND_BODY or BULLET_LIST for a quotation with attribution line
+6. TITLE_SLIDE when body contains substantial multi-sentence/bullet content
+7. TITLE_SLIDE for a section divider (empty body, no attribution phrasing)
+8. BLANK for any slide whose title or body contains any text or visual content
 
 ---
 
-### 4.4 Cross-Model Summary
+### P5 — Chain-of-Thought
+
+**ID:** `P5_chain_of_thought`
+**Strategy:** Asks the model to generate a free-form 4-step reasoning chain before selecting a layout: (1) observe slide content, (2) infer the slide's role in a presentation, (3) match to a layout from descriptions, (4) verify the chosen name is valid.
+**Rationale:** Free chain-of-thought lets the model weigh multiple signals simultaneously without following a rigid branching path. Not constrained to a pre-defined taxonomy. Reasoning is generated freely and grounded in `LAYOUT_DESCRIPTIONS`.
+**Key feature:** The 4 steps are instructional, not prescriptive — the model writes its own reasoning rather than filling in fixed category labels.
+
+---
+
+## 6. Slide Test Cases
+
+12 test cases in total. For each, the model is given `title` and `content` as a JSON object. The `expected` set defines which layout names are considered appropriate.
+
+### Text-content slides (6)
+
+| Label | Title | Content summary | Expected layout(s) |
+|-------|-------|-----------------|-------------------|
+| `cover/title_slide` | "Attention Is All You Need" | "A Research Presentation\nPresented by: John Smith" | `TITLE_SLIDE` |
+| `academic_content` | "Transformer Architecture" | 4 bullet points (* prefix), academic technical content | `TITLE_AND_BODY` or `BULLET_LIST` |
+| `section_header` | "Chapter 2: Methodology" | Empty string | `SECTION_HEADER_CENTER` or `SECTION_HEADER_TOP` |
+| `bullet_list` | "Key Findings" | 4 bullet points (* prefix), metrics/findings | `BULLET_LIST` or `TITLE_AND_BODY` |
+| `closing_slide` | "Thank You" | "Questions and Discussion\nContact: research@example.com" | `TITLE_SLIDE` or `SECTION_HEADER_CENTER` |
+| `quote_slide` | "Inspiration" | Quoted sentence + "— Albert Einstein" attribution | `QUOTE` |
+
+### Visual/photo slides (6)
+
+| Label | Title | Content summary | Expected layout(s) |
+|-------|-------|-----------------|-------------------|
+| `photo_landscape` | "System Architecture" | "[Wide horizontal diagram showing the end-to-end processing pipeline from input to output]" | `PHOTO_LANDSCAPE` |
+| `photo_portrait` | "About the Authors" | "[Portrait photo: lead researcher headshot]" | `PHOTO_PORTRAIT` |
+| `content_with_photo` | "Attention Visualization" | 2 bullet points + "[Figure: attention heatmap visualization on the right]" | `CONTENT_WITH_PHOTO` |
+| `three_photo` | "Qualitative Comparison" | "[Image 1: baseline output] [Image 2: proposed method] [Image 3: ground truth]" | `THREE_PHOTO` |
+| `full_photo` | "" (empty) | "[Full-page image: t-SNE visualization of learned embedding space]" | `FULL_PHOTO` |
+| `blank` | "" (empty) | "" (empty) | `BLANK` |
+
+### Scoring note for no-placeholder layouts
+
+For `THREE_PHOTO`, `FULL_PHOTO`, and `BLANK`, the scoring only checks whether `layout_name` is in the expected set. `idx_title_placeholder` and `idx_content_placeholder` values are not scored. However, the schema fix means these slides no longer produce `success=False` due to Pydantic validation errors on the idx fields — provided the model outputs either `null` (handled by `Optional[str] = None`) or an integer (handled by `coerce_int_to_str`). If the model outputs a non-null, non-integer value that fails other Pydantic constraints, a validation error is still possible; in practice this did not occur in this run.
+
+---
+
+## 7. Results per Model
+
+### 7.1 gemma3:4b
+
+**Available:** Yes. All 180 P1–P5 calls and 36 P0 calls completed (216 total). `success_rate = 36/36` for every prompt — no Pydantic validation errors in this run.
+
+**Appropriate rate per prompt and slide type:**
+
+| Prompt | cover/ title | academic | section | bullet | closing | quote | photo_ land | photo_ port | content_ photo | three_ photo | full_ photo | blank | Overall | Avg Elap |
+|--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| P0 Prod Baseline | 0/3 | 3/3 | 0/3 | 3/3 | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | **15/36** | 9.5s |
+| P1 Baseline | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **33/36** | 11.1s |
+| P2 Decision-Tree | 0/3 | 0/3 | 3/3 | 0/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | **21/36** | 12.4s |
+| P3 Positive Examples | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **33/36** | 13.0s |
+| P4 Negative Examples | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | **21/36** | 13.2s |
+| P5 Chain-of-Thought | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **30/36** | 12.0s |
+
+**Wrong choices by slide type for gemma3:4b:**
+
+| Slide | P0 Prod Baseline | P1 Baseline | P2 Decision-Tree | P3 Positive | P4 Negative | P5 CoT |
+|-------|-----------------|-------------|------------------|-------------|-------------|--------|
+| `cover/title_slide` | `TITLE_AND_BODY`×3 | `TITLE_AND_BODY`×3 | `TITLE_COVER`×3 | `TITLE_AND_BODY`×3 | `TITLE_AND_BODY`×3 | `TITLE_AND_BODY`×3 |
+| `academic_content` | 3/3 OK | 3/3 OK | `CONTENT_SLIDE`×3 | 3/3 OK | `CONTENT_WITH_PHOTO`×3 | 3/3 OK |
+| `section_header` | `TITLE_AND_BODY`×3 | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK |
+| `bullet_list` | 3/3 OK | 3/3 OK | `CONTENT_SLIDE`×3 | 3/3 OK | 3/3 OK | 3/3 OK |
+| `closing_slide` | `TITLE_AND_BODY`×3 | 3/3 OK | `CLOSING_SLIDE`×3 | 3/3 OK | `BULLET_LIST`×3 | 3/3 OK |
+| `quote_slide` | `TITLE_AND_BODY`×3 | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK |
+| `photo_landscape` | `TITLE_AND_BODY`×3 | 3/3 OK | 3/3 OK | 3/3 OK | `CONTENT_WITH_PHOTO`×3 | `CONTENT_WITH_PHOTO`×3 |
+| `photo_portrait` | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK |
+| `content_with_photo` | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK |
+| `three_photo` | `CONTENT_WITH_PHOTO`×3 | 3/3 OK | 3/3 OK | 3/3 OK | `CONTENT_WITH_PHOTO`×3 | 3/3 OK |
+| `full_photo` | 3/3 OK | 3/3 OK | `PHOTO_LANDSCAPE`×3 | 3/3 OK | 3/3 OK | 3/3 OK |
+| `blank` | `TITLE_SLIDE`×3 | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK |
+
+*`TITLE_COVER`, `CONTENT_SLIDE`, `CLOSING_SLIDE` are not valid template layout names — they are intermediate role labels from the P2 decision tree that the model output as the final `layout_name` value.*
+
+---
+
+### 7.2 ministral-3:14b-cloud
+
+**Available:** Yes. All 180 P1–P5 calls and 36 P0 calls completed (216 total). `success_rate = 36/36` for every prompt — no Pydantic validation errors. `appropriate_rate = 36/36` for P1–P5; P0 is 29/36.
+
+**Appropriate rate per prompt and slide type:**
+
+| Prompt | cover/ title | academic | section | bullet | closing | quote | photo_ land | photo_ port | content_ photo | three_ photo | full_ photo | blank | Overall | Avg Elap |
+|--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| P0 Prod Baseline | 0/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 2/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **29/36** | 2.0s |
+| P1 Baseline | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **36/36** | 1.7s |
+| P2 Decision-Tree | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **36/36** | 1.6s |
+| P3 Positive Examples | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **36/36** | 2.3s |
+| P4 Negative Examples | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **36/36** | 2.3s |
+| P5 Chain-of-Thought | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **36/36** | 2.0s |
+
+**Wrong choices for ministral-3:14b-cloud — P0 only:**
+
+| Slide | P0 Prod Baseline | P1–P5 |
+|-------|-----------------|-------|
+| `cover/title_slide` | `TITLE_AND_BODY`×3 | 3/3 OK (all 5 prompts) |
+| `closing_slide` | `TITLE_AND_BODY`×3 | 3/3 OK (all 5 prompts) |
+| `photo_landscape` | `CONTENT_WITH_PHOTO`×1, `PHOTO_LANDSCAPE`×2 → 2/3 | 3/3 OK (all 5 prompts) |
+
+**P1–P5 wrong/FAIL choices:** None. ministral-3:14b-cloud had zero failures or wrong choices across all 180 P1–P5 calls.
+
+**Selected layout names by ministral-3:14b-cloud (choices that vary across prompts, all within expected set):**
+
+- `academic_content`: `BULLET_LIST` consistently across all 6 prompts (both `BULLET_LIST` and `TITLE_AND_BODY` are in the expected set)
+- `section_header`: `SECTION_HEADER_CENTER` for P0/P1/P2/P4/P5; `SECTION_HEADER_TOP` for P3 (both are in the expected set)
+- `closing_slide`: `TITLE_SLIDE` consistently across P1–P5; `TITLE_AND_BODY` (wrong) in P0
+- All other slide types: consistent correct layout choice across all 6 prompts
+
+---
+
+## 8. Cross-Model Summary
+
+### 8.1 Model × Prompt table
 
 | Model | Prompt | Appropriate Rate | Success Rate | Avg Elapsed |
-|---|---|---|---|---|
-| `gemma3:4b` | P1 Decision-Tree Routing | 15/18 | 18/18 | 11.7s |
-| `gemma3:4b` | P2 Negative Examples | **18/18** | 18/18 | 11.6s |
-| `gemma3:4b` | P3 Chain-of-Thought | 12/18 | 18/18 | 11.7s |
-| `gemma3:4b` | P4 Minimal Layout List | 12/18 | 18/18 | 11.3s |
-| `ministral-3:14b-cloud` | P1 Decision-Tree Routing | **18/18** | 18/18 | 2.9s |
-| `ministral-3:14b-cloud` | P2 Negative Examples | **18/18** | 18/18 | 2.1s |
-| `ministral-3:14b-cloud` | P3 Chain-of-Thought | **18/18** | 18/18 | 2.0s |
-| `ministral-3:14b-cloud` | P4 Minimal Layout List | **18/18** | 18/18 | 1.9s |
-| `gpt-oss:20b-cloud` | P1 Decision-Tree Routing | **18/18** | 18/18 | 2.8s |
-| `gpt-oss:20b-cloud` | P2 Negative Examples | **18/18** | 18/18 | 2.8s |
-| `gpt-oss:20b-cloud` | P3 Chain-of-Thought | **18/18** | 18/18 | 2.7s |
-| `gpt-oss:20b-cloud` | P4 Minimal Layout List | 16/18 | 17/18 | 2.8s |
+|-------|--------|:----------------:|:------------:|:-----------:|
+| gemma3:4b | P0 Prod Baseline | **15/36** | 36/36 | 9.5s |
+| gemma3:4b | P1 Baseline | **33/36** | 36/36 | 11.1s |
+| gemma3:4b | P2 Decision-Tree | **21/36** | 36/36 | 12.4s |
+| gemma3:4b | P3 Positive Examples | **33/36** | 36/36 | 13.0s |
+| gemma3:4b | P4 Negative Examples | **21/36** | 36/36 | 13.2s |
+| gemma3:4b | P5 Chain-of-Thought | **30/36** | 36/36 | 12.0s |
+| ministral-3:14b-cloud | P0 Prod Baseline | **29/36** | 36/36 | 2.0s |
+| ministral-3:14b-cloud | P1 Baseline | **36/36** | 36/36 | 1.7s |
+| ministral-3:14b-cloud | P2 Decision-Tree | **36/36** | 36/36 | 1.6s |
+| ministral-3:14b-cloud | P3 Positive Examples | **36/36** | 36/36 | 2.3s |
+| ministral-3:14b-cloud | P4 Negative Examples | **36/36** | 36/36 | 2.3s |
+| ministral-3:14b-cloud | P5 Chain-of-Thought | **36/36** | 36/36 | 2.0s |
 
-**Slide-type breakdown (appropriate rate across all models and all prompts):**
+### 8.2 Per-slide-type breakdown (combined totals, both models, all 6 prompts)
 
-| Slide Type | gemma3:4b (best) | ministral-3:14b-cloud (best) | gpt-oss:20b-cloud (best) |
-|---|---|---|---|
-| `cover/title_slide` | 3/3 (P2,P3) | 3/3 (all) | 3/3 (all) |
-| `academic_content` | 3/3 (P1,P2,P4) | 3/3 (all) | 3/3 (all) |
-| `section_header` | 3/3 (P1,P2,P3) | 3/3 (all) | 3/3 (all) |
-| `bullet_list` | 3/3 (P1,P2,P4) | 3/3 (all) | 3/3 (all) |
-| `closing_slide` | 3/3 (P1,P2,P3,P4) | 3/3 (all) | 3/3 (all) |
-| `quote_slide` | 3/3 (P1,P2,P3,P4) | 3/3 (all) | 3/3 (P1,P2,P3) |
+Maximum possible per slide type (P0–P5): 2 models × 6 prompts × 3 runs = **36**
+Maximum possible per slide type (P1–P5 only): 2 models × 5 prompts × 3 runs = **30**
 
----
+gemma3:4b per-slide breakdown (P0/P1/P2/P3/P4/P5):
+- `cover/title_slide`: 0+0+0+0+0+0 = **0/18**
+- `academic_content`: 3+3+0+3+0+3 = **12/18**
+- `section_header`: 0+3+3+3+3+3 = **15/18**
+- `bullet_list`: 3+3+0+3+3+3 = **15/18**
+- `closing_slide`: 0+3+0+3+0+3 = **9/18**
+- `quote_slide`: 0+3+3+3+3+3 = **15/18**
+- `photo_landscape`: 0+3+3+3+0+0 = **9/18**
+- `photo_portrait`: 3+3+3+3+3+3 = **18/18**
+- `content_with_photo`: 3+3+3+3+3+3 = **18/18**
+- `three_photo`: 0+3+3+3+0+3 = **12/18**
+- `full_photo`: 3+3+0+3+3+3 = **15/18**
+- `blank`: 0+3+3+3+3+3 = **15/18**
 
-## 5. Analysis
+ministral-3:14b-cloud per-slide breakdown (P0/P1/P2/P3/P4/P5):
+- `cover/title_slide`: 0+3+3+3+3+3 = **15/18**
+- `academic_content`: 3+3+3+3+3+3 = **18/18**
+- `section_header`: 3+3+3+3+3+3 = **18/18**
+- `bullet_list`: 3+3+3+3+3+3 = **18/18**
+- `closing_slide`: 0+3+3+3+3+3 = **15/18**
+- `quote_slide`: 3+3+3+3+3+3 = **18/18**
+- `photo_landscape`: 2+3+3+3+3+3 = **17/18**
+- `photo_portrait`: 3+3+3+3+3+3 = **18/18**
+- `content_with_photo`: 3+3+3+3+3+3 = **18/18**
+- `three_photo`: 3+3+3+3+3+3 = **18/18**
+- `full_photo`: 3+3+3+3+3+3 = **18/18**
+- `blank`: 3+3+3+3+3+3 = **18/18**
 
-### 5.1 What Worked Best Per Model
-
-**`gemma3:4b`:**
-- **Best: P2 Negative Examples — 18/18 (100%)** — the only prompt achieving perfect score
-- Worst: P3 Chain-of-Thought and P4 Minimal Layout List — both 12/18 (67%)
-- The 4B model benefits most from direct, explicit "DO NOT use X" rules. It struggles with multi-step reasoning (P1, P3) where intermediate labels can be hallucinated as final answers.
-
-**`ministral-3:14b-cloud`:**
-- **All prompts: 18/18 (100%)** — completely robust across all strategies
-- Fastest with P4 Minimal Layout List (1.9s avg) vs 2.9s for P1
-- The 14B model has sufficient layout comprehension that any of the 4 prompts achieves perfect accuracy.
-
-**`gpt-oss:20b-cloud`:**
-- **Best: P1, P2, P3 — all 18/18 (100%)**
-- Worst: P4 Minimal Layout List — 16/18 with 1 parse failure
-- The think mode may have interfered with structured output parsing in the shorter P4 prompt
-
-### 5.2 Failure Mode Analysis
-
-**gemma3:4b + P1 Decision-Tree:**
-- Returned `TITLE_COVER` (a role label) as the layout name instead of `TITLE_SLIDE`
-- Root cause: A 4B model cannot reliably maintain a two-step "classify then map" chain. It follows step 1 (classifying role) but collapses steps 1+2 by outputting the role label as the final layout.
-- Lesson: Multi-step prompts with labeled intermediate outputs are risky for small models — the labels leak into the output field.
-
-**gemma3:4b + P3 Chain-of-Thought:**
-- Chose `CONTENT_WITH_PHOTO` for academic_content and bullet_list slides (6/6 runs)
-- Root cause: The CoT prompt includes "content" as a slide type. `gemma3:4b` associated "content" with `CONTENT_WITH_PHOTO` layout — a name collision between the CoT vocabulary and the layout name.
-- Lesson: CoT classification labels must not overlap with layout names for small models. Renaming the content category to "body_text" or "bullet_points" would likely fix this.
-
-**gemma3:4b + P4 Minimal Layout:**
-- Chose `TITLE_SLIDE` for section_header (all 3 runs)
-- Root cause: With only 6 layouts and no negative examples, the model conflated "no body text" (section header) with "title slide" (also no body). The reduced list eliminated the disambiguation guardrails.
-
-**gpt-oss:20b-cloud + P4 Minimal Layout (quote_slide):**
-- 1 parse failure + 1 wrong choice out of 3 runs
-- Root cause: The shorter minimal-layout prompt may provide fewer anchoring tokens for the think-mode model's reasoning, leading to occasional output format corruption.
-
-### 5.3 Comparison with Baseline
-
-| Condition | Baseline (layout_name_test.md) | Best this experiment | Improvement |
-|---|---|---|---|
-| `gemma3:4b` | 6/18 (33.3%) | 18/18 (100%) with P2 | +67pp |
-| `ministral-3:14b-cloud` | 12/18 (66.7%) | 18/18 (100%) with any prompt | +33pp |
-| `gpt-oss:20b-cloud` | 10/18 (55.6%) | 18/18 (100%) with P1/P2/P3 | +44pp |
-
-All three models improved substantially. The biggest gain was `gemma3:4b`: from 6/18 (extreme TITLE_AND_BODY bias) to 18/18 with the Negative Examples prompt.
-
-### 5.4 Do Cloud Models Outperform Local?
-
-With the right prompt:
-- `ministral-3:14b-cloud` and `gpt-oss:20b-cloud` achieve 100% on P1/P2/P3 — they are robust across multiple prompt strategies.
-- `gemma3:4b` achieves 100% only on P2 — it is prompt-sensitive and fragile; wrong prompt structure triggers hallucination.
-
-Cloud models are **more reliable** (not just higher accuracy, but also more consistent across prompts). Local `gemma3:4b` can match cloud accuracy with the right prompt, but has no tolerance for suboptimal prompt design.
-
-### 5.5 Which Slide Types Are Hardest
-
-Previous baseline: cover/title_slide and closing_slide were universally hard (0/9 each).
-
-With the new prompts, **all 6 slide types are solved** for ministral-3:14b-cloud and for gpt-oss:20b-cloud (with P1/P2/P3). For gemma3:4b, the residual difficulty is:
-- cover/title_slide: fails on P1 (label hallucination) and P4 (reverting to TITLE_AND_BODY bias without negative constraints)
-- academic_content + bullet_list: fails on P3 (CONTENT_WITH_PHOTO confusion)
-- section_header: fails on P4 (confused with TITLE_SLIDE when list is minimal)
-
-The fundamental finding is that **small models (4B) require negative constraints to stay on-task**, while larger models can correctly interpret multiple reasoning styles.
+| Slide Type | gemma3:4b (/ 18) | ministral (/ 18) | Total (/ 36) |
+|------------|:----------------:|:----------------:|:------------:|
+| `cover/title_slide` | 0 | 15 | **15/36** |
+| `academic_content` | 12 | 18 | **30/36** |
+| `section_header` | 15 | 18 | **33/36** |
+| `bullet_list` | 15 | 18 | **33/36** |
+| `closing_slide` | 9 | 15 | **24/36** |
+| `quote_slide` | 15 | 18 | **33/36** |
+| `photo_landscape` | 9 | 17 | **26/36** |
+| `photo_portrait` | 18 | 18 | **36/36** |
+| `content_with_photo` | 18 | 18 | **36/36** |
+| `three_photo` | 12 | 18 | **30/36** |
+| `full_photo` | 15 | 18 | **33/36** |
+| `blank` | 15 | 18 | **33/36** |
 
 ---
 
-## 6. Recommendations
+## 9. Analysis
 
-### 6.1 Production Prompt
+All numbers in this section are drawn directly from `layout_prompt_eng_results.json`, `layout_prompt_eng_results_P0_baseline.json`, and `layout_prompt_eng_output_new.txt`.
 
-**Recommended prompt: P2 Negative Examples**
+### 9.1 Best prompt per model (exact numbers)
 
-Rationale:
-1. Only prompt to achieve 18/18 on `gemma3:4b` (the weakest local model)
-2. Achieves 18/18 on both cloud models (P2 and others do equally well)
-3. No multi-step reasoning = no hallucination of intermediate labels
-4. Clear explicit rules are easy to maintain and extend (add new slide types with a new "USE X when" block)
-5. Fast latency for ministral (2.1s avg vs P1's 2.9s)
+**gemma3:4b:** P1 Baseline and P3 Positive Examples tie for best at **33/36 appropriate** (91.7%). P5 Chain-of-Thought is second at **30/36** (83.3%). P2 Decision-Tree and P4 Negative Examples tie for worst at **21/36** (58.3%). P0 Production Baseline is lowest at **15/36** (41.7%).
 
-### 6.2 Recommended Model + Prompt Combination
+**ministral-3:14b-cloud:** All P1–P5 prompts tie at **36/36** (100%). P0 Production Baseline is **29/36** (80.6%). No engineered prompt is distinguishable from another for this model on this test set — the between-prompt variance comes entirely from P0 vs the rest.
 
-**For production deployment:**
+### 9.2 Hardest slide types (ranked by combined total P0–P5, lowest first)
 
-| Priority | Model | Prompt | Appropriate Rate | Avg Latency | Notes |
-|---|---|---|---|---|---|
-| **Primary** | `ollama/ministral-3:14b-cloud` | P2 Negative Examples | 18/18 | 2.1s | Best latency + perfect accuracy |
-| **Fallback** | `ollama/gpt-oss:20b-cloud` | P2 Negative Examples | 18/18 | 2.8s | Think mode always on; reliable |
-| **Local only** | `ollama/gemma3:4b` | P2 Negative Examples | 18/18 | 11.6s | Acceptable for offline/air-gapped; slower |
+Maximum possible per slide type across all 6 prompts and 2 models: **36**.
 
-**Production config (primary):**
-```python
-MODEL = {
-    "name": "ollama/ministral-3:14b-cloud",
-    "additional_kwargs": {},
-}
-llm = LiteLLM(model=MODEL["name"], temperature=0.1, max_tokens=2048)
-program = LLMTextCompletionProgram.from_defaults(
-    llm=llm,
-    output_cls=SlideOutlineWithLayout,
-    prompt_template_str=PROMPT_2_NEGATIVE_EXAMPLES,
-    verbose=False,
-)
-```
+| Rank | Slide Type | Total / 36 | Notes |
+|------|------------|:----------:|-------|
+| 1 (hardest) | `cover/title_slide` | 15 | gemma3:4b scores 0/18 across all 6 prompts; ministral scores 0/3 on P0, 15/15 on P1–P5 |
+| 2 | `closing_slide` | 24 | gemma3:4b scores 0/3 on P0, P2, P4; ministral scores 0/3 on P0 |
+| 3 | `photo_landscape` | 26 | gemma3:4b scores 0/3 on P0, P4, P5; ministral scores 2/3 on P0 (1 wrong) |
+| 4 | `academic_content` | 30 | gemma3:4b scores 0/3 on P2 and P4 |
+| 4 | `three_photo` | 30 | gemma3:4b scores 0/3 on P0 and P4 |
+| 6 | `section_header` | 33 | gemma3:4b scores 0/3 on P0 only |
+| 6 | `bullet_list` | 33 | gemma3:4b scores 0/3 on P2 only |
+| 6 | `quote_slide` | 33 | gemma3:4b scores 0/3 on P0 only |
+| 6 | `full_photo` | 33 | gemma3:4b scores 0/3 on P2 only |
+| 6 | `blank` | 33 | gemma3:4b scores 0/3 on P0 only |
+| 11 (easiest, 2-way tie) | `photo_portrait` | 36 | Perfect across both models and all 6 prompts |
+| 11 | `content_with_photo` | 36 | Perfect across both models and all 6 prompts |
 
-### 6.3 Updating `AUGMENT_LAYOUT_PMT` in Production
+`cover/title_slide` is the only slide type where gemma3:4b fails on every prompt (0/3 × 6 prompts = 0/18). P0 and P1/P3/P4/P5 all produce `TITLE_AND_BODY`; P2 produces the invalid name `TITLE_COVER`.
 
-The current `AUGMENT_LAYOUT_PMT` in `/Users/chunming/MyWorkSpace/agent_workspace/research-agent/dev/backend/prompts/prompts.py` still uses the baseline approach. To deploy the improvement:
-1. Replace `AUGMENT_LAYOUT_PMT` with the P2 Negative Examples prompt (full text in `layout_prompt_eng_test.py` → `PROMPT_2_NEGATIVE_EXAMPLES`).
-2. Keep `{available_layout_names}` and `{available_layouts}` template variables — these are still populated dynamically from the template file.
-3. Keep `{slide_content}` variable.
-4. No changes needed to `SlideOutlineWithLayout` schema or `LLMTextCompletionProgram` setup.
+For P1–P5 only (excluding P0), the hardest slides remain: `cover/title_slide` (15/30), `academic_content` (24/30), `closing_slide` (24/30), `photo_landscape` (24/30). The P0 data adds new failures for gemma3:4b on `section_header`, `quote_slide`, `blank` — slide types where P1–P5 were perfect.
 
-### 6.4 Caveats and Limitations
+### 9.3 Failure mode analysis
 
-1. **N_RUNS = 3 per cell**: Small sample size. The 18/18 perfect scores should be validated with N=10 before deploying to production. Partial results (e.g., gpt-oss P4 quote_slide 1/3) need more runs to determine if they are statistical noise.
+**gemma3:4b — three distinct failure modes in this run:**
 
-2. **6 slide types**: Only covers the most common academic slide patterns. Edge cases like agenda slides, statistical result slides, image-caption slides, and comparison tables are not tested. Add them before production sign-off.
+**Failure Mode A — Invalid layout name (P2 decision tree):** When P2 Decision-Tree routing is used, gemma3:4b outputs the intermediate decision-tree role label as the final `layout_name` instead of the actual template layout name. Specifically:
+- `cover/title_slide` → outputs `TITLE_COVER` (not in the valid layout set)
+- `academic_content` → outputs `CONTENT_SLIDE` (not in the valid layout set)
+- `bullet_list` → outputs `CONTENT_SLIDE` (not in the valid layout set)
+- `closing_slide` → outputs `CLOSING_SLIDE` (not in the valid layout set)
 
-3. **gemma3:4b P2 18/18 result**: This is a significant improvement from baseline 6/18. However, given the model's demonstrated sensitivity (hallucinating role labels in P1, misidentifying layouts in P3 and P4), the 100% result on P2 should be verified with a larger N before trusting it in production.
+The model appears to stop at the role-labelling step (STEP 1) rather than proceeding to the layout-name lookup (STEP 2). All P2 failures output strings that match role names defined in the decision tree, not layout names defined in the template.
 
-4. **Chinese layout names**: `項目符號` is now being chosen correctly by all models under prompts that describe it in English ("bullet list layout"). This is an improvement over the baseline where Chinese-named layouts were ignored. However, `照片 - 一頁三張` and `空白` are still never chosen — they may need English alias descriptions if they are ever needed in the pipeline.
+**Failure Mode B — Wrong valid name (covering the remaining failures):** gemma3:4b outputs a valid layout name (present in the template) that is inappropriate for the slide:
+- `cover/title_slide` → `TITLE_AND_BODY`×3 in P1, P3, P4, P5 (consistent across all 4 prompts)
+- `academic_content` → `CONTENT_WITH_PHOTO`×3 in P4 (the negative rules against TITLE_AND_BODY redirect the model to an unexpected layout)
+- `closing_slide` → `BULLET_LIST`×3 in P4 (the negative rule against TITLE_AND_BODY/BULLET_LIST for closing slides appears to mismatch the model's pattern matching)
+- `photo_landscape` → `CONTENT_WITH_PHOTO`×3 in P4 and P5 (the model detects a visual element reference in the content and picks the combined-content-plus-photo layout)
+- `full_photo` → `PHOTO_LANDSCAPE`×3 in P2 (the model recognises a full-image slide but picks the single-landscape-image layout instead)
+- `three_photo` → `CONTENT_WITH_PHOTO`×3 in P4 (similar to `photo_landscape` — visual element detected, wrong layout chosen)
 
-### 6.5 Further Improvements
+**ministral-3:14b-cloud:** No failures on P1–P5 (zero wrong choices across all 180 calls). P0 has 7 wrong choices: `cover/title_slide` (0/3, `TITLE_AND_BODY`×3), `closing_slide` (0/3, `TITLE_AND_BODY`×3), `photo_landscape` (2/3, `CONTENT_WITH_PHOTO`×1).
 
-1. **Combine P2 + P3**: Test a hybrid prompt that includes both negative constraints (P2 style) AND chain-of-thought classification (P3 style). The combination may generalize better to unseen slide types.
+### 9.4 Impact of schema fix: THREE_PHOTO, FULL_PHOTO, BLANK
 
-2. **Fix P3 for gemma3:4b**: Rename CoT classification labels to avoid collision with layout names (e.g. use "cover_page" instead of "content" for the label that maps to CONTENT_WITH_PHOTO). This might bring P3 to 18/18 for small models.
+**Context:** In the previous run, `idx_title_placeholder` and `idx_content_placeholder` were typed as required `str`. Models returning `null` or an integer for these fields triggered immediate Pydantic validation errors. For layouts without text placeholders (`THREE_PHOTO`, `FULL_PHOTO`, `BLANK`), the model had no valid value to return, so almost all calls on these slide types produced `success=False` (validation failure), regardless of whether `layout_name` was correct.
 
-3. **Expand test suite**: Add edge cases — agenda/TOC slides, statistical/chart slides, definition/glossary slides, two-column comparison slides.
+**Previous run results for these layouts (from prior run data):** Both gemma3:4b and ministral-3:14b-cloud had validation failures on `THREE_PHOTO`, `FULL_PHOTO`, and `BLANK` in the previous run. ministral in particular had notable validation failures, contributing to its previous overall score being below perfect.
 
-4. **Validate on real paper outlines**: The current test cases are artificial. Run the same prompts on actual paper summaries to verify generalization.
+**This run results:**
+
+`success_rate` for every model and every prompt in this run is **36/36**. No Pydantic validation errors occurred on any slide type, including `THREE_PHOTO`, `FULL_PHOTO`, and `BLANK`. The schema fix (`Optional[str] = None` + `coerce_int_to_str`) completely eliminated validation failures.
+
+**Appropriate rates for the three no-placeholder layouts:**
+
+| Slide | gemma3:4b (all 6 prompts P0–P5) | ministral (all 6 prompts P0–P5) |
+|-------|:--------------------------------:|:--------------------------------:|
+| `three_photo` | P0=0/3, P1=3/3, P2=3/3, P3=3/3, P4=0/3, P5=3/3 → **12/18** | P0=3/3, P1–P5=15/15 → **18/18** |
+| `full_photo` | P0=3/3, P1=3/3, P2=0/3, P3=3/3, P4=3/3, P5=3/3 → **15/18** | P0=3/3, P1–P5=15/15 → **18/18** |
+| `blank` | P0=0/3, P1=3/3, P2=3/3, P3=3/3, P4=3/3, P5=3/3 → **15/18** | P0=3/3, P1–P5=15/15 → **18/18** |
+
+The schema fix resolved the validation failures. In this run, failures for these slide types are due to wrong `layout_name` choices (Failure Mode A or B), not schema validation errors. For example, gemma3:4b P0 `three_photo` fails with `CONTENT_WITH_PHOTO` (wrong but valid name), and gemma3:4b P4 `three_photo` also fails with `CONTENT_WITH_PHOTO`; in the previous run both would have failed with a Pydantic error before the layout name could even be evaluated.
+
+Notably, for gemma3:4b P0 `blank`: the production prompt has no null instruction for idx fields, yet `success=True` was achieved (36/36 success rate). The model produced a non-null value for the idx fields on `blank`, which the schema's `coerce_int_to_str` validator handled without error. The `blank` wrong choice (`TITLE_SLIDE`×3) is a layout selection error, not a schema error. ministral P0 on `blank` chose `BLANK` correctly (3/3).
+
+The `coerce_int_to_str` validator was not triggered in any observable way in the P1–P5 run — the output log shows no coercion warnings, and all 360 calls completed with `success=True`. For P0, `success_rate = 36/36` for both models, confirming the schema fix handles P0's missing null instruction gracefully. The validator serves as a defensive measure for future edge cases.
+
+### 9.5 Impact of P4 redesign (8 rules vs previous 19 rules)
+
+**Previous run P4 scores:** gemma3:4b = 15/36, ministral-3:14b-cloud = 29/36.
+
+**This run P4 scores:** gemma3:4b = **21/36**, ministral-3:14b-cloud = **36/36**.
+
+**gemma3:4b P4:** Improved from 15/36 to 21/36 (+6 appropriate calls). However, this improvement cannot be attributed solely to the P4 redesign — the schema fix eliminated Pydantic validation errors that contributed to failures in the previous run. In this run, gemma3:4b P4 still fails on 5 slide types: `cover/title_slide` (0/3, `TITLE_AND_BODY`), `academic_content` (0/3, `CONTENT_WITH_PHOTO`), `closing_slide` (0/3, `BULLET_LIST`), `photo_landscape` (0/3, `CONTENT_WITH_PHOTO`), `three_photo` (0/3, `CONTENT_WITH_PHOTO`). The `CONTENT_WITH_PHOTO` wrong choice appearing 3 times in gemma3:4b P4 suggests the 8 rules (which do not cover visual layout disambiguation) are insufficient for preventing visual layout confusion in the 4B model. P4 remains the worst or second-worst prompt for gemma3:4b.
+
+**ministral-3:14b-cloud P4:** Improved from 29/36 to 36/36 (+7). Again, the schema fix is a confounding factor — the previous 7 failures may have been validation errors. In this run, ministral achieves 36/36 on all 5 prompts, making it impossible to attribute the improvement specifically to the P4 redesign vs the schema fix.
+
+**Conclusion on P4 redesign:** The reduction from 19 to 8 rules did not worsen results for either model. Whether it independently improved results cannot be determined without an isolated control run (same schema fix, old 19-rule P4 prompt).
+
+### 9.6 How all 6 prompts compare across both models
+
+| Prompt | gemma3:4b | ministral | Combined |
+|--------|:---------:|:---------:|:--------:|
+| P0 Prod Baseline | 15/36 | 29/36 | **44/72** |
+| P1 Baseline | 33/36 | 36/36 | **69/72** |
+| P2 Decision-Tree | 21/36 | 36/36 | **57/72** |
+| P3 Positive Examples | 33/36 | 36/36 | **69/72** |
+| P4 Negative Examples | 21/36 | 36/36 | **57/72** |
+| P5 Chain-of-Thought | 30/36 | 36/36 | **66/72** |
+
+P0 is the lowest combined score at 44/72 (61.1%). P1 and P3 tie for highest (69/72, 95.8%). P2 and P4 tie at 57/72 (79.2%). P5 is 66/72 (91.7%).
+
+P1 (adding LAYOUT_DESCRIPTIONS alone) already lifts gemma3:4b from 15/36 to 33/36 (+18 appropriate calls, +50pp). Adding routing guidance (P2–P5) does not uniformly improve over P1 for gemma3:4b. For ministral-3:14b-cloud, P1–P5 all achieve 36/36; P0 alone falls short at 29/36.
+
+For ministral-3:14b-cloud, P1–P5 are indistinguishable — the model achieves 36/36 regardless of prompt strategy. The between-prompt variance is entirely driven by gemma3:4b.
+
+For gemma3:4b specifically:
+- P0 Prod Baseline (15/36) is the floor — the current production prompt
+- P1 Baseline (33/36) and P3 Positive Examples (33/36) tie for best among engineered prompts
+- P5 Chain-of-Thought (30/36) is second
+- P2 Decision-Tree (21/36) and P4 Negative Examples (21/36) tie for worst among engineered prompts (but both still outperform P0)
+- P2 is uniquely harmful: it introduces Failure Mode A (invalid layout names as role labels), which does not occur in any other prompt
+
+### 9.7 Latency
+
+| Model | P0 | P1 | P2 | P3 | P4 | P5 |
+|-------|:--:|:--:|:--:|:--:|:--:|:--:|
+| gemma3:4b | 9.5s | 11.1s | 12.4s | 13.0s | 13.2s | 12.0s |
+| ministral-3:14b-cloud | 2.0s | 1.7s | 1.6s | 2.3s | 2.3s | 2.0s |
+
+**gemma3:4b:** P0 Production Baseline is the fastest at **9.5s** — it is a shorter prompt with no LAYOUT_DESCRIPTIONS block. P1 Baseline is next at 11.1s. P4 Negative Examples is slowest (13.2s). The 3.7s spread from P0 to P4 corresponds to increased token count for longer prompt templates. P5 Chain-of-Thought (12.0s) is only 0.9s slower than P1 despite requiring the model to generate multi-step reasoning before the JSON output.
+
+**ministral-3:14b-cloud:** P2 Decision-Tree is fastest (1.6s). P3 and P4 are slowest (2.3s each). P0 is 2.0s — comparable to P5. ministral-3:14b-cloud runs approximately 6–8× faster than gemma3:4b (cloud routing vs local M1 inference). P5 Chain-of-Thought (2.0s) is not the slowest for ministral in this run, unlike the typical CoT overhead pattern.
+
+### 9.8 P0 analysis — production prompt accuracy
+
+**P0 overall accuracy (both models combined):** 44/72 (61.1%). This is the accuracy of the prompt currently deployed in production against the 12-layout test set.
+
+**P0 vs P1 — does adding LAYOUT_DESCRIPTIONS alone improve accuracy?**
+
+| Model | P0 (no descriptions) | P1 (descriptions only) | Delta |
+|-------|:--------------------:|:----------------------:|:-----:|
+| gemma3:4b | 15/36 (41.7%) | 33/36 (91.7%) | **+18 (+50pp)** |
+| ministral-3:14b-cloud | 29/36 (80.6%) | 36/36 (100%) | **+7 (+19pp)** |
+| Combined | 44/72 (61.1%) | 69/72 (95.8%) | **+25 (+34pp)** |
+
+Adding `LAYOUT_DESCRIPTIONS` alone (P1 vs P0) produces the single largest accuracy improvement in this experiment. The full routing engineering in P2–P5 adds relatively little beyond P1 for most cases. This directly answers the P0 vs P1 question: yes, LAYOUT_DESCRIPTIONS alone produces a large gain.
+
+**P0 vs P2–P5 — how much does routing guidance help beyond descriptions?**
+
+For gemma3:4b: P1 and P3 are best (33/36). P2, P4 are worse (21/36). P5 is intermediate (30/36). Routing guidance does not consistently improve over descriptions-only for the small 4B model.
+
+For ministral-3:14b-cloud: P1–P5 all achieve 36/36. All engineered prompts are equivalent improvements over P0. The 7-call gap (P0 29/36 → P1 36/36) is fully closed by any prompt with LAYOUT_DESCRIPTIONS.
+
+**Which slide types P0 fails on and why:**
+
+*gemma3:4b P0 (15/36, 7 types failed):*
+- `cover/title_slide` (0/3, `TITLE_AND_BODY`×3): Without LAYOUT_DESCRIPTIONS, the model has no guidance distinguishing TITLE_SLIDE from TITLE_AND_BODY. The production prompt's only routing hint is "agenda/overview, regular content, title slide, or closing/thank-you" — too vague.
+- `section_header` (0/3, `TITLE_AND_BODY`×3): No description of SECTION_HEADER_CENTER/TOP in P0. The model defaults to TITLE_AND_BODY for any titled slide.
+- `closing_slide` (0/3, `TITLE_AND_BODY`×3): Same as above — no description distinguishing closing slides from regular content.
+- `quote_slide` (0/3, `TITLE_AND_BODY`×3): QUOTE layout has no guidance in P0. Model defaults to TITLE_AND_BODY.
+- `photo_landscape` (0/3, `TITLE_AND_BODY`×3): The production prompt says "choose a layout that has a content placeholder" — biasing toward text-bearing layouts even for visual slides. Result: `TITLE_AND_BODY` instead of `PHOTO_LANDSCAPE`.
+- `three_photo` (0/3, `CONTENT_WITH_PHOTO`×3): Model detects multiple image references and picks the combined layout rather than the three-photo-specific layout.
+- `blank` (0/3, `TITLE_SLIDE`×3): No guidance for completely empty slides. Model picks `TITLE_SLIDE` (the emptiest-seeming layout it knows).
+
+*ministral-3:14b-cloud P0 (29/36, 2 types fully failed + 1 partial):*
+- `cover/title_slide` (0/3, `TITLE_AND_BODY`×3): Same failure as gemma3:4b — no description distinguishing TITLE_SLIDE from TITLE_AND_BODY.
+- `closing_slide` (0/3, `TITLE_AND_BODY`×3): Same failure — no guidance for ceremonial closing slides.
+- `photo_landscape` (2/3, `CONTENT_WITH_PHOTO`×1, `PHOTO_LANDSCAPE`×2): Mostly correct (2/3), with 1 wrong choice. ministral generally handles visual layouts well even without detailed descriptions.
+
+**P0 on visual layouts (THREE_PHOTO, FULL_PHOTO, BLANK) — null instruction missing:**
+
+P0 does not instruct the model to output `null` for `idx_title_placeholder`/`idx_content_placeholder` on layouts with no text placeholders. Despite this, `success_rate = 36/36` for both models under P0. The schema fix (`Optional[str] = None` + `coerce_int_to_str`) absorbed whatever the model returned for these fields. Layout selection correctness for these slides under P0:
+- `full_photo`: gemma3:4b 3/3 correct (FULL_PHOTO); ministral 3/3 correct.
+- `blank`: gemma3:4b 0/3 wrong (`TITLE_SLIDE`×3 — layout confusion, not idx issue); ministral 3/3 correct (BLANK).
+- `three_photo`: gemma3:4b 0/3 wrong (`CONTENT_WITH_PHOTO`×3); ministral 3/3 correct.
+
+The missing null instruction in P0 does not cause validation failures under the current schema, but the layout selection errors on `blank` and `three_photo` for gemma3:4b indicate that the absence of LAYOUT_DESCRIPTIONS (which provides Signals for these layouts) is the primary cause of failure, not the idx field instruction.
+
+**P0 latency vs other prompts:**
+
+P0 is the fastest prompt for gemma3:4b (9.5s vs 11.1–13.2s for P1–P5) because the production prompt has fewer tokens — no LAYOUT_DESCRIPTIONS block. For ministral, P0 (2.0s) is comparable to P1 (1.7s) and P5 (2.0s). Speed advantage of P0 is not sufficient justification to keep it given the 34pp accuracy gap over P1 combined.
 
 ---
 
-## 7. File Index
+## 10. Conclusions and Recommendations
 
-| File | Location | Description |
-|---|---|---|
-| `layout_prompt_eng_test.py` | `poc/agent-behavior-test/` | This experiment's test script — 4 prompts × 3 models × 6 slide types × 3 runs |
-| `layout_prompt_eng_output.txt` | `poc/agent-behavior-test/` | Full console output from the test run |
-| `layout_prompt_eng_results.json` | `poc/agent-behavior-test/` | Raw JSON with all 216 run results |
-| `layout_name_test.md` | `poc/agent-behavior-test/` | Report on baseline single-prompt test (this experiment's baseline) |
-| `layout_name_test_v2.py` | `poc/agent-behavior-test/` | Baseline test script (3 models, baseline prompt, 18 runs each) |
-| `layout_name_test_v2_output.txt` | `poc/agent-behavior-test/` | Baseline test output |
-| `augment-results.md` | `poc/agent-behavior-test/` | Structured output method comparison (FunctionCallingProgram vs LLMTextCompletionProgram) |
-| `test_cloud_models.md` | `poc/agent-behavior-test/` | Cloud model capability audit (think mode, function calling) |
-| `prompts.py` | `backend/prompts/` | Current `AUGMENT_LAYOUT_PMT` — replace with P2 Negative Examples for production |
-| `schemas.py` | `backend/agent_workflows/` | `SlideOutlineWithLayout` Pydantic schema |
-| `tools.py` | `backend/utils/` | `get_all_layouts_info()` — reads layout metadata from PPTX template |
-| `template-en.pptx` | `assets/` | PPTX template with 12 layouts used in all experiments |
+**P0 is the lowest-performing prompt overall.** The production prompt (`AUGMENT_LAYOUT_PMT`, P0) achieves 44/72 combined (61.1%) vs 69/72 (95.8%) for the best engineered prompts (P1 and P3). This is the accuracy of layout selection in the currently deployed pipeline. Every engineered prompt P1–P5 outperforms P0 for both models.
+
+**P1 (LAYOUT_DESCRIPTIONS alone) is the most impactful change.** Moving from P0 to P1 closes most of the accuracy gap: gemma3:4b goes from 15/36 to 33/36 (+18 calls), ministral from 29/36 to 36/36 (+7 calls). The addition of structured layout descriptions (Use for / Structure / Signals per layout) is the dominant improvement over the production prompt — not routing rules or negative constraints.
+
+**Best prompt for deployment:** P1 or P3 (tied at 69/72 combined). For gemma3:4b, both achieve 33/36. For ministral-3:14b-cloud, all P1–P5 achieve 36/36. P3 (Positive Examples) is semantically richer and may generalise better across paper types; P1 is simpler. P5 Chain-of-Thought (66/72) is a viable alternative if reasoning transparency is valued. P2 Decision-Tree and P4 Negative Examples should be avoided for gemma3:4b — they are worse than P1/P3 and introduce new failure modes.
+
+**P0 failure pattern:** The production prompt has no layout descriptions, biasing models to pick `TITLE_AND_BODY` for any slide with text and creating no guidance for specialist layouts (QUOTE, SECTION_HEADER_*, THREE_PHOTO, BLANK). For gemma3:4b, 7 out of 12 slide types fail under P0. For ministral-3:14b-cloud, 2 slide types fail completely (`cover/title_slide`, `closing_slide`) with a third partial failure (`photo_landscape`). The Norwegian legacy text ("Plassholder for innhold") in P0 does not appear to cause visible harm to either model's layout name output, but is a maintenance liability.
+
+**Recommendation:** Replace `AUGMENT_LAYOUT_PMT` in production with a prompt that includes `LAYOUT_DESCRIPTIONS`. P1 (`P1_baseline`) is the minimum viable replacement. P3 (`P3_positive_examples`) is the recommended replacement given its semantic clarity and equal accuracy. The `OUTPUT_FIELDS` null instruction should be included to properly guide models on visual-only layouts, even though the schema fix (`Optional[str] = None`) prevents validation failures without it.
 
 ---
 
-## Appendix: Key Prompt Text
+## 12. Limitations
 
-### P2 Negative Examples (Recommended Production Prompt)
+1. **Near-determinism:** `temperature=0.1` and `N_RUNS=3` means most cells are deterministically 0/3 or 3/3. Three runs provide minimal statistical value for estimating variance in layout selection. A meaningful variance estimate would require `N_RUNS >= 10` with higher temperature.
 
-```
-You are an AI that selects the most appropriate slide layout for given slide content.
-You will receive a slide with a title and main text body.
+2. **Visual test case fidelity:** Visual slide cases use bracketed text as image proxies (e.g., `"[Wide horizontal diagram showing the end-to-end processing pipeline from input to output]"`). In the real pipeline, the content field for a visual slide may be empty or contain only a caption — not an explicit bracketed `[Wide image]` tag. Results on visual layouts may not transfer directly to production inputs where the signal is weaker.
 
-LAYOUT SELECTION RULES — follow these exactly:
+3. **Unused slide types in production:** `section_header` and `quote_slide` do not appear in the current real pipeline. Their results are valid as isolated test cases but do not represent production workload distribution.
 
-USE TITLE_SLIDE when:
-  - The slide is the opening/cover slide of the presentation
-  - The body contains author name, institution, or "Presented by:" lines
-  - The slide is a closing/thank-you slide ("Thank You", "Q&A", "Questions")
+4. **Only 2 models tested:** `gpt-oss:20b-cloud` was removed from the `MODELS` list. Conclusions apply only to gemma3:4b and ministral-3:14b-cloud. Results are not generalisable to other models without additional testing.
 
-USE SECTION_HEADER_CENTER or SECTION_HEADER_TOP when:
-  - The body is empty or very short (no bullet points)
-  - The title begins with "Chapter", "Section", "Part", or similar division markers
+5. **Schema fix and P4 redesign are confounded:** The schema fix (`Optional[str] = None`) and the P4 redesign were applied simultaneously. The previous run had validation failures that affected the P4 score. It is not possible to determine how much of the P4 score change (gemma: 15→21, ministral: 29→36) is attributable to the schema fix vs the prompt redesign vs the expanded test set (6→12 slide types, with different scoring for the new cases).
 
-USE QUOTE when:
-  - The body contains a direct quotation with attribution (e.g. "— Author Name")
-  - The main content is a single sentence or short paragraph presented as a quote
-
-USE TITLE_AND_BODY or 項目符號 when:
-  - The slide contains multiple bullet points (* or -)
-  - The body is substantive academic or technical content
-
-DO NOT use TITLE_AND_BODY for:
-  - Opening cover slides with author attribution
-  - Chapter/section transition slides with empty or minimal body
-  - Closing/thank-you slides
-  - Slides whose body is a quoted sentence with attribution line
-
-The following layouts are available: {available_layout_names}
-Layout details:
-{available_layouts}
-
-Slide content:
-{slide_content}
-
-Output the following fields:
-- title: the slide title text (copy verbatim from input)
-- content: the slide body text (copy verbatim from input)
-- layout_name: the exact name string of the chosen layout (must match one of the available layout names exactly)
-- idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout
-- idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout
-```
+6. **Null idx validation dependency:** The `idx_title_placeholder` and `idx_content_placeholder` null instruction in `OUTPUT_FIELDS` depends on the LLM correctly following the CRITICAL note in the prompt. If an LLM outputs an integer (e.g., `"0"`) instead of `null`, the `coerce_int_to_str` validator coerces it to the string `"0"`, preventing a validation error — but the placeholder index may still be structurally wrong at runtime if the layout has no such placeholder. In this run, no such runtime consequence was observed because the experiment only evaluates `layout_name` correctness, not idx correctness.
 
 ---
 
-*Report generated 2026-03-29. 所有實驗在 MacBook M1 chip 執行，gemma3:4b 為本機模型，ministral 和 gpt-oss 為 Ollama cloud routing。*
+## 13. File Index
+
+| File | Absolute path | Description |
+|------|---------------|-------------|
+| Experiment script | `poc/agent-behavior-test/layout_selection_prompt_eng.py` | Full Python experiment: models, prompts, test cases, runner, JSON output |
+| Console output (this run) | `poc/agent-behavior-test/layout_prompt_eng_output_new.txt` | Full per-run console output from this execution |
+| Raw results JSON (P1–P5) | `poc/agent-behavior-test/layout_prompt_eng_results.json` | Structured results: per-model, per-prompt, per-slide, per-run (P1–P5 only) |
+| Raw results JSON (P0) | `poc/agent-behavior-test/layout_prompt_eng_results_P0_baseline.json` | Structured results for P0 production baseline run (merged into this report) |
+| This report | `poc/agent-behavior-test/layout_selection_prompt_eng.md` | This document |
+| SlideOutlineWithLayout schema | `backend/agent_workflows/schemas.py` | Pydantic schema with `Optional[str] = None` idx fields and `coerce_int_to_str` validator |
+| Template file | `assets/template-en.pptx` | PPTX master with 12 English-named layouts |

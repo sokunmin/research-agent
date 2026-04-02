@@ -1,131 +1,174 @@
-# Slide Layout Selection — Prompt Engineering to Fix Baseline Failures
+# Slide Layout Selection — Comparing Original vs Redesigned Prompts
 
-**Date:** 2026-03-29
+**Date:** 2026-03-31
 
 ---
 
 ## Background & Motivation
 
-The baseline experiment (`layout_selection_baseline.md`) showed that all three tested models universally fail to select the correct layout for cover slides and closing slides — every model chose `TITLE_AND_BODY` for these slide types across all runs (0/9 each). The root cause identified was prompt design: the baseline prompt gives generic instructions with no explicit routing rules for distinguishing slide roles.
+This experiment is conducted on the purpose of converting research papers into slide decks. For each slide, an LLM selects one of 12 layouts from a PowerPoint template (`assets/template-en.pptx`). The selected layout determines which placeholders exist on the slide — title, content, photo, or none. A wrong layout choice causes structural failures: incorrect placeholder indices, visual errors, or runtime crashes when the slide generator accesses a non-existent placeholder.
 
-This experiment tested 4 prompt engineering strategies specifically designed to fix these failures. The same 3 models and 6 slide types from the baseline were used, making results directly comparable. The key question: can prompt design alone bring even the weakest local 4B model to 100% accuracy, eliminating the need for larger or cloud models?
+The original codebase uses a prompt called `AUGMENT_LAYOUT_PMT` (tested here as P0) for layout selection. It achieved only 44/72 (61.1%) accuracy across both tested models and all 12 slide types. It provides no layout descriptions, no routing rules, and no constraints — biasing models toward `TITLE_AND_BODY` for almost everything. This experiment tests 5 redesigned prompt strategies (P1–P5) against P0 to identify which design best closes the accuracy gap.
+
+The key question: how much of the failure is prompt design, and which prompt strategy works reliably across model sizes?
 
 ---
 
 ## Experiment Setup
 
-**Method:** LlamaIndex `LLMTextCompletionProgram` for all models and all prompts (same as the baseline). Native function/tool calling explicitly excluded — it fails for all Ollama models.
+**Method:** LlamaIndex `LLMTextCompletionProgram` for all models and all prompts. `FunctionCallingProgram` (native tool/function calling) explicitly excluded — it fails for all Ollama models, confirmed in a prior experiment.
 
-**Models tested:** Same as baseline — `gemma3:4b` (local 4B), `ministral-3:14b-cloud` (cloud 14B), `gpt-oss:20b-cloud` (cloud 20B, think mode always on).
+**Models tested:** `gemma3:4b` (local, 4B parameters, M1 MacBook), `ministral-3:14b-cloud` (cloud, 14B parameters, Ollama routing). A third model (`gpt-oss:20b-cloud`) was unavailable and excluded from this run.
 
-**Run configuration:** 3 runs per (model × prompt × slide type) at temperature 0.1, max_tokens 2048. Sequential execution only. Total: 3 models × 4 prompts × 6 slide types × 3 runs = **216 inferences**.
+**Run configuration:** 3 runs per (model × prompt × slide type) at temperature 0.1, max_tokens 2048. Sequential execution only — Ollama does not support parallel requests. Total: 2 models × 6 prompts × 12 slide types × 3 runs = **432 inferences** (360 for P1–P5, 72 for P0 run separately).
 
-**Slide types tested:** Identical to baseline — cover/title slide, academic content, section header, bullet list, closing slide, quote slide.
+**Slide types tested:** 12 total — 6 text-content slides (cover/title, academic content, section header, bullet list, closing, quote) and 6 visual/photo slides (photo landscape, photo portrait, content with photo, three photo, full photo, blank).
 
-### Prompt Strategies Tested (4 total)
+**Schema fix (prerequisite):** `idx_title_placeholder` and `idx_content_placeholder` in `SlideOutlineWithLayout` changed from required `str` to `Optional[str] = None`, with a `coerce_int_to_str` field validator added. This fix was necessary for layouts with no text placeholders (`THREE_PHOTO`, `FULL_PHOTO`, `BLANK`): the previous required-`str` typing caused immediate Pydantic validation errors when the model returned `null` or an integer for these fields, producing `success=False` regardless of whether `layout_name` was correct. The fix eliminates this confound.
 
-**1. Decision-Tree Routing**
-A two-step explicit dispatch: Step 1 classifies the slide into one of 5 roles (quote slide, section break, closing slide, title cover, content slide) using if/then rules. Step 2 maps the role to the correct layout name. Hypothesis: explicit routing rules will fix the universal cover/closing slide failures.
+---
 
-**2. Negative Examples** *(the recommended production prompt)*
-Explicit "USE X when" positive rules combined with "DO NOT use TITLE_AND_BODY for" negative constraints. Directly counters the dominant failure mode (TITLE_AND_BODY bias) without requiring multi-step reasoning. Hypothesis: negative constraints are the most direct way to break the bias without hallucination risk.
+## Prompt Strategies Tested (6 total)
 
-**3. Chain-of-Thought**
-Asks the model to classify the slide type first (cover, section_break, closing, quote, content), then select the layout, then verify the choice exists in the available list. Hypothesis: making reasoning explicit gives models a chance to self-correct before outputting the final layout.
+**P0 — Original Codebase Baseline (AUGMENT_LAYOUT_PMT)**
+Verbatim copy of the prompt from the original forked codebase. Provides a short task description, a list of available layout names, raw template layout details, and a 5-field output instruction. No layout descriptions, no routing rules, no negative constraints. Contains legacy Norwegian text (`"Plassholder for innhold"`) from the original template. Tested here to measure the original prompt's accuracy against the full 12-layout set as a comparison baseline.
 
-**4. Minimal Layout List**
-Provides only the 6 core text layouts (instead of all 12) with explicit English role descriptions. Eliminates the 6 photo/visual layouts that are irrelevant for academic text slides and adds semantic grounding for non-English layout names. Hypothesis: a smaller, well-described layout list reduces decision noise.
+**P1 — Descriptions Only**
+Adds a `LAYOUT_DESCRIPTIONS` block covering all 12 layouts, each with three sub-fields: **Use for** (presentation purpose), **Structure** (placeholder arrangement), **Signals** (observable text patterns). No additional routing guidance beyond descriptions. Establishes how much layout descriptions alone improve over P0.
+
+**P2 — Decision-Tree Routing**
+A 13-step if/then decision tree (STEP 1) classifies the slide into a semantic role (`BLANK`, `FULL_PHOTO`, `THREE_PHOTO`, `TITLE_COVER`, `CONTENT_SLIDE`, etc.) in priority order. A lookup table (STEP 2) maps each role to one or more valid layout names. Tree is evaluated top-down; restrictive conditions appear first, generic fallbacks last. Followed by `LAYOUT_DESCRIPTIONS` for full context.
+
+**P3 — Positive Examples**
+One semantic `USE <LAYOUT> when:` rule per layout, describing purpose and content type in natural language. No negative constraints, no decision tree, no reasoning steps. Rules describe intent rather than surface text patterns. Followed by `LAYOUT_DESCRIPTIONS`.
+
+**P4 — Negative Examples**
+8 explicit `WRONG: Choosing X when Y — Why wrong: [structural reason]` rules, with no "Use instead:" redirects. The model must derive the correct layout from `LAYOUT_DESCRIPTIONS` after eliminating wrong choices. Rules are grounded in structural signals (empty body, bullet points, image references, attribution lines). Exception clauses distinguish short attribution text from "substantial text" for `TITLE_SLIDE`, and enforce that any text at all disqualifies `BLANK`. Followed by `LAYOUT_DESCRIPTIONS`.
+
+**P5 — Chain-of-Thought**
+Asks the model to generate a free-form 4-step reasoning chain before selecting a layout: (1) observe slide content, (2) infer the slide's role, (3) match to a layout from descriptions, (4) verify the chosen name is valid. Not constrained to a pre-defined taxonomy — the model writes its own reasoning grounded in `LAYOUT_DESCRIPTIONS`.
+
+All P1–P5 prompts include the same shared `LAYOUT_DESCRIPTIONS` and `OUTPUT_FIELDS` blocks. P0 is self-contained with its own output instructions and does not use these shared blocks.
 
 ---
 
 ## Results
 
 ### gemma3:4b (local, 4B parameters)
-**Baseline (from layout_selection_baseline.md):** 6/18 (33.3%)
 
-| Prompt | cover/title | academic | section header | bullet list | closing | quote | Overall | Avg Elapsed |
-|---|---|---|---|---|---|---|---|---|
-| Decision-Tree Routing | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **15/18** | 11.7s |
-| Negative Examples | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 11.6s |
-| Chain-of-Thought | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | **12/18** | 11.7s |
-| Minimal Layout List | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | **12/18** | 11.3s |
+| Prompt | cover/ title | academic | section | bullet | closing | quote | photo_ land | photo_ port | content_ photo | three_ photo | full_ photo | blank | Overall | Avg Elap |
+|--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| P0 Original Baseline | 0/3 | 3/3 | 0/3 | 3/3 | 0/3 | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | **15/36** | 9.5s |
+| P1 Descriptions Only | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **33/36** | 11.1s |
+| P2 Decision-Tree | 0/3 | 0/3 | 3/3 | 0/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | **21/36** | 12.4s |
+| P3 Positive Examples | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **33/36** | 13.0s |
+| P4 Negative Examples | 0/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 0/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | **21/36** | 13.2s |
+| P5 Chain-of-Thought | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **30/36** | 12.0s |
 
-**Failure details:**
-- Decision-Tree Routing failure: the model returned `TITLE_COVER` (the role label from Step 1) as the `layout_name` instead of `TITLE_SLIDE`. The 4B model collapsed the two-step classify-then-map chain by outputting the intermediate label as the final answer.
-- Chain-of-Thought failure: the model chose `CONTENT_WITH_PHOTO` for academic_content and bullet_list slides (6/6 runs). The CoT prompt's "content" slide type label was confused with the `CONTENT_WITH_PHOTO` layout name — a name collision between CoT vocabulary and layout names.
-- Minimal Layout List failure: with only 6 layouts and no negative examples, the model chose `TITLE_SLIDE` for section_header (all 3 runs), conflating "no body text" with "title slide."
+**Wrong choices by slide type (gemma3:4b):**
+
+| Slide | P0 | P1 | P2 | P3 | P4 | P5 |
+|-------|----|----|----|----|----|----|
+| `cover/title_slide` | `TITLE_AND_BODY`×3 | `TITLE_AND_BODY`×3 | `TITLE_COVER`×3 | `TITLE_AND_BODY`×3 | `TITLE_AND_BODY`×3 | `TITLE_AND_BODY`×3 |
+| `academic_content` | 3/3 OK | 3/3 OK | `CONTENT_SLIDE`×3 | 3/3 OK | `CONTENT_WITH_PHOTO`×3 | 3/3 OK |
+| `section_header` | `TITLE_AND_BODY`×3 | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK |
+| `bullet_list` | 3/3 OK | 3/3 OK | `CONTENT_SLIDE`×3 | 3/3 OK | 3/3 OK | 3/3 OK |
+| `closing_slide` | `TITLE_AND_BODY`×3 | 3/3 OK | `CLOSING_SLIDE`×3 | 3/3 OK | `BULLET_LIST`×3 | 3/3 OK |
+| `quote_slide` | `TITLE_AND_BODY`×3 | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK |
+| `photo_landscape` | `TITLE_AND_BODY`×3 | 3/3 OK | 3/3 OK | 3/3 OK | `CONTENT_WITH_PHOTO`×3 | `CONTENT_WITH_PHOTO`×3 |
+| `photo_portrait` | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK |
+| `content_with_photo` | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK |
+| `three_photo` | `CONTENT_WITH_PHOTO`×3 | 3/3 OK | 3/3 OK | 3/3 OK | `CONTENT_WITH_PHOTO`×3 | 3/3 OK |
+| `full_photo` | 3/3 OK | 3/3 OK | `PHOTO_LANDSCAPE`×3 | 3/3 OK | 3/3 OK | 3/3 OK |
+| `blank` | `TITLE_SLIDE`×3 | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK | 3/3 OK |
+
+*`TITLE_COVER`, `CONTENT_SLIDE`, `CLOSING_SLIDE` are not valid template layout names — they are intermediate role labels from the P2 decision tree that gemma3:4b output as the final `layout_name` value.*
+
+`cover/title_slide` fails on every prompt (0/3 × 6 prompts = 0/18). P1, P3, P4, P5 all produce `TITLE_AND_BODY`; P2 produces the invalid name `TITLE_COVER`. This is the only slide type where every prompt fails on gemma3:4b.
 
 ### ministral-3:14b-cloud (cloud, 14B parameters)
-**Baseline (from layout_selection_baseline.md):** 12/18 (66.7%)
 
-| Prompt | cover/title | academic | section header | bullet list | closing | quote | Overall | Avg Elapsed |
-|---|---|---|---|---|---|---|---|---|
-| Decision-Tree Routing | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.9s |
-| Negative Examples | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.1s |
-| Chain-of-Thought | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.0s |
-| Minimal Layout List | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 1.9s |
+| Prompt | cover/ title | academic | section | bullet | closing | quote | photo_ land | photo_ port | content_ photo | three_ photo | full_ photo | blank | Overall | Avg Elap |
+|--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| P0 Original Baseline | 0/3 | 3/3 | 3/3 | 3/3 | 0/3 | 3/3 | 2/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **29/36** | 2.0s |
+| P1 Descriptions Only | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **36/36** | 1.7s |
+| P2 Decision-Tree | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **36/36** | 1.6s |
+| P3 Positive Examples | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **36/36** | 2.3s |
+| P4 Negative Examples | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **36/36** | 2.3s |
+| P5 Chain-of-Thought | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **36/36** | 2.0s |
 
-All 4 prompts achieved perfect 18/18. The Minimal Layout List prompt produced the fastest latency (1.9s avg) due to the shorter token count.
-
-### gpt-oss:20b-cloud (cloud, 20B parameters, think mode always on)
-**Baseline (from layout_selection_baseline.md):** 10/18 (55.6%)
-
-| Prompt | cover/title | academic | section header | bullet list | closing | quote | Overall | Avg Elapsed |
-|---|---|---|---|---|---|---|---|---|
-| Decision-Tree Routing | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.8s |
-| Negative Examples | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.8s |
-| Chain-of-Thought | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **18/18** | 2.7s |
-| Minimal Layout List | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 1/3 | **16/18** | 2.8s |
-
-**Minimal Layout List failure:** quote_slide run 2 was a parse failure ("Could not extract json string from output") and run 3 chose `TITLE_AND_BODY`. The shorter minimal-layout prompt may have provided insufficient anchoring tokens for this model's always-on think mode, causing occasional output format corruption.
+**P0 wrong choices (ministral-3:14b-cloud):** `cover/title_slide` → `TITLE_AND_BODY`×3; `closing_slide` → `TITLE_AND_BODY`×3; `photo_landscape` → `CONTENT_WITH_PHOTO`×1 (2/3 correct). Zero failures across all 180 P1–P5 calls.
 
 ### Cross-Model Summary
 
-| Model | Prompt | Appropriate Rate | Parse Success | Avg Elapsed |
-|---|---|---|---|---|
-| `gemma3:4b` | Decision-Tree Routing | 15/18 | 18/18 | 11.7s |
-| `gemma3:4b` | Negative Examples | **18/18** | 18/18 | 11.6s |
-| `gemma3:4b` | Chain-of-Thought | 12/18 | 18/18 | 11.7s |
-| `gemma3:4b` | Minimal Layout List | 12/18 | 18/18 | 11.3s |
-| `ministral-3:14b-cloud` | Decision-Tree Routing | **18/18** | 18/18 | 2.9s |
-| `ministral-3:14b-cloud` | Negative Examples | **18/18** | 18/18 | 2.1s |
-| `ministral-3:14b-cloud` | Chain-of-Thought | **18/18** | 18/18 | 2.0s |
-| `ministral-3:14b-cloud` | Minimal Layout List | **18/18** | 18/18 | 1.9s |
-| `gpt-oss:20b-cloud` | Decision-Tree Routing | **18/18** | 18/18 | 2.8s |
-| `gpt-oss:20b-cloud` | Negative Examples | **18/18** | 18/18 | 2.8s |
-| `gpt-oss:20b-cloud` | Chain-of-Thought | **18/18** | 18/18 | 2.7s |
-| `gpt-oss:20b-cloud` | Minimal Layout List | 16/18 | 17/18 | 2.8s |
+| Model | Prompt | Appropriate Rate | Success Rate | Avg Elapsed |
+|-------|--------|:----------------:|:------------:|:-----------:|
+| gemma3:4b | P0 Original Baseline | **15/36** | 36/36 | 9.5s |
+| gemma3:4b | P1 Descriptions Only | **33/36** | 36/36 | 11.1s |
+| gemma3:4b | P2 Decision-Tree | **21/36** | 36/36 | 12.4s |
+| gemma3:4b | P3 Positive Examples | **33/36** | 36/36 | 13.0s |
+| gemma3:4b | P4 Negative Examples | **21/36** | 36/36 | 13.2s |
+| gemma3:4b | P5 Chain-of-Thought | **30/36** | 36/36 | 12.0s |
+| ministral-3:14b-cloud | P0 Original Baseline | **29/36** | 36/36 | 2.0s |
+| ministral-3:14b-cloud | P1 Descriptions Only | **36/36** | 36/36 | 1.7s |
+| ministral-3:14b-cloud | P2 Decision-Tree | **36/36** | 36/36 | 1.6s |
+| ministral-3:14b-cloud | P3 Positive Examples | **36/36** | 36/36 | 2.3s |
+| ministral-3:14b-cloud | P4 Negative Examples | **36/36** | 36/36 | 2.3s |
+| ministral-3:14b-cloud | P5 Chain-of-Thought | **36/36** | 36/36 | 2.0s |
 
-**Improvement over baseline:**
+**Combined score per prompt (both models):**
 
-| Model | Baseline | Best this experiment | Improvement |
-|---|---|---|---|
-| `gemma3:4b` | 6/18 (33.3%) | 18/18 (100%) with Negative Examples | +67 percentage points |
-| `ministral-3:14b-cloud` | 12/18 (66.7%) | 18/18 (100%) with any prompt | +33 percentage points |
-| `gpt-oss:20b-cloud` | 10/18 (55.6%) | 18/18 (100%) with Decision-Tree/Negative/Chain-of-Thought | +44 percentage points |
+| Prompt | Combined | % |
+|--------|:--------:|:---:|
+| P0 Original Baseline | **44/72** | 61.1% |
+| P1 Descriptions Only | **69/72** | 95.8% |
+| P2 Decision-Tree | **57/72** | 79.2% |
+| P3 Positive Examples | **69/72** | 95.8% |
+| P4 Negative Examples | **57/72** | 79.2% |
+| P5 Chain-of-Thought | **66/72** | 91.7% |
+
+**Improvement over P0:**
+
+| Model | P0 (original) | Best redesigned prompt | Improvement |
+|-------|:-------------:|:---------------------:|:-----------:|
+| gemma3:4b | 15/36 (41.7%) | 33/36 (91.7%) — P1 or P3 | +50 percentage points |
+| ministral-3:14b-cloud | 29/36 (80.6%) | 36/36 (100%) — any P1–P5 | +19 percentage points |
 
 ---
 
 ## Key Findings
 
-- **The Negative Examples prompt achieves 100% for all three models**, including the weakest local 4B model. It is the only prompt that works universally across all model sizes.
-- **Small models (4B) require negative constraints**: `gemma3:4b` achieves 100% only with the Negative Examples prompt. Multi-step prompts (Decision-Tree Routing, Chain-of-Thought) trigger hallucinations or name collisions. Minimal context causes regressions on slide types that were previously correct.
-- **Larger models are more robust**: `ministral-3:14b-cloud` achieves 100% on all 4 prompt strategies. It can correctly interpret multiple reasoning styles, whereas `gemma3:4b` has no tolerance for suboptimal prompt design.
-- **The Minimal Layout List prompt is the only strategy that fails** — for `gpt-oss:20b-cloud` on the quote slide (1 parse failure + 1 wrong choice), likely because the shorter prompt destabilizes structured output parsing under always-on think mode.
-- **Prompt quality matters more than model size for small models**: with the right prompt, a local 4B model can match the accuracy of a cloud 14B or 20B model.
+- **Adding layout descriptions (P1) produces the single largest accuracy jump.** Moving from P0 to P1 alone closes most of the gap: gemma3:4b goes from 15/36 to 33/36 (+18 calls, +50pp); ministral from 29/36 to 36/36 (+7 calls, +19pp). The structured `LAYOUT_DESCRIPTIONS` block — not routing rules or negative constraints — is the dominant improvement over the original prompt.
+
+- **P1 and P3 are the best prompts for gemma3:4b (tied at 33/36).** All additional routing guidance (P2–P5) does not uniformly improve over descriptions-only for the 4B model. P2 Decision-Tree and P4 Negative Examples are worse than P1 for gemma3:4b and introduce new failure modes.
+
+- **ministral-3:14b-cloud achieves 100% on all engineered prompts (P1–P5).** Between-prompt variance for the 14B model is entirely driven by P0 vs the rest. All P1–P5 prompts are equivalent for this model on this test set.
+
+- **P2 Decision-Tree uniquely introduces invalid layout names for gemma3:4b.** The 4B model collapses the two-step classify-then-map chain, outputting intermediate role labels (`TITLE_COVER`, `CONTENT_SLIDE`, `CLOSING_SLIDE`) as the final `layout_name` — names not present in the template. This failure mode does not occur in any other prompt.
+
+- **P4 Negative Examples backfires for gemma3:4b.** The rules against `TITLE_AND_BODY` redirect the model to unexpected alternatives: `CONTENT_WITH_PHOTO` for academic content, photo landscape, and three-photo slides; `BULLET_LIST` for closing slides. The 4B model cannot navigate the elimination-based reasoning P4 requires.
+
+- **`cover/title_slide` is the only slide type that gemma3:4b fails on every prompt (0/18).** No prompt strategy tested here resolves this failure for the 4B model. All non-P2 prompts produce `TITLE_AND_BODY`; P2 produces the invalid name `TITLE_COVER`. This represents a fundamental limit of the 4B model for this slide type without further prompt work.
+
+- **`photo_portrait` and `content_with_photo` are the easiest slide types (36/36 across both models and all 6 prompts).** These layouts have unambiguous structural signals — headshot reference or mixed text+figure reference — that models of all sizes handle correctly.
+
+- **The schema fix eliminated all Pydantic validation errors.** `success_rate = 36/36` for every model and every prompt, including P0 which has no null instruction for placeholder index fields. The `Optional[str] = None` change and `coerce_int_to_str` validator absorbed whatever the model returned for index fields on no-placeholder layouts, allowing layout name accuracy to be evaluated without validation noise.
+
+- **Prompt complexity inversely correlates with gemma3:4b accuracy.** Ranked by score for gemma3:4b: P1=P3 (33/36) > P5 (30/36) > P2=P4 (21/36) > P0 (15/36). Simpler strategies (descriptions, positive rules) outperform complex ones (decision trees, negative constraints, chain-of-thought) for the 4B model.
 
 ---
 
 ## Decision
 
-**The Negative Examples prompt is adopted for production** as the `AUGMENT_LAYOUT_PMT` replacement in `backend/prompts/prompts.py`.
+**P3 (Positive Examples) is the recommended replacement for the original `AUGMENT_LAYOUT_PMT`.**
 
-Rationale: it is the only prompt achieving 18/18 on `gemma3:4b` (the weakest supported model), achieves 18/18 on both cloud models, uses no multi-step reasoning (eliminating hallucination of intermediate labels), and the explicit USE/DO NOT rules are straightforward to maintain and extend.
+P1 (Descriptions Only) and P3 (Positive Examples) are tied on accuracy (33/36 for gemma3:4b, 36/36 for ministral-3:14b-cloud, 69/72 combined). P3 is preferred over P1 on the basis of semantic clarity: each explicit `USE <LAYOUT> when:` rule grounds the model in the presentation intent of the layout rather than relying solely on the description block. For ministral-3:14b-cloud, both achieve 36/36; for gemma3:4b, both achieve 33/36 with the same failure on `cover/title_slide`. P3's additional semantic rules may also generalise better across paper types not represented in the test set.
 
-**Recommended model + prompt combinations for production:**
+P5 Chain-of-Thought (66/72 combined) is a viable alternative if reasoning transparency is valued at the cost of slightly higher latency (12.0s avg for gemma3:4b vs 13.0s for P3 — comparable). P2 and P4 should not be used with gemma3:4b.
+
+**Recommended model + prompt combinations:**
 
 | Priority | Model | Prompt | Appropriate Rate | Avg Latency |
-|---|---|---|---|---|
-| Primary | `ollama/ministral-3:14b-cloud` | Negative Examples | 18/18 | 2.1s |
-| Fallback | `ollama/gpt-oss:20b-cloud` | Negative Examples | 18/18 | 2.8s |
-| Local-only / offline | `ollama/gemma3:4b` | Negative Examples | 18/18 | 11.6s |
+|----------|-------|--------|:----------------:|:-----------:|
+| Primary | `ollama/ministral-3:14b-cloud` | P3 Positive Examples | 36/36 | 2.3s |
+| Local-only / offline | `ollama/gemma3:4b` | P3 Positive Examples | 33/36 | 13.0s |

@@ -205,6 +205,9 @@ Requirements for the generated code:
 - Loop over all items in `{json_file_path}`; create one slide per outline item
 - Match each slide to its layout by layout_name from the JSON
 - Fill title using idx_title_placeholder index, content using idx_content_placeholder index
+- If idx_title_placeholder is null, do NOT attempt to fill a title placeholder for that slide
+- If idx_content_placeholder is null, do NOT attempt to fill a content placeholder for that slide
+- For layouts with no text placeholders (e.g. THREE_PHOTO, FULL_PHOTO, BLANK), add the slide with the correct layout and leave all placeholders unfilled
 - If there is no front page or 'thank you' slide, add them using the appropriate layout
 - If a placeholder has auto_size=TEXT_TO_FIT_SHAPE, use MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE and do NOT set font size
 - Save the final file as `{generated_slide_fname}` using prs.save()

@@ -1,4 +1,12 @@
 ---
+## [2026-03-31] `template-en.pptx` 含三個中文 layout 名稱（項目符號、照片-一頁三張、空白），英文模型於 layout selection 時視而不見 `[環境: template-en.pptx 初始版本]`
+原因：template 命名暗示全英文，但三個 layout 仍為中文，英文 LLM 無法將這些名稱與 slide 語意對應，實驗中從未被選中，導致準確率被低估。
+修正：以 python-pptx 修改 XML 將三個 layout 重命名：項目符號 → BULLET_LIST、照片-一頁三張 → THREE_PHOTO、空白 → BLANK；實驗 prompt 與 expected set 同步更新。
+---
+## [2026-03-31] `SlideOutlineWithLayout` schema 強制 `idx_title_placeholder` / `idx_content_placeholder` 為必填 `str`，導致 THREE_PHOTO、FULL_PHOTO、BLANK 永遠 Pydantic validation fail `[通用]`
+原因：這三個 layout 在 template 裡沒有 title/content placeholder，LLM 即使正確選出 layout name，仍因無法填入有效 idx 而輸出 null，Pydantic 拒絕 null → FAIL，appropriate rate 被低估。
+修正：將 schema 的兩個 idx 欄位改為 `Optional[str] = None`，並同步更新 `slide_gen` agent 處理 idx 為 None 的情況。
+---
 ## [2026-03-28] `FunctionCallingProgram` + Ollama 模型（via LiteLLM）回傳 `{"properties": {...}}` 包裝，Pydantic 5 fields missing，success rate 0% `[版本: litellm 1.82.0 + llama-index-llms-litellm 0.6.3 / 模型: gemma3:4b, qwen3.5:4b]`
 原因：Ollama 模型在 function calling 呼叫中將 JSON Schema 的 `"properties"` 結構原樣輸出（schema 定義層），而非填入實際值（arguments 層）；即使透過 `litellm.register_model()` 宣告 `supports_function_calling=True` 使呼叫能到達 API，模型行為本身仍輸出錯誤格式，導致 LlamaIndex Pydantic 解析時所有 required fields 皆 missing。
 修正：`slide_gen.py` 的 `outlines_with_layout` step 將 `FunctionCallingProgram` 換為 `LLMTextCompletionProgram`（不走 tool/function calling API，改走 prompt 內嵌 JSON schema 路徑，對任何 LLM 均相容）；若僅使用 Ollama，可改在 `LiteLLM` 的 `additional_kwargs` 傳入 `{"format": SlideOutlineWithLayout.model_json_schema()}`（Ollama server-side constrained generation），兩者均可達 100% success rate；cloud provider（Groq、Gemini）的 `FunctionCallingProgram` 呼叫不受影響，可透過 `config.py` flag 區分路徑。

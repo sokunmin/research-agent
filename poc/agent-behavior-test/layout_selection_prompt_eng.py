@@ -56,15 +56,13 @@ MODELS = [
         "label": "ministral-3:14b-cloud",
         "provider": "ollama",
     },
-    {
-        "name": "ollama/gpt-oss:20b-cloud",
-        "additional_kwargs": {},
-        "label": "gpt-oss:20b-cloud",
-        "provider": "ollama",
-    },
 ]
 
 N_RUNS = 3  # runs per (model × prompt × slide_type)
+
+# Set to a list of prompt IDs to run only those prompts, e.g. ["P1_baseline"].
+# Set to None to run all prompts (default behaviour — does not affect existing results).
+RUN_PROMPT_IDS = ["P0_baseline"]  # set to None to run all prompts
 
 # ── Load layout info from template-en.pptx ────────────────────────────────────
 
@@ -89,6 +87,83 @@ AVAILABLE_LAYOUTS = _load_layouts()
 AVAILABLE_LAYOUT_NAMES = [l["layout_name"] for l in AVAILABLE_LAYOUTS]
 VALID_LAYOUT_NAMES = set(AVAILABLE_LAYOUT_NAMES)
 
+# ── Shared layout descriptions block (used in all prompts) ───────────────────
+
+LAYOUT_DESCRIPTIONS = """LAYOUT DESCRIPTIONS — what each layout is for:
+
+1. TITLE_SLIDE
+   Use for: Opening cover slide of the presentation, OR closing thank-you/Q&A slide.
+   Structure: Large title + subtitle area. NO body content area.
+   Signals: author attribution ("Presented by:"), institution, "Thank You", "Q&A", "Conclusion".
+
+2. TITLE_AND_BODY
+   Use for: Standard academic or technical content slide with substantial text.
+   Structure: Title + large body text area for paragraphs or bullets.
+   Signals: multiple sentences or bullet points of academic/technical content.
+
+3. QUOTE
+   Use for: Displaying a quotation with attribution.
+   Structure: Large quote text area + attribution line (— Author Name).
+   Signals: text in quotes followed by "— Name" attribution format.
+
+4. PHOTO_LANDSCAPE
+   Use for: A slide whose main content is a single wide/horizontal image or diagram.
+   Structure: Title + caption text + landscape (wide) photo placeholder.
+   Signals: "[Wide image/diagram/chart]", horizontal layout, description of a wide visual.
+
+5. SECTION_HEADER_CENTER
+   Use for: Chapter or section divider slide — title only, centered.
+   Structure: Title centered on slide. NO body content area.
+   Signals: empty or near-empty body, "Chapter X", "Section X", "Part X".
+
+6. PHOTO_PORTRAIT
+   Use for: A slide whose main content is a single tall/vertical image or portrait photo.
+   Structure: Title + caption text + portrait (tall) photo placeholder.
+   Signals: "[Portrait photo]", headshot, tall/vertical image description.
+
+7. SECTION_HEADER_TOP
+   Use for: Chapter or section divider — title at top. Same role as SECTION_HEADER_CENTER.
+   Structure: Title at top of slide. NO body content area.
+   Signals: same as SECTION_HEADER_CENTER.
+
+8. CONTENT_WITH_PHOTO
+   Use for: A slide combining bullet-point text AND an image/figure side by side.
+   Structure: Title + text content area + photo placeholder (split layout).
+   Signals: slide body contains BOTH bullet points AND a "[Figure/Image: ...]" reference together.
+
+9. BULLET_LIST
+   Use for: Bullet-point content slide — similar to TITLE_AND_BODY but optimized for lists.
+   Structure: Title + body text area.
+   Signals: body is primarily a list of bullet points (* or -).
+
+10. THREE_PHOTO
+    Use for: Comparing or displaying three images side by side.
+    Structure: Three photo placeholders. NO title, NO text content area.
+    Signals: "[Image 1: ...] [Image 2: ...] [Image 3: ...]", three separate image references.
+
+11. FULL_PHOTO
+    Use for: A full-bleed image covering the entire slide with no text.
+    Structure: Single full-page photo placeholder. NO title, NO text area.
+    Signals: "[Full-page image/visualization]", entirely visual slide with no text content.
+
+12. BLANK
+    Use for: A completely empty slide with no content.
+    Structure: No placeholders except footer.
+    Signals: both title and content are empty strings.
+"""
+
+OUTPUT_FIELDS = """Output the following fields:
+- title: the slide title text (copy verbatim from input)
+- content: the slide body text (copy verbatim from input)
+- layout_name: the exact name string of the chosen layout (must match one of the available layout names exactly)
+- idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout. 
+- idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout. 
+CRITICAL: For layouts THREE_PHOTO, FULL_PHOTO, and BLANK:
+  - idx_title_placeholder MUST be null (not a number, not a string)
+  - idx_content_placeholder MUST be null (not a number, not a string)
+  These layouts have NO title or content placeholders. Outputting any number here is incorrect and will cause a runtime error.
+"""
+
 # ── Slide test cases (identical to layout_name_test_v2.py) ───────────────────
 
 SLIDE_TEST_CASES = [
@@ -112,8 +187,8 @@ SLIDE_TEST_CASES = [
                 "* Outperforms RNN/CNN baselines on translation tasks"
             ),
         },
-        "expected": {"TITLE_AND_BODY", "項目符號"},
-        "description": "Regular academic content slide — should pick TITLE_AND_BODY or 項目符號",
+        "expected": {"TITLE_AND_BODY", "BULLET_LIST"},
+        "description": "Regular academic content slide — should pick TITLE_AND_BODY or BULLET_LIST",
     },
     {
         "label": "section_header",
@@ -135,8 +210,8 @@ SLIDE_TEST_CASES = [
                 "* Better generalisation on out-of-domain data"
             ),
         },
-        "expected": {"項目符號", "TITLE_AND_BODY"},
-        "description": "Bullet list only — should pick 項目符號 or TITLE_AND_BODY",
+        "expected": {"BULLET_LIST", "TITLE_AND_BODY"},
+        "description": "Bullet list only — should pick BULLET_LIST or TITLE_AND_BODY",
     },
     {
         "label": "closing_slide",
@@ -159,51 +234,139 @@ SLIDE_TEST_CASES = [
         "expected": {"QUOTE"},
         "description": "Quote slide — should pick QUOTE",
     },
+    # ── Visual / photo layouts ─────────────────────────────────────────────────
+    # NOTE: PHOTO_LANDSCAPE and PHOTO_PORTRAIT have idx=0 (title) + idx=1 (caption) + idx=2 (photo).
+    #       CONTENT_WITH_PHOTO has idx=0 (title) + idx=1 (content) + idx=2 (photo).
+    #       THREE_PHOTO, FULL_PHOTO, BLANK have NO title/content placeholders —
+    #       LLM-returned idx values will be invalid; only layout_name correctness is scored.
+    {
+        "label": "photo_landscape",
+        "slide": {
+            "title": "System Architecture",
+            "content": "[Wide horizontal diagram showing the end-to-end processing pipeline from input to output]",
+        },
+        "expected": {"PHOTO_LANDSCAPE"},
+        "description": "Wide/landscape image slide — should pick PHOTO_LANDSCAPE",
+    },
+    {
+        "label": "photo_portrait",
+        "slide": {
+            "title": "About the Authors",
+            "content": "[Portrait photo: lead researcher headshot]",
+        },
+        "expected": {"PHOTO_PORTRAIT"},
+        "description": "Portrait-oriented photo slide — should pick PHOTO_PORTRAIT",
+    },
+    {
+        "label": "content_with_photo",
+        "slide": {
+            "title": "Attention Visualization",
+            "content": (
+                "* Self-attention assigns weights across all input tokens\n"
+                "* Captures long-range dependencies without recurrence\n"
+                "[Figure: attention heatmap visualization on the right]"
+            ),
+        },
+        "expected": {"CONTENT_WITH_PHOTO"},
+        "description": "Bullet points with accompanying figure — should pick CONTENT_WITH_PHOTO",
+    },
+    {
+        "label": "three_photo",
+        "slide": {
+            "title": "Qualitative Comparison",
+            "content": "[Image 1: baseline output] [Image 2: proposed method] [Image 3: ground truth]",
+        },
+        "expected": {"THREE_PHOTO"},
+        "description": "Three-image comparison slide — should pick THREE_PHOTO",
+    },
+    {
+        "label": "full_photo",
+        "slide": {
+            "title": "",
+            "content": "[Full-page image: t-SNE visualization of learned embedding space]",
+        },
+        "expected": {"FULL_PHOTO"},
+        "description": "Full-bleed image slide — should pick FULL_PHOTO",
+    },
+    {
+        "label": "blank",
+        "slide": {
+            "title": "",
+            "content": "",
+        },
+        "expected": {"BLANK"},
+        "description": "Blank slide with no title or content — should pick BLANK",
+    },
 ]
 
 # ── Prompt Variants ────────────────────────────────────────────────────────────
 #
-# All 4 prompts test meaningfully different strategies.
-# The baseline prompt (layout_name_test_v2.py PROMPT_TEMPLATE) has already been tested.
-# We do NOT duplicate the baseline here — all 4 variants are new strategies.
+# 6 prompts: P0–P1 are baselines, P2–P5 each add a different guidance strategy.
 #
 # Strategy summary:
-#   PROMPT_1: Decision-tree / explicit routing — step-by-step "if/then" dispatch rules
-#   PROMPT_2: Negative examples — explicitly tells model what NOT to pick for each slide type
-#   PROMPT_3: Chain-of-thought — ask model to reason about slide role before selecting layout
-#   PROMPT_4: Minimal layout list + descriptions — reduce to 6 core layouts with English role descriptions
+#   PROMPT_0: Original production baseline — AUGMENT_LAYOUT_PMT verbatim (not yet run)
+#   PROMPT_1: Descriptions-only baseline — all 12 layout descriptions, no routing guidance
+#   PROMPT_2: Decision-tree / explicit routing — step-by-step "if/then" dispatch rules
+#   PROMPT_3: Positive examples — semantic USE rules for every layout
+#   PROMPT_4: Negative examples — explicit WRONG constraints with structural signals
+#   PROMPT_5: Chain-of-thought — ask model to reason about slide role before selecting layout
 
-# ── PROMPT_1: Decision-tree routing ───────────────────────────────────────────
+# ── PROMPT_2: Decision-tree routing ───────────────────────────────────────────
 # Rationale: The baseline prompt gives a generic instruction. Models fail cover/title
 # and closing slides because they lack explicit routing rules. A decision tree forces
 # the model to match slide characteristics to layout before picking.
 # Hypothesis: Explicit if/then rules will fix cover_slide and closing_slide failures.
 
-PROMPT_1_DECISION_TREE = """
+PROMPT_2_DECISION_TREE = """
 You are an AI that selects the most appropriate slide layout for given slide content.
 You will receive a slide with a title and body text.
 
-STEP 1 — Identify the slide role using this decision tree:
-  A. If the slide body is a direct quote with an attribution line (e.g. "— Author Name")
+STEP 1 — Identify the slide role using this decision tree (evaluate in order, stop at first match):
+  A. If both title AND body are empty strings
+     → role = BLANK
+  B. Else if the body describes a single full-page image that covers the entire slide,
+     with no title and no readable text content alongside it
+     → role = FULL_PHOTO
+  C. Else if the body presents three separate images for comparison or display,
+     with no substantial text content
+     → role = THREE_PHOTO
+  D. Else if the body is a direct quote with an attribution line (e.g. "— Author Name")
      → role = QUOTE_SLIDE
-  B. Else if the slide title starts with "Chapter", "Section", "Part", or the body is empty or nearly empty (< 10 characters)
+  E. Else if the body contains BOTH bullet-point text (* or -) AND a supporting
+     image or figure described alongside the text
+     → role = CONTENT_WITH_PHOTO
+  F. Else if the body's primary content is a single tall or vertical visual —
+     such as a portrait photograph, headshot, or portrait-oriented figure
+     → role = PHOTO_PORTRAIT
+  G. Else if the body's primary content is a single wide or horizontal visual —
+     such as a diagram, chart, pipeline figure, or landscape-oriented image
+     → role = PHOTO_LANDSCAPE
+  H. Else if the body is empty or very short (< 10 characters and no image references)
      → role = SECTION_BREAK
-  C. Else if the slide title is "Thank You", "Conclusion", "Q&A", "Questions", "Contact", or the content is a short closing message (contact info, acknowledgements)
+  I. Else if the title begins with "Chapter", "Section", "Part", "Unit", "Module", or a numbered section marker (e.g. "1.", "2.")
+     → role = SECTION_BREAK
+  J. Else if the title is "Thank You", "Acknowledgements", "References", "Q&A", "Questions and Answers", or the body is a short closing message (contact info, acknowledgements, bibliography)
      → role = CLOSING_SLIDE
-  D. Else if the slide has a subtitle line like "Presented by:", "A Research Presentation", or "Author:" in the body and no bullet points
+  K. Else if the body contains "Presented by:", "Authors:", "Author:", "Affiliation:", "Institution:", or "Department:" without bullet points
      → role = TITLE_COVER
-  E. Else if the slide body contains bullet points (* or -)
+  L. Else if the body contains bullet points (* or -)
      → role = CONTENT_SLIDE
-  F. Else
+  M. Else
      → role = CONTENT_SLIDE
 
 STEP 2 — Select layout based on role:
-  - role = QUOTE_SLIDE     → use layout: QUOTE
-  - role = SECTION_BREAK   → use layout: SECTION_HEADER_CENTER or SECTION_HEADER_TOP
-  - role = CLOSING_SLIDE   → use layout: TITLE_SLIDE or SECTION_HEADER_CENTER
-  - role = TITLE_COVER     → use layout: TITLE_SLIDE
-  - role = CONTENT_SLIDE   → use layout: TITLE_AND_BODY or 項目符號
-
+  - role = BLANK               → use layout: BLANK
+  - role = FULL_PHOTO          → use layout: FULL_PHOTO
+  - role = THREE_PHOTO         → use layout: THREE_PHOTO
+  - role = QUOTE_SLIDE         → use layout: QUOTE
+  - role = CONTENT_WITH_PHOTO  → use layout: CONTENT_WITH_PHOTO
+  - role = PHOTO_PORTRAIT      → use layout: PHOTO_PORTRAIT
+  - role = PHOTO_LANDSCAPE     → use layout: PHOTO_LANDSCAPE
+  - role = SECTION_BREAK       → use layout: SECTION_HEADER_CENTER or SECTION_HEADER_TOP
+  - role = CLOSING_SLIDE       → use layout: TITLE_SLIDE or SECTION_HEADER_CENTER
+  - role = TITLE_COVER         → use layout: TITLE_SLIDE
+  - role = CONTENT_SLIDE       → use layout: TITLE_AND_BODY or BULLET_LIST
+""" + LAYOUT_DESCRIPTIONS + """
 The following layouts are available: {available_layout_names}
 Layout details:
 {available_layouts}
@@ -211,48 +374,70 @@ Layout details:
 Slide content to classify:
 {slide_content}
 
-Output the following fields:
-- title: the slide title text (copy verbatim from input)
-- content: the slide body text (copy verbatim from input)
-- layout_name: the exact name string of the chosen layout (must match one of the available layout names exactly)
-- idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout
-- idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout
-"""
+""" + OUTPUT_FIELDS
 
-# ── PROMPT_2: Negative examples ───────────────────────────────────────────────
-# Rationale: Models exhibit TITLE_AND_BODY bias. Explicit "do NOT use X for Y"
-# instructions may break the default bias without requiring complex routing logic.
-# Hypothesis: Negative constraints reduce inappropriate TITLE_AND_BODY choices.
+# ── PROMPT_3: Positive examples ───────────────────────────────────────────────
+# Rationale: Provide clear, semantic USE rules for every layout — one rule per layout,
+# describing the slide's purpose and content type rather than specific text patterns.
+# No negative constraints, no decision tree, no reasoning steps.
+# Hypothesis: Semantic positive rules generalise better across paper types and domains
+# than text-pattern conditions, because they describe intent rather than surface signals.
 
-PROMPT_2_NEGATIVE_EXAMPLES = """
+PROMPT_3_POSITIVE_EXAMPLES = """
 You are an AI that selects the most appropriate slide layout for given slide content.
 You will receive a slide with a title and main text body.
 
-LAYOUT SELECTION RULES — follow these exactly:
+LAYOUT SELECTION RULES — choose the layout whose description best matches the slide's purpose:
 
 USE TITLE_SLIDE when:
-  - The slide is the opening/cover slide of the presentation
-  - The body contains author name, institution, or "Presented by:" lines
-  - The slide is a closing/thank-you slide ("Thank You", "Q&A", "Questions")
+  - The slide is the opening cover page of the presentation
+  - The slide introduces the paper with its title, author, or institutional information
+  - The slide is the closing thank-you, Q&A, or conclusion page
+  - The content is presentational rather than informational — short, ceremonial, or attributional text
+
+USE TITLE_AND_BODY when:
+  - The slide has a title and a substantial body of academic or technical text
+  - The content consists of explanatory paragraphs or a mix of sentences and short phrases
+  - The body is informational but not structured primarily as a list
+
+USE BULLET_LIST when:
+  - The body is structured as a list of bullet points (* or -)
+  - The slide presents multiple parallel items — findings, contributions, steps, or comparisons
+  - The content is best read as a list rather than as flowing prose
 
 USE SECTION_HEADER_CENTER or SECTION_HEADER_TOP when:
-  - The body is empty or very short (no bullet points)
-  - The title begins with "Chapter", "Section", "Part", or similar division markers
+  - The slide marks the beginning of a new section, chapter, or topic within the presentation
+  - The title alone carries the complete message — no body content is needed
+  - The body is empty or contains only a very brief subtitle or tagline
 
 USE QUOTE when:
-  - The body contains a direct quotation with attribution (e.g. "— Author Name")
-  - The main content is a single sentence or short paragraph presented as a quote
+  - The primary content is a quotation attributed to a named person or source
+  - The body presents a quoted sentence followed by an attribution line (e.g. "— Author Name")
 
-USE TITLE_AND_BODY or 項目符號 when:
-  - The slide contains multiple bullet points (* or -)
-  - The body is substantive academic or technical content
+USE PHOTO_LANDSCAPE when:
+  - The main content is a wide or horizontal visual — a diagram, chart, pipeline figure, or landscape image
+  - The slide is built around a single horizontal visual element
 
-DO NOT use TITLE_AND_BODY for:
-  - Opening cover slides with author attribution
-  - Chapter/section transition slides with empty or minimal body
-  - Closing/thank-you slides
-  - Slides whose body is a quoted sentence with attribution line
+USE PHOTO_PORTRAIT when:
+  - The main content is a tall or vertical visual — a portrait photograph, headshot, or portrait-oriented figure
+  - The slide is built around a single vertical visual element
 
+USE CONTENT_WITH_PHOTO when:
+  - The slide combines textual bullet points with an image or figure
+  - Both a written explanation and a supporting visual are needed on the same slide
+
+USE THREE_PHOTO when:
+  - The slide presents three images for side-by-side comparison or display
+  - The content is primarily three separate visual elements with no substantial text
+
+USE FULL_PHOTO when:
+  - The entire slide is a single full-page image or visualization with no title or body text
+  - The visual content fills the whole slide without any text
+
+USE BLANK when:
+  - Both the title and the body are empty
+  - No content is placed on this slide
+""" + LAYOUT_DESCRIPTIONS + """
 The following layouts are available: {available_layout_names}
 Layout details:
 {available_layouts}
@@ -260,42 +445,78 @@ Layout details:
 Slide content:
 {slide_content}
 
-Output the following fields:
-- title: the slide title text (copy verbatim from input)
-- content: the slide body text (copy verbatim from input)
-- layout_name: the exact name string of the chosen layout (must match one of the available layout names exactly)
-- idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout
-- idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout
-"""
+""" + OUTPUT_FIELDS
 
-# ── PROMPT_3: Chain-of-thought ────────────────────────────────────────────────
-# Rationale: Previous prompts ask for the answer directly. Chain-of-thought asks the
-# model to explicitly classify the slide type before selecting a layout, making
-# reasoning explicit and giving models a chance to self-correct.
-# Hypothesis: CoT reasoning improves accuracy on ambiguous slides (cover, closing).
+# ── PROMPT_4: Negative examples ───────────────────────────────────────────────
+# Rationale: Each rule states a WRONG layout choice and explains WHY it is
+# structurally wrong. No "Use instead" is provided — the model derives the
+# correct layout from LAYOUT_DESCRIPTIONS. This keeps negative rules as pure
+# constraints, not lookup shortcuts.
+# Rules use only structural signals (empty body, bullet points, visual element
+# reference, attribution line, empty title+body) — no domain-specific terms.
+# Rules are reduced to the 8 most critical failure modes identified from
+# experiment data. Photo-vs-photo cross rules are removed as they create
+# interference for small models without improving accuracy.
+# Schema note: idx_title_placeholder and idx_content_placeholder may be null
+# for layouts with no text placeholders (THREE_PHOTO, FULL_PHOTO, BLANK).
+# Hypothesis: Fewer, more precise WRONG rules with explicit preconditions
+# outperform the 19-rule version by reducing inter-rule interference.
 
-PROMPT_3_CHAIN_OF_THOUGHT = """
+PROMPT_4_NEGATIVE_EXAMPLES = """
 You are an AI that selects the most appropriate slide layout for given slide content.
 You will receive a slide with a title and body text.
 
-Before selecting a layout, REASON STEP BY STEP:
+The following are WRONG layout choices to avoid. Each rule states the wrong choice
+and explains why it is structurally incorrect. Use the LAYOUT DESCRIPTIONS below
+to determine the correct layout after ruling out the wrong ones.
 
-1. What type of slide is this? Choose one:
-   - "cover": the opening/title page of a presentation (has author attribution, institution, or "Presented by")
-   - "section_break": a chapter or section divider (body is empty or only has a subtitle/tagline, no bullets)
-   - "closing": a thank-you, Q&A, or conclusion slide
-   - "quote": body is a quoted sentence with attribution (e.g. "— Einstein")
-   - "content": a slide with substantial bullet-point content
+WRONG: Choosing TITLE_AND_BODY or BULLET_LIST when the body contains any image,
+  figure, or visual element reference (whether the body is image-only, or a
+  combination of bullet-point text and an image reference together).
+  Why wrong: TITLE_AND_BODY and BULLET_LIST have no photo placeholder — visual
+  content cannot be displayed in these layouts.
 
-2. Based on the slide type, which layout is most appropriate?
-   - cover      → TITLE_SLIDE
-   - section_break → SECTION_HEADER_CENTER or SECTION_HEADER_TOP
-   - closing    → TITLE_SLIDE or SECTION_HEADER_CENTER
-   - quote      → QUOTE
-   - content    → TITLE_AND_BODY or 項目符號
+WRONG: Choosing TITLE_AND_BODY or BULLET_LIST for the opening cover slide
+  (body contains author name, "Presented by:", institutional affiliation, or
+  similar attribution — even if the attribution text is short).
+  Why wrong: These layouts are designed for informational content, not for
+  the presentation's title page.
 
-3. Confirm: does the chosen layout exist in the available layout list below?
+WRONG: Choosing TITLE_AND_BODY or BULLET_LIST for the closing slide
+  (title is "Thank You", "Q&A", "Questions", "References", or "Acknowledgements",
+  and body is short — contact info, bibliography, or acknowledgement text only).
+  Why wrong: These layouts are designed for informational content, not for
+  closing or ceremonial slides.
 
+WRONG: Choosing TITLE_AND_BODY or BULLET_LIST when the body is empty or very
+  short (fewer than 10 characters, no bullet points, no image reference).
+  Why wrong: These layouts have a large body content area — an empty body
+  creates visual dead space on the slide.
+
+WRONG: Choosing TITLE_AND_BODY or BULLET_LIST when the body is a single
+  quotation followed by an attribution line (e.g. "— Author Name").
+  Why wrong: These layouts do not provide a large-format quote display with
+  a dedicated attribution area.
+
+WRONG: Choosing TITLE_SLIDE when the body contains substantial text such as
+  multiple bullet points or multiple full sentences of academic or technical
+  content. Short attribution lines ("Presented by:", author names, institution
+  names) are NOT substantial text and do NOT make this rule apply.
+  Why wrong: TITLE_SLIDE has no body content area — substantial body text
+  will not be displayed.
+
+WRONG: Choosing TITLE_SLIDE for a chapter or section divider whose body is
+  empty and whose title does not include author attribution or closing phrasing.
+  Why wrong: TITLE_SLIDE is for the opening cover or closing slide, not for
+  internal section transitions.
+
+WRONG: Choosing BLANK for any slide whose title or body contains any text or
+  visual content, even if the text is very short (e.g. "Thank You", contact
+  info, a single sentence).
+  Why wrong: BLANK is strictly for slides where BOTH the title AND the body
+  are completely empty strings.
+
+""" + LAYOUT_DESCRIPTIONS + """
 The following layouts are available: {available_layout_names}
 Layout details:
 {available_layouts}
@@ -303,63 +524,75 @@ Layout details:
 Slide content:
 {slide_content}
 
-Output the following fields:
-- title: the slide title text (copy verbatim from input)
-- content: the slide body text (copy verbatim from input)
-- layout_name: the exact name string of the chosen layout (must match one of the available layout names exactly)
-- idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout
-- idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout
-"""
+""" + OUTPUT_FIELDS
 
-# ── PROMPT_4: Minimal layout list with role descriptions ─────────────────────
-# Rationale: All 12 layouts overwhelm the model with irrelevant options. Photo layouts,
-# full-photo, and blank are almost never correct for text slides. Providing only the
-# 6 text-relevant layouts with clear English role descriptions reduces the search space.
-# Chinese layout names (項目符號, 空白) are renamed to English descriptions to avoid
-# the disambiguation problem noted in layout_name_test.md §8.3.
-# Hypothesis: Smaller, clearly described layout list improves selection accuracy.
-#
-# NOTE: We still pass the full available_layout_names for the validity check,
-# but the prompt narrative focuses on the 6 most relevant layouts.
+# ── PROMPT_5: Chain-of-thought ────────────────────────────────────────────────
+# Rationale: True CoT asks the model to generate its own reasoning chain freely,
+# without pre-defined category lists or lookup tables. The model observes slide
+# characteristics, reasons about the slide's purpose in a presentation context,
+# and derives the layout choice through its own reasoning — not by matching to
+# a fixed taxonomy. This makes the prompt flexible and applicable to any paper
+# type or domain, since the reasoning is not constrained to pre-defined slots.
+# Hypothesis: Free reasoning produces better generalisation to unseen slide types
+# than structured classification, because the model can weigh multiple signals
+# simultaneously rather than following a rigid branching path.
 
-PROMPT_4_MINIMAL_LAYOUT = """
+PROMPT_5_CHAIN_OF_THOUGHT = """
 You are an AI that selects the most appropriate slide layout for given slide content.
 You will receive a slide with a title and body text.
 
-AVAILABLE TEXT LAYOUTS (choose from these 6 for text slides):
+Before selecting a layout, think step by step and write your reasoning:
 
-1. TITLE_SLIDE
-   Role: Opening cover slide OR closing thank-you slide.
-   Use when: The slide is the first or last slide of the presentation,
-             body has author/institution info, or title is "Thank You" / "Conclusion".
+Step 1 — Observe: What does this slide contain?
+  Describe what you see: the title, the body content type (bullets, quote, image reference,
+  empty, short text, etc.), and any notable signals in the text.
 
-2. TITLE_AND_BODY
-   Role: Standard academic or technical content slide.
-   Use when: The slide has a title and multiple paragraphs or bullet points of body text.
+Step 2 — Infer purpose: What is the role of this slide in a presentation?
+  Think about where this slide would appear and what it is trying to communicate to
+  the audience. Consider the full context: is it introducing, summarising, dividing,
+  quoting, illustrating, or closing?
 
-3. 項目符號  (bullet list layout)
-   Role: Bullet-point content slide — similar to TITLE_AND_BODY but optimized for lists.
-   Use when: The body is a list of bullet points (* or -).
+Step 3 — Match to layout: Which available layout best serves this purpose?
+  Review the layout descriptions below. For each candidate layout, consider whether
+  its structure (placeholders, visual format) fits the slide's purpose and content.
+  Reason about why the chosen layout fits better than the alternatives.
 
-4. SECTION_HEADER_CENTER
-   Role: Section divider centered on slide. No body content area.
-   Use when: The slide marks the start of a new section/chapter with empty or very short body.
+Step 4 — Verify: Confirm the chosen layout name exactly matches one of the available
+  layout names listed below. If not, revise your choice.
 
-5. SECTION_HEADER_TOP
-   Role: Section divider with title at top. No body content area.
-   Use when: Same as SECTION_HEADER_CENTER — chapter/section transition with minimal body.
-
-6. QUOTE
-   Role: Large-format quote display.
-   Use when: The body is a quotation sentence with attribution (e.g. "— Author Name").
-
-For photo-heavy or decorative content, other layouts exist but are not listed here.
-
-The full list of available layouts (for reference): {available_layout_names}
-Full layout technical details:
+""" + LAYOUT_DESCRIPTIONS + """
+The following layouts are available: {available_layout_names}
+Layout details:
 {available_layouts}
 
 Slide content:
+{slide_content}
+
+""" + OUTPUT_FIELDS
+
+# ── PROMPT_0_ORIGINAL_BASELINE: Original production prompt from backend/prompts/prompts.py ──
+# Sourced verbatim from AUGMENT_LAYOUT_PMT. No LAYOUT_DESCRIPTIONS or OUTPUT_FIELDS
+# appended — this prompt is self-contained with its own output instructions.
+# Serves as the true production baseline: tests the prompt currently deployed in
+# outlines_with_layout (slide_gen.py) before any prompt engineering improvements.
+# NOTE: contains "Plassholder for innhold" (Norwegian) — a legacy reference from
+# the original Norwegian template. Kept verbatim to reflect the real production state.
+
+PROMPT_0_ORIGINAL_BASELINE = """
+You are an AI that selects the most appropriate slide layout for given slide content.
+You will receive a slide with a title and main text body.
+
+Select the layout and placeholder indices based on the content type
+(e.g. agenda/overview, regular content, title slide, or closing/thank-you slide).
+
+For content slides:
+ - choose a layout that has a content placeholder (also referred to as 'Plassholder for innhold') after the title placeholder
+ - choose the content placeholder that is large enough for the text
+
+The following layouts are available: {available_layout_names} with their detailed information:
+{available_layouts}
+
+Here is the slide content:
 {slide_content}
 
 Output the following fields:
@@ -369,37 +602,73 @@ Output the following fields:
 - idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout
 - idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout
 """
+
+# ── PROMPT_0: Baseline — layout descriptions only, no routing guidance ────────
+# Rationale: Provides all 12 layout descriptions (Use for / Structure / Signals)
+# without any routing rules, negative constraints, or reasoning steps.
+# Serves as the baseline to measure how much P1/P2/P3 guidance strategies improve
+# layout selection accuracy over a description-only prompt.
+# Hypothesis: Without explicit guidance, models default to TITLE_AND_BODY bias
+# even when layout descriptions are provided.
+
+PROMPT_1_BASELINE = """
+You are an AI that selects the most appropriate slide layout for given slide content.
+You will receive a slide with a title and body text.
+
+""" + LAYOUT_DESCRIPTIONS + """
+The following layouts are available: {available_layout_names}
+Layout details:
+{available_layouts}
+
+Slide content to classify:
+{slide_content}
+
+""" + OUTPUT_FIELDS
 
 # ── Prompt registry ────────────────────────────────────────────────────────────
 
 PROMPTS = [
     {
-        "id": "P1_decision_tree",
-        "label": "Decision-Tree Routing",
-        "template": PROMPT_1_DECISION_TREE,
+        "id": "P0_baseline",
+        "label": "P0 Original Baseline (AUGMENT_LAYOUT_PMT)",
+        "template": PROMPT_0_ORIGINAL_BASELINE,
+        "description": "Verbatim AUGMENT_LAYOUT_PMT from backend/prompts/prompts.py — the current production prompt",
+        "rationale": "True production baseline: no layout descriptions, no routing rules, no negative constraints. Measures the current deployed prompt's layout selection accuracy against the full 12-layout test set.",
+    },
+    {
+        "id": "P1_baseline",
+        "label": "P1 Baseline (Descriptions Only)",
+        "template": PROMPT_1_BASELINE,
+        "description": "All 12 layout descriptions (Use for / Structure / Signals), no routing guidance",
+        "rationale": "Baseline: measures how well models select layouts from descriptions alone, without any explicit routing rules.",
+    },
+    {
+        "id": "P2_decision_tree",
+        "label": "P2 Decision-Tree Routing",
+        "template": PROMPT_2_DECISION_TREE,
         "description": "Explicit if/then decision tree: classify slide role → pick layout",
         "rationale": "Baseline prompt has no routing rules. Explicit dispatch may fix cover/closing failures.",
     },
     {
-        "id": "P2_negative_examples",
-        "label": "Negative Examples",
-        "template": PROMPT_2_NEGATIVE_EXAMPLES,
-        "description": "Explicit 'DO NOT use TITLE_AND_BODY for X' constraints",
-        "rationale": "All models show TITLE_AND_BODY bias. Explicit negative constraints aim to break that default.",
+        "id": "P3_positive_examples",
+        "label": "P3 Positive Examples",
+        "template": PROMPT_3_POSITIVE_EXAMPLES,
+        "description": "Semantic USE rules for every layout — describes slide purpose, not text patterns",
+        "rationale": "Semantic positive rules generalise across paper types; no negative constraints or routing steps.",
     },
     {
-        "id": "P3_chain_of_thought",
-        "label": "Chain-of-Thought",
-        "template": PROMPT_3_CHAIN_OF_THOUGHT,
+        "id": "P4_negative_examples",
+        "label": "P4 Negative Examples",
+        "template": PROMPT_4_NEGATIVE_EXAMPLES,
+        "description": "Explicit DO NOT constraints for every layout — structural signals only, no domain-specific terms",
+        "rationale": "Negative constraints block the TITLE_AND_BODY default directly. Structural conditions (empty body, bullets, image refs, attribution) are domain-agnostic and applicable to any paper type.",
+    },
+    {
+        "id": "P5_chain_of_thought",
+        "label": "P5 Chain-of-Thought",
+        "template": PROMPT_5_CHAIN_OF_THOUGHT,
         "description": "Ask model to classify slide type explicitly before selecting layout",
         "rationale": "Making reasoning explicit via CoT steps may improve accuracy on ambiguous slides.",
-    },
-    {
-        "id": "P4_minimal_layout",
-        "label": "Minimal Layout List",
-        "template": PROMPT_4_MINIMAL_LAYOUT,
-        "description": "Only 6 core text layouts with English role descriptions",
-        "rationale": "12 layouts including irrelevant photo/blank layouts overwhelm the model. Smaller list + descriptions reduces ambiguity.",
     },
 ]
 
@@ -510,10 +779,11 @@ def run_model(model_cfg: dict) -> dict | None:
 
     all_results = {}  # prompt_id -> {label -> [run_dicts]}
 
-    total_calls = len(PROMPTS) * len(SLIDE_TEST_CASES) * N_RUNS
+    prompts_to_run = [p for p in PROMPTS if RUN_PROMPT_IDS is None or p["id"] in RUN_PROMPT_IDS]
+    total_calls = len(prompts_to_run) * len(SLIDE_TEST_CASES) * N_RUNS
     call_n = 0
 
-    for prompt_cfg in PROMPTS:
+    for prompt_cfg in prompts_to_run:
         prompt_id = prompt_cfg["id"]
         prompt_label = prompt_cfg["label"]
         all_results[prompt_id] = {}
@@ -816,7 +1086,11 @@ def main():
             "raw_results": serialized_raw,
         })
 
-    json_path = output_dir / "layout_prompt_eng_results.json"
+    if RUN_PROMPT_IDS is not None:
+        suffix = "_" + "_".join(RUN_PROMPT_IDS)
+        json_path = output_dir / f"layout_prompt_eng_results{suffix}.json"
+    else:
+        json_path = output_dir / "layout_prompt_eng_results.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
 
