@@ -1,6 +1,6 @@
 from typing import Optional, Any, Literal, Dict
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 class SlideOutline(BaseModel):
@@ -18,21 +18,14 @@ class SlideOutlineWithLayout(BaseModel):
     layout_name: str = Field(
         ..., description="Name of the page layout to be used for the slide"
     )
-    idx_title_placeholder: Optional[str] = Field(
+    idx_title_placeholder: Optional[int] = Field(
         default=None,
         description="Index of the title placeholder in the page layout. None if the layout has no title placeholder (e.g. THREE_PHOTO, FULL_PHOTO, BLANK)."
     )
-    idx_content_placeholder: Optional[str] = Field(
+    idx_content_placeholder: Optional[int] = Field(
         default=None,
         description="Index of the content placeholder in the page layout. None if the layout has no content placeholder (e.g. THREE_PHOTO, FULL_PHOTO, BLANK, SECTION_HEADER_CENTER, SECTION_HEADER_TOP)."
     )
-
-    @field_validator('idx_title_placeholder', 'idx_content_placeholder', mode='before')
-    @classmethod
-    def coerce_int_to_str(cls, v):
-        if isinstance(v, int):
-            return str(v)
-        return v
 
 
 class SlideValidationResult(BaseModel):
