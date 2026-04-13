@@ -192,6 +192,9 @@ def process_messages():
                 st.session_state.workflow_complete = (
                     True  # Set the flag to stop auto-refresh
                 )
+                # Fragment re-renders only itself; force full app rerun so
+                # right_column (outside the fragment) can render the download buttons.
+                st.rerun()
 
             elif msg_type == "error":
                 st.error(content)
@@ -199,7 +202,7 @@ def process_messages():
             pass
 
 
-_run_every = None if st.session_state.workflow_complete else "2s"
+_run_every = None if st.session_state.workflow_complete else "5s"
 
 
 @st.fragment(run_every=_run_every)
