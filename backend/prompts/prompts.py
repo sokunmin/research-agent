@@ -46,7 +46,8 @@ To answer the question, please use the following format.
 ```
 Thought: I need to use a tool to help me answer the question.
 Action: tool name (one of {tool_names}) if using a tool.
-Action Input: the input to the tool, in a JSON format representing the kwargs (e.g. {{"input": "hello world", "num_beams": 5}})
+Action Input: the input to the tool, in a JSON format representing the kwargs
+(e.g. {{"code": "print('hello')"}} for run_code, {{"remote_dir": "/sandbox"}} for list_files)
 ```
 
 Please ALWAYS start with a Thought.
@@ -59,9 +60,8 @@ If this format is used, the user will respond in the following format:
 Observation: tool response
 ```
 
-You should keep repeating the above format until you have enough information
-to answer the question without using any more tools. At that point, you MUST respond
-in the one of the following two formats:
+Use the minimum number of tool calls needed. Stop as soon as the goal is achieved.
+At that point, you MUST respond in one of the following two formats:
 
 ```
 Thought: I can answer without using any more tools.
@@ -73,14 +73,25 @@ Thought: I cannot answer the question with the provided tools.
 Answer: Sorry, I cannot answer your query.
 ```
 
-## Additional Rules
-- The answer MUST contain a sequence of bullet points that explain how you arrived at the answer. This can include aspects of the previous conversation history.
-- You MUST obey the function signature of each tool. Do NOT pass in no arguments if the function expects arguments.
-
+{sandbox_stop_rule}
 ## Current Conversation
 Below is the current conversation consisting of interleaving human and assistant messages.
 
 """
+
+
+SANDBOX_STOP_RULE_PMT = """
+## Critical Stop Rule
+If you see "LIMIT REACHED" in any Observation, output IMMEDIATELY:
+  Thought: Maximum attempts reached. Cannot complete the task.
+  Answer: Task failed after {max_retries} attempts. Error: [summarise the last error seen]
+Do NOT call run_code again after seeing "LIMIT REACHED".
+
+"""
+# Injected into REACT_PROMPT_SUFFIX at call site (slide_gen.py) via str.replace().
+# {max_retries} is filled with settings.SLIDE_GEN_MAX_RETRY_ATTEMPTS.
+# Kept separate from REACT_PROMPT_SUFFIX because it is sandbox-specific and needs
+# a runtime config value — REACT_PROMPT_SUFFIX is a static template.
 
 
 SUMMARIZE_PAPER_PMT = """
@@ -160,27 +171,87 @@ Output the following fields:
 
 AUGMENT_LAYOUT_PMT = """
 You are an AI that selects the most appropriate slide layout for given slide content.
-You will receive a slide with a title and main text body.
+You will receive a slide with a title and body text.
 
-Select the layout and placeholder indices based on the content type
-(e.g. agenda/overview, regular content, title slide, or closing/thank-you slide).
+LAYOUT DESCRIPTIONS — what each layout is for:
 
-For content slides:
- - choose a layout that has a content placeholder (also referred to as 'Plassholder for innhold') after the title placeholder
- - choose the content placeholder that is large enough for the text
+1. TITLE_SLIDE
+   Use for: Opening cover slide of the presentation, OR closing thank-you/Q&A slide.
+   Structure: Large title + subtitle area. NO body content area.
+   Signals: author attribution ("Presented by:"), institution, "Thank You", "Q&A", "Conclusion".
 
-The following layouts are available: {available_layout_names} with their detailed information:
+2. TITLE_AND_BODY
+   Use for: Standard academic or technical content slide with substantial text.
+   Structure: Title + large body text area for paragraphs or bullets.
+   Signals: multiple sentences or bullet points of academic/technical content.
+
+3. QUOTE
+   Use for: Displaying a quotation with attribution.
+   Structure: Large quote text area + attribution line (— Author Name).
+   Signals: text in quotes followed by "— Name" attribution format.
+
+4. PHOTO_LANDSCAPE
+   Use for: A slide whose main content is a single wide/horizontal image or diagram.
+   Structure: Title + caption text + landscape (wide) photo placeholder.
+   Signals: "[Wide image/diagram/chart]", horizontal layout, description of a wide visual.
+
+5. SECTION_HEADER_CENTER
+   Use for: Chapter or section divider slide — title only, centered.
+   Structure: Title centered on slide. NO body content area.
+   Signals: empty or near-empty body, "Chapter X", "Section X", "Part X".
+
+6. PHOTO_PORTRAIT
+   Use for: A slide whose main content is a single tall/vertical image or portrait photo.
+   Structure: Title + caption text + portrait (tall) photo placeholder.
+   Signals: "[Portrait photo]", headshot, tall/vertical image description.
+
+7. SECTION_HEADER_TOP
+   Use for: Chapter or section divider — title at top. Same role as SECTION_HEADER_CENTER.
+   Structure: Title at top of slide. NO body content area.
+   Signals: same as SECTION_HEADER_CENTER.
+
+8. CONTENT_WITH_PHOTO
+   Use for: A slide combining bullet-point text AND an image/figure side by side.
+   Structure: Title + text content area + photo placeholder (split layout).
+   Signals: slide body contains BOTH bullet points AND a "[Figure/Image: ...]" reference together.
+
+9. BULLET_LIST
+   Use for: Bullet-point content slide — similar to TITLE_AND_BODY but optimized for lists.
+   Structure: Title + body text area.
+   Signals: body is primarily a list of bullet points (* or -).
+
+10. THREE_PHOTO
+    Use for: Comparing or displaying three images side by side.
+    Structure: Three photo placeholders. NO title, NO text content area.
+    Signals: "[Image 1: ...] [Image 2: ...] [Image 3: ...]", three separate image references.
+
+11. FULL_PHOTO
+    Use for: A full-bleed image covering the entire slide with no text.
+    Structure: Single full-page photo placeholder. NO title, NO text area.
+    Signals: "[Full-page image/visualization]", entirely visual slide with no text content.
+
+12. BLANK
+    Use for: A completely empty slide with no content.
+    Structure: No placeholders except footer.
+    Signals: both title and content are empty strings.
+
+The following layouts are available: {available_layout_names}
+Layout details:
 {available_layouts}
 
-Here is the slide content:
+Slide content to classify:
 {slide_content}
 
 Output the following fields:
 - title: the slide title text (copy verbatim from input)
 - content: the slide body text (copy verbatim from input)
 - layout_name: the exact name string of the chosen layout (must match one of the available layout names exactly)
-- idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout
-- idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout
+- idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout.
+- idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout.
+CRITICAL: For layouts THREE_PHOTO, FULL_PHOTO, and BLANK:
+  - idx_title_placeholder MUST be null (not a number, not a string)
+  - idx_content_placeholder MUST be null (not a number, not a string)
+  These layouts have NO title or content placeholders. Outputting any number here is incorrect and will cause a runtime error.
 """
 
 SLIDE_GEN_PMT = """
@@ -203,14 +274,22 @@ Steps you MUST follow in order:
 Requirements for the generated code:
 - Load the template from `{template_fpath}` using Presentation()
 - Loop over all items in `{json_file_path}`; create one slide per outline item
-- Match each slide to its layout by layout_name from the JSON
-- Fill title using idx_title_placeholder index, content using idx_content_placeholder index
-- If idx_title_placeholder is null, do NOT attempt to fill a title placeholder for that slide
-- If idx_content_placeholder is null, do NOT attempt to fill a content placeholder for that slide
-- For layouts with no text placeholders (e.g. THREE_PHOTO, FULL_PHOTO, BLANK), add the slide with the correct layout and leave all placeholders unfilled
-- If there is no front page or 'thank you' slide, add them using the appropriate layout
-- If a placeholder has auto_size=TEXT_TO_FIT_SHAPE, use MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE and do NOT set font size
-- Save the final file as `{generated_slide_fname}` using prs.save()
+- Layout lookup — add_slide() requires a SlideLayout object, NOT a string or int:
+      layout = next(l for l in prs.slide_layouts if l.name == item['layout_name'])
+      slide  = prs.slides.add_slide(layout)
+- Placeholder fill with null guard — idx values are None for visual-only layouts:
+      if item['idx_title_placeholder'] is not None:
+          slide.placeholders[item['idx_title_placeholder']].text = item['title']
+      if item['idx_content_placeholder'] is not None:
+          slide.placeholders[item['idx_content_placeholder']].text = item['content']
+- For layouts with no text placeholders (e.g. THREE_PHOTO, FULL_PHOTO, BLANK),
+  add the slide with the correct layout and leave all placeholders unfilled
+- The JSON already contains ALL slides in the correct order, including the front page
+  and thank-you slides. Loop through EVERY item — do NOT skip any,
+  do NOT add extra slides outside the loop.
+- If a placeholder has auto_size=TEXT_TO_FIT_SHAPE, use MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+  and do NOT set font size
+- Save the final file as `/sandbox/{generated_slide_fname}` using prs.save()
 
 CRITICAL: You MUST use `run_code` to actually execute the code. Do not output code as text only.
 CRITICAL: Task is complete only when `list_files` confirms `{generated_slide_fname}` exists.
