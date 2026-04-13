@@ -53,7 +53,7 @@ def pptx2pdf(pptx_path: Path, pdf_path: Path):
             "soffice",
             "--headless",
             "--convert-to",
-            "pdf",
+            'pdf:impress_pdf_Export:{"UseTaggedPDF":{"type":"boolean","value":"false"}}',
             "--outdir",
             pdf_path.parent.as_posix(),
             pptx_path.as_posix(),
