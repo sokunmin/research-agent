@@ -6,7 +6,7 @@ conftest.py autoskip handles Docker-unavailable case.
 """
 import pytest
 
-from services.sandbox import LlmSandboxToolSpec, RemoteFile
+from tools.sandbox_tools import LlmSandboxToolSpec, RemoteFile
 
 
 @pytest.fixture
@@ -78,9 +78,9 @@ class TestLlmSandboxFileOps:
 class TestLlmSandboxToolList:
     def test_to_tool_list_length(self, sandbox):
         tools = sandbox.to_tool_list()
-        assert len(tools) == 3
+        assert len(tools) == 2
 
     def test_tool_names(self, sandbox):
         tools = sandbox.to_tool_list()
         names = {t.metadata.name for t in tools}
-        assert names == {"run_code", "list_files", "upload_file"}
+        assert names == {"run_code", "list_files"}
