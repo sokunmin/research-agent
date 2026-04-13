@@ -1,4 +1,27 @@
 ---
+## [2026-04-13] PPTX placeholder 的 `name` 欄位無語意，不可用字串比對識別用途 `[通用]`
+原因：`placeholder.name` 是 template 工具的 display label（如 `"Google Shape;10;p36"`），命名慣例因工具而異，不含 "Title"/"Body" 等語意，字串比對在非標準 template 上失效。
+修正：改用 `placeholder.placeholder_format.type`（`PP_PLACEHOLDER` enum，`TITLE=1` / `BODY=2`）過濾，此為 OpenXML 規格定義，跨所有 PPTX template 通用。
+---
+## [2026-04-09] pptx2images — MuPDF "No common ancestor in structure tree" 警告 `[通用]`
+根本原因（版本升級問題，原作者程式碼本身沒有錯）：
+1. LibreOffice 25.2.3（Debian 13）的 bug：Impress PDF export 生成格式不合規的 Tagged PDF，`/StructTreeRoot /K` 直接包含 16 個跨不同 page 的 structure elements，缺少共同根節點，違反 PDF/UA spec。MuPDF 每個 page 驗證一次，5 張投影片產生 5 次 error 後 fallback 到 content stream rendering。LibreOffice 7.4（Debian 12）無此 bug。
+2. Dockerfile 未鎖版本：`FROM python:3.12-slim` 無 digest pinning，底層 Debian 從 12 (Bookworm) 升至 13 (Trixie)，LibreOffice 從 7.4.7 跳至 25.2.3，引入此 bug。
+影響：Non-blocking warning。Smoke test 確認 PNG 輸出 byte-identical，Tagged PDF 結構樹僅用於 accessibility，不影響 rasterization。
+修正方法：修改 `utils/file_processing.py` 的 `pptx2pdf()`，在 LibreOffice 指令加 JSON filter string 停用 Tagged PDF，從根本消除問題：
+  修改前：`"--convert-to", "pdf",`
+  修改後：`"--convert-to", 'pdf:impress_pdf_Export:{"UseTaggedPDF":{"type":"boolean","value":"false"}}',`
+  說明：JSON filter string 語法非官方文件記載，但為 Gotenberg/unoconv/JODConverter 廣泛採用的 de-facto 標準，LibreOffice 7.4 與 25.x 均相容。UNO Python API 雖更標準但在 Docker subprocess 架構下複雜度過高。
+詳細分析：`dev-tracker/poc/problem2_mupdf_analysis.md`、`dev-tracker/poc/problem2_libreoffice_api_research.md`
+---
+## [2026-04-09] Frontend — workflow error 後 NoneType 警告 `[通用]`
+原因：Backend workflow 在 validate_slides crash 後，最後一個 event 為 `None`；Frontend 的 workflow info 格式化函式未對 `None` 做防守性檢查，直接呼叫 `.get()` 導致 `'NoneType' object has no attribute 'get'`。
+修正方法：兩層修正並行實施。(1) **Backend 根本原因**：`main.py` 的 event_generator() 在 workflow crash 時發送的 error event 格式為 `{"event": "error", "message": "..."}` — 缺少 `event_content` key，不符合標準 `WorkflowStreamingEvent` 結構；改為以 `WorkflowStreamingEvent(event_type="server_message", event_sender="system", event_content={"message": error_message})` 格式發送，確保所有 event 都有 `event_content`。(2) **Frontend 防禦**：`slide_generation_page.py` 的 `format_workflow_info()` 第 89 行 `event_content.get('message')` 在取得 `event_content` 之前加 `None` guard：`if event_content is None: return json.dumps(info_json)`，避免任何非標準 event 格式造成 AttributeError。
+---
+## [2026-04-09] Agent 產生無效 python-pptx API 呼叫 — add_slide() 不接受 position argument `[通用]`
+原因：`SLIDE_GEN_PMT` 的 code pattern 示範了標準 slide 建立，但未明確說明 `add_slide()` 只接受 `SlideLayout` 一個參數。Agent 根據 prompt 要求「若缺少 front/thank-you slide 需補上」，自行推測出不存在的 `prs.slides.add_slide(layout, 0)` API（position argument），此次因條件未觸發未爆炸，但屬潛在 runtime error。
+修正方法：兩層修正。(1) **立即修（prompt 層）**：`SLIDE_GEN_PMT` 的模糊指示 `"If there is no front page or 'thank you' slide, add them using the appropriate layout"` 替換為明確的 pre/post loop 模式並加 CRITICAL 禁止語句：在 loop 之前先 `add_slide()` 封面（使得它成為第一張），在 loop 之後再 `add_slide()` 感謝頁；並明確標注 `prs.slides.add_slide(layout, 0)  # WRONG — raises TypeError`，python-pptx 無任何 insert-at-position API（context7 查詢確認，`Slides` 只有 `add_slide`、無 `insert_slide`/`move_slide`；`_sldIdLst` 為 private XML，無公開 API）。(2) **長期根本解（workflow 層，Option D）**：在 `slide_gen.py` 的 `outlines_with_layout` 步驟，Python code 直接向 `slides_w_layout` list 的首尾注入封面與感謝頁的 `SlideOutlineWithLayout` 物件（layout 名稱與 placeholder index 從 `self.pptx_spec.all_layout` 動態查詢），使 JSON 已包含所有 slides；`SLIDE_GEN_PMT` 改為 `"The JSON already contains ALL slides in order. Loop through EVERY item — do NOT add extra slides."`，完全消除 LLM 的條件判斷與 hallucination 空間。
+---
 ## [2026-03-31] `template-en.pptx` 含三個中文 layout 名稱（項目符號、照片-一頁三張、空白），英文模型於 layout selection 時視而不見 `[環境: template-en.pptx 初始版本]`
 原因：template 命名暗示全英文，但三個 layout 仍為中文，英文 LLM 無法將這些名稱與 slide 語意對應，實驗中從未被選中，導致準確率被低估。
 修正：以 python-pptx 修改 XML 將三個 layout 重命名：項目符號 → BULLET_LIST、照片-一頁三張 → THREE_PHOTO、空白 → BLANK；實驗 prompt 與 expected set 同步更新。
