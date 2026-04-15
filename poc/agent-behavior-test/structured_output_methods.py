@@ -1,27 +1,34 @@
 """
 Agent Behavior Test v2: outlines_with_layout — Method Comparison
 =================================================================
-Tests whether LLMs correctly produce SlideOutlineWithLayout via 5 different methods:
+Tests whether LLMs correctly produce SlideOutlineWithLayout via 6 different methods:
 
   METHOD_A: FunctionCallingProgram (original baseline)
   METHOD_B: LLMTextCompletionProgram
   METHOD_C: Ollama `format` param — JSON schema in additional_kwargs (Ollama only)
   METHOD_D: llm.as_structured_llm() — wrap llm, call sllm.acomplete(formatted_prompt)
   METHOD_E: llm.astructured_predict() with PydanticProgramMode.LLM
+  METHOD_F: litellm.acompletion() with response_format=Pydantic class (provider-native)
 
-Same 4 prompts × 2 models from augment_test.py.
-N_RUNS = 3 per (model × prompt × method × slide) combination.
-Total = 2 models × 4 prompts × 5 methods × 3 slides × 3 runs = 360 LLM calls.
+5 models × 4 prompts × 6 methods × 1 slide × 1 run = 120 max calls.
+METHOD_C is auto-skipped for non-Ollama models (12 instant skips → 108 real LLM calls).
 
-ALL execution is SEQUENTIAL — Ollama does not support parallel requests.
+Execution strategy:
+  - Ollama models: sequential (local inference, no parallel support)
+  - API models (Groq/OpenRouter/Gemini): concurrent via asyncio.gather
+  - Per-model delay_s respected after each non-skipped call to avoid rate limits
 """
 import asyncio
 import json
+import re
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend"))
+
+import litellm
+from pydantic import BaseModel, Field
 
 from agent_workflows.schemas import SlideOutlineWithLayout
 from llama_index.llms.litellm import LiteLLM
@@ -29,24 +36,30 @@ from llama_index.core.program import FunctionCallingProgram, LLMTextCompletionPr
 from llama_index.core import PromptTemplate
 from llama_index.core.llms.llm import PydanticProgramMode
 
+# ── Model config ──────────────────────────────────────────────────────────────
+
+class ModelConfig(BaseModel):
+    """Configuration for a single model under test."""
+    name: str
+    is_ollama: bool = False
+    additional_kwargs: dict = Field(default_factory=dict)
+    delay_s: float = 0.0  # seconds to sleep after each non-skipped call (rate limit)
+
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
 MODELS = [
-    {
-        "name":               "ollama/gemma3:4b",
-        "additional_kwargs":  {},
-        "is_ollama":          True,
-    },
-    {
-        "name":               "ollama/qwen3.5:4b",
-        "additional_kwargs":  {"extra_body": {"think": False}},
-        "is_ollama":          True,
-    },
+    # ModelConfig(name="ollama/gemma3:4b",                                is_ollama=True),
+    ModelConfig(name="ollama/gemma4:e2b",                                is_ollama=True),
+    ModelConfig(name="ollama/ministral-3:14b-cloud",                    is_ollama=True),
+    ModelConfig(name="groq/openai/gpt-oss-20b",                         delay_s=2.0),
+    ModelConfig(name="openrouter/google/gemini-3.1-flash-lite-preview", delay_s=3.0),
+    ModelConfig(name="gemini/gemini-3.1-flash-lite-preview",            delay_s=4.0),
 ]
 
-N_RUNS = 3  # runs per (model × prompt × method × slide)
+N_RUNS = 1  # runs per (model × prompt × method × slide)
 
-METHODS = ["METHOD_A", "METHOD_B", "METHOD_C", "METHOD_D", "METHOD_E"]
+METHODS = ["METHOD_A", "METHOD_B", "METHOD_C", "METHOD_D", "METHOD_E", "METHOD_F"]
 
 # ── Mock available layouts (mirrors real template structure) ──────────────────
 
@@ -83,7 +96,7 @@ VALID_LAYOUT_NAMES     = set(AVAILABLE_LAYOUT_NAMES)
 # ── Test cases: 3 representative slide types ──────────────────────────────────
 
 SLIDE_OUTLINES = [
-    {   # regular academic content slide
+    {   # regular academic content slide — most representative, stable layout choice
         "title": "Attention Is All You Need",
         "content": (
             "* Key Approach: Transformer using self-attention, no recurrence\n"
@@ -91,14 +104,6 @@ SLIDE_OUTLINES = [
             "* Training: Adam optimizer, warmup schedule\n"
             "* Conclusion: Outperforms RNN/CNN baselines on translation tasks"
         ),
-    },
-    {   # agenda / overview slide
-        "title": "Agenda",
-        "content": "1. Introduction\n2. Methodology\n3. Experimental Results\n4. Conclusion",
-    },
-    {   # closing slide
-        "title": "Thank You",
-        "content": "Questions and Discussion\nContact: research@example.com",
     },
 ]
 
@@ -257,13 +262,12 @@ def _detect_capability_error(err: str) -> bool:
     )
 
 
-def _make_llm(model_cfg: dict, extra_format_kwarg: dict = None) -> LiteLLM:
+def _make_llm(model_cfg: ModelConfig, extra_format_kwarg: dict = None) -> LiteLLM:
     """Construct a LiteLLM instance from model config."""
-    model_name = model_cfg["name"]
-    additional_kwargs = dict(model_cfg.get("additional_kwargs", {}))
+    additional_kwargs = dict(model_cfg.additional_kwargs)
     if extra_format_kwarg:
         additional_kwargs.update(extra_format_kwarg)
-    llm_kwargs = dict(model=model_name, temperature=0.1, max_tokens=2048)
+    llm_kwargs = dict(model=model_cfg.name, temperature=0.1, max_tokens=2048)
     if additional_kwargs:
         llm_kwargs["additional_kwargs"] = additional_kwargs
     return LiteLLM(**llm_kwargs)
@@ -307,36 +311,32 @@ def _build_success(response: SlideOutlineWithLayout, elapsed: float,
     }
 
 
-# ── METHOD_A: FunctionCallingProgram ─────────────────────────────────────────
+# ── Shared call helpers ───────────────────────────────────────────────────────
 
-async def run_method_a(prompt_template: str, slide_outline: dict, model_cfg: dict) -> dict:
-    llm = _make_llm(model_cfg)
+def _call_kwargs(slide_outline: dict) -> dict:
+    """Return the three prompt template variables shared by all method runners."""
+    return {
+        "slide_content":          json.dumps(slide_outline),
+        "available_layout_names": json.dumps(AVAILABLE_LAYOUT_NAMES),
+        "available_layouts":      json.dumps(AVAILABLE_LAYOUTS, indent=2),
+    }
+
+
+async def _run_timed(core_fn, slide_outline: dict) -> dict:
+    """
+    Execute core_fn(), measure elapsed time, return a result dict.
+
+    core_fn: async callable() -> SlideOutlineWithLayout
+    On success: returns _build_success result.
+    On any exception: returns _build_empty_failure with error classification.
+    """
     t_start = time.perf_counter()
     try:
-        try:
-            program = FunctionCallingProgram.from_defaults(
-                llm=llm,
-                output_cls=SlideOutlineWithLayout,
-                prompt_template_str=prompt_template,
-                verbose=False,
-            )
-        except Exception as cap_err:
-            elapsed = time.perf_counter() - t_start
-            err_str = str(cap_err)
-            return _build_empty_failure(elapsed, err_str, False, True)
-
-        response = await program.acall(
-            slide_content=json.dumps(slide_outline),
-            available_layout_names=json.dumps(AVAILABLE_LAYOUT_NAMES),
-            available_layouts=json.dumps(AVAILABLE_LAYOUTS, indent=2),
-            description="Data model for the slide page outline with layout",
-        )
+        response = await core_fn()
         elapsed = time.perf_counter() - t_start
         if isinstance(response, SlideOutlineWithLayout):
             return _build_success(response, elapsed, slide_outline)
-        else:
-            return _build_empty_failure(elapsed, f"Unexpected type: {type(response)}", False, False)
-
+        return _build_empty_failure(elapsed, f"Unexpected type: {type(response)}", False, False)
     except Exception as e:
         elapsed = time.perf_counter() - t_start
         err_str = str(e)
@@ -347,156 +347,137 @@ async def run_method_a(prompt_template: str, slide_outline: dict, model_cfg: dic
         )
 
 
+# ── METHOD_A: FunctionCallingProgram ─────────────────────────────────────────
+
+async def run_method_a(prompt_template: str, slide_outline: dict, model_cfg: ModelConfig) -> dict:
+    llm = _make_llm(model_cfg)
+    async def _core():
+        program = FunctionCallingProgram.from_defaults(
+            llm=llm,
+            output_cls=SlideOutlineWithLayout,
+            prompt_template_str=prompt_template,
+            verbose=False,
+        )
+        return await program.acall(
+            **_call_kwargs(slide_outline),
+            description="Data model for the slide page outline with layout",
+        )
+    return await _run_timed(_core, slide_outline)
+
+
 # ── METHOD_B: LLMTextCompletionProgram ───────────────────────────────────────
 
-async def run_method_b(prompt_template: str, slide_outline: dict, model_cfg: dict) -> dict:
+async def run_method_b(prompt_template: str, slide_outline: dict, model_cfg: ModelConfig) -> dict:
     llm = _make_llm(model_cfg)
-    t_start = time.perf_counter()
-    try:
+    async def _core():
         program = LLMTextCompletionProgram.from_defaults(
             llm=llm,
             output_cls=SlideOutlineWithLayout,
             prompt_template_str=prompt_template,
             verbose=False,
         )
-        response = await program.acall(
-            slide_content=json.dumps(slide_outline),
-            available_layout_names=json.dumps(AVAILABLE_LAYOUT_NAMES),
-            available_layouts=json.dumps(AVAILABLE_LAYOUTS, indent=2),
-        )
-        elapsed = time.perf_counter() - t_start
-        if isinstance(response, SlideOutlineWithLayout):
-            return _build_success(response, elapsed, slide_outline)
-        else:
-            return _build_empty_failure(elapsed, f"Unexpected type: {type(response)}", False, False)
-
-    except Exception as e:
-        elapsed = time.perf_counter() - t_start
-        err_str = str(e)
-        return _build_empty_failure(
-            elapsed, err_str,
-            _detect_properties_wrap(err_str),
-            _detect_capability_error(err_str),
-        )
+        return await program.acall(**_call_kwargs(slide_outline))
+    return await _run_timed(_core, slide_outline)
 
 
 # ── METHOD_C: Ollama format param ─────────────────────────────────────────────
 
-async def run_method_c(prompt_template: str, slide_outline: dict, model_cfg: dict) -> dict:
+async def run_method_c(prompt_template: str, slide_outline: dict, model_cfg: ModelConfig) -> dict:
     """
     Pass SlideOutlineWithLayout.model_json_schema() as `format` in additional_kwargs.
     Only works for Ollama models. For non-Ollama, skip with a note.
     """
-    if not model_cfg.get("is_ollama", False):
+    if not model_cfg.is_ollama:
         return _build_empty_failure(
             0.0,
             "METHOD_C: Skipped — Ollama format param only supported for Ollama models",
             False, False, skipped=True,
         )
-
     schema = SlideOutlineWithLayout.model_json_schema()
-    # Merge with existing additional_kwargs, adding format
-    base_kwargs = dict(model_cfg.get("additional_kwargs", {}))
-    base_kwargs["format"] = schema
-
     llm = _make_llm(model_cfg, extra_format_kwarg={"format": schema})
-    t_start = time.perf_counter()
-    try:
+    async def _core():
         program = LLMTextCompletionProgram.from_defaults(
             llm=llm,
             output_cls=SlideOutlineWithLayout,
             prompt_template_str=prompt_template,
             verbose=False,
         )
-        response = await program.acall(
-            slide_content=json.dumps(slide_outline),
-            available_layout_names=json.dumps(AVAILABLE_LAYOUT_NAMES),
-            available_layouts=json.dumps(AVAILABLE_LAYOUTS, indent=2),
-        )
-        elapsed = time.perf_counter() - t_start
-        if isinstance(response, SlideOutlineWithLayout):
-            return _build_success(response, elapsed, slide_outline)
-        else:
-            return _build_empty_failure(elapsed, f"Unexpected type: {type(response)}", False, False)
-
-    except Exception as e:
-        elapsed = time.perf_counter() - t_start
-        err_str = str(e)
-        return _build_empty_failure(
-            elapsed, err_str,
-            _detect_properties_wrap(err_str),
-            _detect_capability_error(err_str),
-        )
+        return await program.acall(**_call_kwargs(slide_outline))
+    return await _run_timed(_core, slide_outline)
 
 
 # ── METHOD_D: llm.as_structured_llm() ────────────────────────────────────────
 
-async def run_method_d(prompt_template: str, slide_outline: dict, model_cfg: dict) -> dict:
+async def run_method_d(prompt_template: str, slide_outline: dict, model_cfg: ModelConfig) -> dict:
     """
     Wrap llm via as_structured_llm(), manually format the prompt string,
     call sllm.acomplete(formatted_prompt), result is response.raw.
     """
     llm = _make_llm(model_cfg)
-    t_start = time.perf_counter()
-    try:
+    async def _core():
         sllm = llm.as_structured_llm(SlideOutlineWithLayout)
-        formatted_prompt = prompt_template.format(
-            slide_content=json.dumps(slide_outline),
-            available_layout_names=json.dumps(AVAILABLE_LAYOUT_NAMES),
-            available_layouts=json.dumps(AVAILABLE_LAYOUTS, indent=2),
-        )
+        formatted_prompt = prompt_template.format(**_call_kwargs(slide_outline))
         response = await sllm.acomplete(formatted_prompt)
-        elapsed = time.perf_counter() - t_start
         raw = response.raw
-        if isinstance(raw, SlideOutlineWithLayout):
-            return _build_success(raw, elapsed, slide_outline)
-        else:
-            # Try to parse if it's a dict or something else
-            err_str = f"response.raw type={type(raw)}, value={str(raw)[:200]}"
-            return _build_empty_failure(elapsed, err_str, False, False)
-
-    except Exception as e:
-        elapsed = time.perf_counter() - t_start
-        err_str = str(e)
-        return _build_empty_failure(
-            elapsed, err_str,
-            _detect_properties_wrap(err_str),
-            _detect_capability_error(err_str),
-        )
+        if not isinstance(raw, SlideOutlineWithLayout):
+            raise ValueError(f"response.raw type={type(raw)}, value={str(raw)[:200]}")
+        return raw
+    return await _run_timed(_core, slide_outline)
 
 
 # ── METHOD_E: llm.astructured_predict() ──────────────────────────────────────
 
-async def run_method_e(prompt_template: str, slide_outline: dict, model_cfg: dict) -> dict:
+async def run_method_e(prompt_template: str, slide_outline: dict, model_cfg: ModelConfig) -> dict:
     """
     Set pydantic_program_mode=PydanticProgramMode.LLM on the LLM instance,
     then call llm.astructured_predict(SlideOutlineWithLayout, prompt=PromptTemplate(...), **kwargs).
     """
     llm = _make_llm(model_cfg)
     llm.pydantic_program_mode = PydanticProgramMode.LLM
-    t_start = time.perf_counter()
-    try:
-        response = await llm.astructured_predict(
+    async def _core():
+        return await llm.astructured_predict(
             SlideOutlineWithLayout,
             prompt=PromptTemplate(prompt_template),
-            slide_content=json.dumps(slide_outline),
-            available_layout_names=json.dumps(AVAILABLE_LAYOUT_NAMES),
-            available_layouts=json.dumps(AVAILABLE_LAYOUTS, indent=2),
+            **_call_kwargs(slide_outline),
         )
-        elapsed = time.perf_counter() - t_start
-        if isinstance(response, SlideOutlineWithLayout):
-            return _build_success(response, elapsed, slide_outline)
-        else:
-            return _build_empty_failure(elapsed, f"Unexpected type: {type(response)}", False, False)
+    return await _run_timed(_core, slide_outline)
 
-    except Exception as e:
-        elapsed = time.perf_counter() - t_start
-        err_str = str(e)
-        return _build_empty_failure(
-            elapsed, err_str,
-            _detect_properties_wrap(err_str),
-            _detect_capability_error(err_str),
+
+# ── METHOD_F: litellm response_format ────────────────────────────────────────
+
+def _strip_json_fence(text: str) -> str:
+    """Strip markdown code fences (```json...``` or ```...```) from LLM output.
+
+    Some models (e.g. Mistral via Ollama) wrap their JSON response in markdown
+    fences even when constrained decoding is requested. This strips those fences
+    before JSON parsing so that valid responses are not incorrectly rejected.
+    """
+    match = re.search(r"```(?:json)?\s*(\{.*?})\s*```", text, re.DOTALL)
+    return match.group(1).strip() if match else text.strip()
+
+
+async def run_method_f(prompt_template: str, slide_outline: dict, model_cfg: ModelConfig) -> dict:
+    """
+    Call litellm.acompletion() directly with response_format=SlideOutlineWithLayout.
+    Provider-native schema enforcement — no function calling, no prompt injection of schema.
+    Works for all providers (Groq, Gemini, OpenRouter, Ollama).
+
+    enable_json_schema_validation is intentionally NOT used: litellm's validator calls
+    json.loads() on the raw response with no fence stripping, causing false negatives
+    for models that wrap JSON in markdown fences. Fence stripping is done here instead.
+    """
+    formatted_prompt = prompt_template.format(**_call_kwargs(slide_outline))
+    async def _core():
+        response = await litellm.acompletion(
+            model=model_cfg.name,
+            messages=[{"role": "user", "content": formatted_prompt}],
+            response_format=SlideOutlineWithLayout,
+            temperature=0.1,
+            max_tokens=2048,
         )
+        content = _strip_json_fence(response.choices[0].message.content)
+        return SlideOutlineWithLayout.model_validate_json(content)
+    return await _run_timed(_core, slide_outline)
 
 
 # ── Method dispatcher ─────────────────────────────────────────────────────────
@@ -507,17 +488,18 @@ METHOD_RUNNERS = {
     "METHOD_C": run_method_c,
     "METHOD_D": run_method_d,
     "METHOD_E": run_method_e,
+    "METHOD_F": run_method_f,
 }
 
 
 # ── Per-method-prompt-slide runner ────────────────────────────────────────────
 
-async def run_all_combinations(model_cfg: dict) -> dict:
+async def run_all_combinations(model_cfg: ModelConfig) -> dict:
     """
     For a given model, run ALL methods × prompts × slides × N_RUNS sequentially.
     Returns: { (method, prompt_label, slide_title): [result, ...] }
     """
-    model_name = model_cfg["name"]
+    model_name = model_cfg.name
     results = {}  # key=(method, prompt_label, slide_title) -> list of result dicts
 
     total_methods = len(METHODS)
@@ -560,6 +542,9 @@ async def run_all_combinations(model_cfg: dict) -> dict:
                     else:
                         mark = "FAIL"
                     print(f"-> {mark} ({result['elapsed_s']}s)")
+
+                    if not result.get("skipped") and model_cfg.delay_s > 0:
+                        await asyncio.sleep(model_cfg.delay_s)
 
     return results
 
@@ -676,7 +661,7 @@ def print_cross_method_summary(all_model_results: dict, prompts_list: list):
     print(f"  {'-'*92}")
 
     for model_cfg in MODELS:
-        model_name = model_cfg["name"]
+        model_name = model_cfg.name
         results = all_model_results[model_name]
 
         for method in METHODS:
@@ -711,25 +696,35 @@ def print_cross_method_summary(all_model_results: dict, prompts_list: list):
 
 async def main():
     total_calls = len(MODELS) * len(PROMPTS) * len(METHODS) * len(SLIDE_OUTLINES) * N_RUNS
+    ollama_models = [m for m in MODELS if m.is_ollama]
+    api_models    = [m for m in MODELS if not m.is_ollama]
+
     print(f"\n{'='*90}")
     print(f"  outlines_with_layout — Method Comparison (v2)")
-    print(f"  Models:  {', '.join(m['name'] for m in MODELS)}")
+    print(f"  Models:  {', '.join(m.name for m in MODELS)}")
     print(f"  Methods: {', '.join(METHODS)}")
     print(f"  Prompts: {len(PROMPTS)}  |  Slides: {len(SLIDE_OUTLINES)}  |  N_RUNS: {N_RUNS}")
     print(f"  Total LLM calls (max): {total_calls}")
-    print(f"  ALL EXECUTION IS SEQUENTIAL")
+    print(f"  Ollama ({len(ollama_models)}): sequential | API ({len(api_models)}): concurrent")
     print(f"{'='*90}\n")
 
     all_model_results = {}  # model_name -> results dict
 
-    for model_cfg in MODELS:
-        model_name = model_cfg["name"]
+    # ── Ollama models: sequential (local inference, no parallel support) ───────
+    for model_cfg in ollama_models:
         print(f"\n{'#'*90}")
-        print(f"# Testing model: {model_name}")
+        print(f"# Testing model: {model_cfg.name}")
         print(f"{'#'*90}")
+        all_model_results[model_cfg.name] = await run_all_combinations(model_cfg)
 
-        results = await run_all_combinations(model_cfg)
-        all_model_results[model_name] = results
+    # ── API models: concurrent (independent servers, independent rate limits) ──
+    if api_models:
+        print(f"\n{'#'*90}")
+        print(f"# Testing API models concurrently: {', '.join(m.name for m in api_models)}")
+        print(f"{'#'*90}")
+        api_results = await asyncio.gather(*[run_all_combinations(m) for m in api_models])
+        for model_cfg, results in zip(api_models, api_results):
+            all_model_results[model_cfg.name] = results
 
     # ── Print tables per model ─────────────────────────────────────────────────
     print(f"\n\n{'='*90}")
@@ -737,8 +732,7 @@ async def main():
     print(f"{'='*90}")
 
     for model_cfg in MODELS:
-        model_name = model_cfg["name"]
-        print_model_tables(model_name, all_model_results[model_name], PROMPTS)
+        print_model_tables(model_cfg.name, all_model_results[model_cfg.name], PROMPTS)
 
     # ── Cross-method summary ───────────────────────────────────────────────────
     print_cross_method_summary(all_model_results, PROMPTS)
@@ -747,7 +741,6 @@ async def main():
     output_dir = Path(__file__).parent
     raw_json_path = output_dir / "augment_results_raw.json"
 
-    # Convert tuple keys to strings for JSON serialization
     serializable = {}
     for model_name, results in all_model_results.items():
         serializable[model_name] = {}
