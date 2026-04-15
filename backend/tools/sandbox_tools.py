@@ -1,3 +1,10 @@
+# DEPRECATED: sandbox_tools.py
+# The LlmSandboxToolSpec is no longer used by SlideGenerationWorkflow.
+# slide_gen and modify_slides steps have been replaced by deterministic
+# PptxRenderer-based rendering (see tools/pptx_tools.py).
+# This file is retained because backend/tests/e2e/test_sandbox.py imports it.
+# Do not use in new code.
+
 """
 tools/sandbox_tools.py — Docker-based code execution sandbox.
 
