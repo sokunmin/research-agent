@@ -1,4 +1,9 @@
 ---
+## [2026-04-15] `FunctionCallingProgram` + Ollama `qwen3.5:2b` + 巢狀 array schema（`List[ParagraphItem]`）輸出 `{"argument_name": ..., "argument_value": ...}` 包裝，Pydantic validation fail `[版本: litellm 1.82.0 / 模型: qwen3.5:2b]`
+原因：`SlideOutline.content` 從 `str` 改為 `List[ParagraphItem]`（巢狀 array of objects）後，`qwen3.5:2b` 的 function calling 無法正確處理複雜 nested schema，改以 `{"argument_name": "content", "argument_value": "[...]"}` 包裝格式輸出，導致 `title` 與 `content` 兩個 required fields 皆 missing。注意：同一模型在 `content: str`（簡單 schema）時 function calling 正常；schema 變複雜才觸發此問題，與 [2026-03-28] 的 `{"properties": {...}}` 格式是同類問題的不同表現。
+修正：`slide_gen.py` 的 `summary2outline` step 將 `_fc_program`（`FunctionCallingProgram`）換為 `_text_program`（`LLMTextCompletionProgram`）；`LLMTextCompletionProgram` 將 JSON schema 嵌入 prompt text，不走 tool calling API，對任何 LLM 均相容。`_text_program` 預設使用 `_smart_llm`，比原本的 `_fast_llm` 慢，可視需求明確傳入 `llm=self._fast_llm`（須先確認該 model 能正確解析巢狀 schema）。
+結論：Ollama 本地模型的 function calling 對簡單 schema（純 `str`/`int` fields）尚可用；含 nested array of objects 的 schema 請一律改用 `LLMTextCompletionProgram`。
+---
 ## [2026-04-13] PPTX placeholder 的 `name` 欄位無語意，不可用字串比對識別用途 `[通用]`
 原因：`placeholder.name` 是 template 工具的 display label（如 `"Google Shape;10;p36"`），命名慣例因工具而異，不含 "Title"/"Body" 等語意，字串比對在非標準 template 上失效。
 修正：改用 `placeholder.placeholder_format.type`（`PP_PLACEHOLDER` enum，`TITLE=1` / `BODY=2`）過濾，此為 OpenXML 規格定義，跨所有 PPTX template 通用。
