@@ -2,6 +2,8 @@ from typing import Optional, Any, Literal, Dict
 
 from pydantic import BaseModel, Field
 
+IssueType = Literal["content_too_long", "content_missing", "visual_overlap", "ok"]
+
 
 class SlideOutline(BaseModel):
     """Slide outline for one page"""
@@ -30,12 +32,24 @@ class SlideOutlineWithLayout(BaseModel):
 
 class SlideValidationResult(BaseModel):
     is_valid: bool
-    suggestion_to_fix: str
+    issue_type: IssueType = Field(
+        default="ok",
+        description=(
+            "content_too_long: text too small/clipped, LLM must trim JSON content. "
+            "content_missing: slide appears empty but JSON has content, re-render. "
+            "visual_overlap: elements overlap, adjust placeholder position. "
+            "ok: no issues."
+        ),
+    )
+    suggestion_to_fix: str = Field(default="")
 
 
 class SlideNeedModifyResult(BaseModel):
     slide_idx: int
-    suggestion_to_fix: str
+    issue_type: IssueType = Field(default="content_missing")
+    suggestion_to_fix: str = Field(default="")
+    target_placeholder_name: Optional[str] = Field(default=None)
+    delta_top_pt: Optional[float] = Field(default=None)
 
 
 class WorkflowStreamingEvent(BaseModel):
