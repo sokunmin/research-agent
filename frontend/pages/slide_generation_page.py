@@ -411,42 +411,33 @@ def main():
     # Include the user input fragment
     gather_outline_feedback(artifact_render)
 
-    # Render the PDF and download button in the right_column
-    with right_column:
-        # Display the PDF if available
-        if "download_url_pdf" in st.session_state and st.session_state.download_url_pdf:
-            download_url_pdf = st.session_state.download_url_pdf
-            try:
-                # Fetch the PDF content
-                pdf_response = httpx.get(download_url_pdf)
-                pdf_response.raise_for_status()
-                st.session_state.pdf_data = pdf_response.content
+    # Render PDF preview and download button full-width below both columns
+    if "download_url_pdf" in st.session_state and st.session_state.download_url_pdf:
+        st.divider()
+        st.markdown("### Generated Slide Deck:")
+        try:
+            pdf_response = httpx.get(st.session_state.download_url_pdf)
+            pdf_response.raise_for_status()
+            st.session_state.pdf_data = pdf_response.content
+            st.pdf(st.session_state.pdf_data, height=800)
+        except Exception as e:
+            st.error(f"Failed to load the PDF file: {str(e)}")
 
-                st.markdown("### Generated Slide Deck:")
-                st.pdf(st.session_state.pdf_data, height=600)
-            except Exception as e:
-                st.error(f"Failed to load the PDF file: {str(e)}")
-
-        # Provide the download button for PPTX if available
-        if (
-            "download_url_pptx" in st.session_state
-            and st.session_state.download_url_pptx
-        ):
-            download_url_pptx = st.session_state.download_url_pptx
-            try:
-                # Fetch the PPTX content
-                pptx_response = httpx.get(download_url_pptx)
-                pptx_response.raise_for_status()
-                pptx_data = pptx_response.content
-
-                st.download_button(
-                    label="Download Generated PPTX",
-                    data=pptx_data,
-                    file_name="generated_slides.pptx",
-                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                )
-            except Exception as e:
-                st.error(f"Failed to load the PPTX file: {str(e)}")
+    if (
+        "download_url_pptx" in st.session_state
+        and st.session_state.download_url_pptx
+    ):
+        try:
+            pptx_response = httpx.get(st.session_state.download_url_pptx)
+            pptx_response.raise_for_status()
+            st.download_button(
+                label="Download Generated PPTX",
+                data=pptx_response.content,
+                file_name="generated_slides.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            )
+        except Exception as e:
+            st.error(f"Failed to load the PPTX file: {str(e)}")
 
 
 main()
