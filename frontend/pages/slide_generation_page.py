@@ -234,9 +234,8 @@ def workflow_display():
             status.update(label="✅ Agent finished!", state="complete", expanded=False)
 
 
-def gather_outline_feedback(placeholder):
-    container = placeholder.container()
-    with container:
+@st.fragment
+def gather_outline_feedback():
         logging.debug(
             f"gather_outline_feedback: "
             f"st.session_state.user_input_required: {st.session_state.user_input_required}"
@@ -378,7 +377,6 @@ def main():
 
     with right_column:
         st.write("Workflow Artifacts:")
-        artifact_render = st.empty()
 
     if submit_button:
         # Reset the workflow_complete flag for a new workflow
@@ -408,8 +406,8 @@ def main():
     with left_column:
         workflow_display()
 
-    # Include the user input fragment
-    gather_outline_feedback(artifact_render)
+    with right_column:
+        gather_outline_feedback()
 
     # Render PDF preview and download button full-width below both columns
     if "download_url_pdf" in st.session_state and st.session_state.download_url_pdf:
