@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     LLM_SMART_MODEL: str = "groq/openai/gpt-oss-120b"
     LLM_FAST_MODEL: str = "groq/openai/gpt-oss-20b"
     LLM_VISION_MODEL: str = "gemini/gemini-2.5-flash"
-    LLM_DISABLE_THINK: bool = False  # set true for Ollama models with think mode (e.g. qwen3)
+    DISABLE_OLLAMA_THINK: bool = False  # set true for Ollama models with think mode (e.g. qwen3)
     LLM_VISION_FALLBACK_MODEL: str = "openrouter/google/gemma-3-27b-it:free"
     LLM_EMBED_MODEL: str = "gemini/gemini-embedding-001"
 
