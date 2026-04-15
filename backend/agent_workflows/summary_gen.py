@@ -220,7 +220,7 @@ class SummaryGenerationDummyWorkflow(HumanInTheLoopWorkflow):
     @step
     async def dummy_stop_step(self, ev: DummyEvent) -> StopEvent:
         return StopEvent(
-            result="workflow_artifacts/SummaryGenerationWorkflow/5sn92wndsx/data/paper_summaries"
+            result="workflow_artifacts/SummaryGenerationWorkflow/dummy-id/papers_images"
         )
 
 
