@@ -186,19 +186,17 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         self._emit_message(ctx, inspect.currentframe().f_code.co_name,
                            message="Making summary to slide outline...")
         if isinstance(ev, OutlineFeedbackEvent):
-            program = self._fc_program(SlideOutline, MODIFY_SUMMARY2OUTLINE_PMT)
+            program = self._text_program(SlideOutline, MODIFY_SUMMARY2OUTLINE_PMT)
             response = await program.acall(
                 summary_txt=ev.summary,
                 outline_txt=ev.outline.model_dump(),
                 feedback=ev.feedback,
-                description="Data model for the slide page outline",
             )
 
         else:
-            program = self._fc_program(SlideOutline, SUMMARY2OUTLINE_PMT)
+            program = self._text_program(SlideOutline, SUMMARY2OUTLINE_PMT)
             response = await program.acall(
                 summary=ev.summary,
-                description="Data model for the slide page outline",
             )
         # async for response in generator:
         #     # Allow the workflow to stream this piece of response
@@ -308,14 +306,14 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         )
         front_slide = SlideOutlineWithLayout(
             title=presentation_title,
-            content=presentation_subtitle,
+            content=[ParagraphItem(text=presentation_subtitle, level=0)],
             layout_name=cover_layout,
             idx_title_placeholder=idx_title,
             idx_content_placeholder=idx_content,
         )
         thankyou_slide = SlideOutlineWithLayout(
             title="Thank You",
-            content="Questions and Discussion",
+            content=[ParagraphItem(text="Questions and Discussion", level=0)],
             layout_name=cover_layout,
             idx_title_placeholder=idx_title,
             idx_content_placeholder=idx_content,
@@ -380,27 +378,18 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             ctx, "validate_slides", message=f"{n_retry}th validation pass..."
         )
 
-        # ── Stop immediately if max retries reached ──────────────────────────
-        if n_retry >= self.max_validation_retries:
-            self._emit_message(
-                ctx, "validate_slides",
-                message=f"Max retries ({self.max_validation_retries}) reached, stopping.",
-            )
-            self.copy_final_slide(await ctx.store.get("latest_pptx_file"))
-            return StopEvent(str(self.workflow_artifacts_path / "final.pptx"))
-
-        # ── Layer A: content integrity (cheap, no VLM) ───────────────────────
+        # ── Step 1: content integrity check (programmatic, no VLM) ─────────────
         empty_indices = self.renderer.content_integrity_check(
             Path(ev.pptx_fpath), outlines
         )
         if empty_indices:
             self._emit_message(
                 ctx, "validate_slides",
-                message=f"Layer-A: {len(empty_indices)} empty slides found, re-rendering...",
+                message=f"Step 1: {len(empty_indices)} empty slides found, re-rendering...",
             )
             return ContentMissingFixEvent(outlines_fpath=outlines_fpath)
 
-        # ── Layer B: VLM visual validation ───────────────────────────────────
+        # ── Step 2: VLM visual validation ────────────────────────────────────
         img_dir = self.pptx_conversion_spec.pptx2images(Path(ev.pptx_fpath))
         image_documents = SimpleDirectoryReader(img_dir).load_data()
         needs_modify: list[SlideNeedModifyResult] = []
@@ -422,6 +411,15 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
 
         if not needs_modify:
             self._emit_message(ctx, "validate_slides", message="Slides validated!")
+            self.copy_final_slide(await ctx.store.get("latest_pptx_file"))
+            return StopEvent(str(self.workflow_artifacts_path / "final.pptx"))
+
+        # ── Max retries reached: stop with warning ────────────────────────────
+        if n_retry >= self.max_validation_retries:
+            self._emit_message(
+                ctx, "validate_slides",
+                message=f"Max retries ({self.max_validation_retries}) reached, stopping.",
+            )
             self.copy_final_slide(await ctx.store.get("latest_pptx_file"))
             return StopEvent(str(self.workflow_artifacts_path / "final.pptx"))
 
@@ -474,12 +472,22 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     role="user",
                     content=CONTENT_FIX_PMT.format(
                         slide_idx=issue.slide_idx,
-                        current_content=outlines[issue.slide_idx].get("content", ""),
+                        current_content=json.dumps(
+                            outlines[issue.slide_idx].get("content", []),
+                            ensure_ascii=False,
+                        ),
                     ),
                 )
             ]
             response = await self._fast_llm.achat(messages)
-            outlines[issue.slide_idx]["content"] = response.message.content.strip()
+            try:
+                outlines[issue.slide_idx]["content"] = json.loads(
+                    response.message.content.strip()
+                )
+            except json.JSONDecodeError:
+                logger.warning(
+                    f"content_fix: JSON parse failed for slide {issue.slide_idx}, keeping original"
+                )
             self._emit_message(
                 ctx, "content_fix",
                 message=f"Trimmed content for slide {issue.slide_idx}",

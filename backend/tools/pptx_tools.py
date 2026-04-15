@@ -184,7 +184,14 @@ class PptxRenderer:
                 ph = slide.placeholders[idx_c]
                 ph.text_frame.clear()
                 ph.text_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-                ph.text_frame.paragraphs[0].text = item["content"]
+                content = item.get("content", [])
+                if isinstance(content, str):
+                    # backward compatibility: plain string → single level-0 paragraph
+                    content = [{"text": content, "level": 0}]
+                for i, para in enumerate(content):
+                    p = ph.text_frame.paragraphs[0] if i == 0 else ph.text_frame.add_paragraph()
+                    p.text = para.get("text", "") if isinstance(para, dict) else str(para)
+                    p.level = para.get("level", 0) if isinstance(para, dict) else 0
         output_path = self._output_dir / output_fname
         prs.save(str(output_path))
         return output_path
@@ -199,7 +206,11 @@ class PptxRenderer:
         prs = Presentation(str(pptx_path))
         empty = []
         for i, (slide, item) in enumerate(zip(prs.slides, outlines)):
-            if not (item.get("title", "").strip() or item.get("content", "").strip()):
+            content = item.get("content", [])
+            content_text = "".join(
+                p.get("text", "") for p in content
+            ) if isinstance(content, list) else str(content)
+            if not (item.get("title", "").strip() or content_text.strip()):
                 continue  # intentionally empty layout
             slide_text = "".join(
                 s.text_frame.text for s in slide.shapes if s.has_text_frame

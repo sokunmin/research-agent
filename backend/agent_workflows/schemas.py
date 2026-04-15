@@ -1,22 +1,28 @@
-from typing import Optional, Any, Literal, Dict
+from typing import Optional, Any, Literal, Dict, List
 
 from pydantic import BaseModel, Field
 
 IssueType = Literal["content_too_long", "content_missing", "visual_overlap", "ok"]
 
 
+class ParagraphItem(BaseModel):
+    """One paragraph in a slide's content area."""
+    text: str = Field(..., description="Plain text only — no markdown, no * or - prefix")
+    level: int = Field(default=0, description="Indent level: 0=main bullet, 1=sub-bullet")
+
+
 class SlideOutline(BaseModel):
     """Slide outline for one page"""
 
     title: str = Field(..., description="Title of the slide")
-    content: str = Field(..., description="Main text content of the slide")
+    content: List[ParagraphItem] = Field(..., description="Slide body as a list of paragraphs")
 
 
 class SlideOutlineWithLayout(BaseModel):
     """Slide outline with layout information for one page"""
 
     title: str = Field(..., description="Title of the slide")
-    content: str = Field(..., description="Main text content of the slide")
+    content: List[ParagraphItem] = Field(..., description="Slide body as a list of paragraphs")
     layout_name: str = Field(
         ..., description="Name of the page layout to be used for the slide"
     )

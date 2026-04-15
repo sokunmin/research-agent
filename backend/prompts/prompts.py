@@ -113,15 +113,15 @@ Ensure that the summary is clear and concise, avoiding unnecessary jargon or ove
 """
 
 summary2outline_requirements = """
-
-- Use the paper title as the slide title
-- Use the summary in the markdown file as the slide content, convert the main markdown headings (Key Approach,
- Key Components/Steps, Model Training/Finetuning, Dataset Details, Evaluation Methods and Metrics, Conclusion) to
- bullet points by prepending each heading text with a bullet (* or -).
-- Rephrase the content under each bullet point to make it more concise, and straight to the point, one or two
- sentences, maximum 20 words.
-- Do not use markdown formatting in the output: no **bold**, no *italic*, no backticks (`).
- Use plain text only. Bullet points use * or - prefix only.
+- title: use the paper title as the slide title
+- content: a JSON list of paragraph objects. Each of the six headings (Key Approach,
+ Key Components/Steps, Model Training/Finetuning, Dataset Details,
+ Evaluation Methods and Metrics, Conclusion) becomes one item at level=0.
+ Format: [{"text": "<heading>: <rephrased content>", "level": 0}, ...]
+ Rules for text values:
+   - Plain text only: no **bold**, no *italic*, no backticks, no * or - prefix
+   - Maximum 20 words per item
+   - Use level=1 for sub-points only if genuinely needed
 """
 
 SUMMARY2OUTLINE_PMT = (
@@ -137,7 +137,7 @@ Here is the markdown content: {summary}
 
 Output the following fields:
 - title: the slide title text
-- content: the slide body text with bullet points
+- content: a JSON list, e.g. [{"text": "Key Approach: novel method...", "level": 0}, ...]
 """
 )
 
@@ -154,7 +154,7 @@ Please modify the outline based on the feedback and provide the updated outline,
 
 Output the following fields:
 - title: the slide title text
-- content: the slide body text with bullet points
+- content: a JSON list, e.g. [{"text": "Key Approach: novel method...", "level": 0}, ...]
 """
 )
 
@@ -233,10 +233,10 @@ Slide content to classify:
 
 Output the following fields:
 - title: the slide title text (copy verbatim from input)
-- content: the slide body text (copy verbatim from input)
+- content: the content list (copy verbatim from input, do not modify the list)
 - layout_name: the exact name string of the chosen layout (must match one of the available layout names exactly)
-- idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout.
-- idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout.
+- idx_title_placeholder: the numeric index (integer) of the title placeholder in the chosen layout.
+- idx_content_placeholder: the numeric index (integer) of the content placeholder in the chosen layout.
 CRITICAL: For layouts THREE_PHOTO, FULL_PHOTO, and BLANK:
   - idx_title_placeholder MUST be null (not a number, not a string)
   - idx_content_placeholder MUST be null (not a number, not a string)
@@ -264,15 +264,16 @@ Output the JSON fields: is_valid, issue_type, suggestion_to_fix.
 CONTENT_FIX_PMT = """
 You are an AI that shortens slide content that is too long to display clearly.
 
-The slide at index {slide_idx} has the following content that is too long:
+The slide at index {slide_idx} has too many items. Current content list:
 ---
 {current_content}
 ---
 
-Shorten this content to approximately 60% of its current length.
+Reduce to approximately 60% of current items by removing less important points.
 Requirements:
-- Preserve the bullet point format (* or -)
+- Output a JSON list with the same structure: [{{"text": "...", "level": 0}}, ...]
 - Keep the most important points; remove redundant detail
 - Do not add new information
-- Output ONLY the shortened content text, no explanation
+- Plain text only in text values: no **bold**, no *italic*, no backticks
+- Output ONLY the JSON list, no explanation
 """
