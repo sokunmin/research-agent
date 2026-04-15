@@ -80,19 +80,6 @@ Below is the current conversation consisting of interleaving human and assistant
 """
 
 
-SANDBOX_STOP_RULE_PMT = """
-## Critical Stop Rule
-If you see "LIMIT REACHED" in any Observation, output IMMEDIATELY:
-  Thought: Maximum attempts reached. Cannot complete the task.
-  Answer: Task failed after {max_retries} attempts. Error: [summarise the last error seen]
-Do NOT call run_code again after seeing "LIMIT REACHED".
-
-"""
-# Injected into REACT_PROMPT_SUFFIX at call site (slide_gen.py) via str.replace().
-# {max_retries} is filled with settings.SLIDE_GEN_MAX_RETRY_ATTEMPTS.
-# Kept separate from REACT_PROMPT_SUFFIX because it is sandbox-specific and needs
-# a runtime config value — REACT_PROMPT_SUFFIX is a static template.
-
 
 SUMMARIZE_PAPER_PMT = """
 You are an AI specialized in summarizing scientific papers.
@@ -133,6 +120,8 @@ summary2outline_requirements = """
  bullet points by prepending each heading text with a bullet (* or -).
 - Rephrase the content under each bullet point to make it more concise, and straight to the point, one or two
  sentences, maximum 20 words.
+- Do not use markdown formatting in the output: no **bold**, no *italic*, no backticks (`).
+ Use plain text only. Bullet points use * or - prefix only.
 """
 
 SUMMARY2OUTLINE_PMT = (
@@ -254,90 +243,36 @@ CRITICAL: For layouts THREE_PHOTO, FULL_PHOTO, and BLANK:
   These layouts have NO title or content placeholders. Outputting any number here is incorrect and will cause a runtime error.
 """
 
-SLIDE_GEN_PMT = """
-You are an AI code executor that generates a PowerPoint slide deck using python-pptx.
-
-Your ONLY job is to write Python code and execute it using the `run_code` tool.
-Do NOT explain, describe, or ask the user questions. Just write and execute the code.
-
-Input files available in the sandbox:
-- Slide outlines JSON: `{json_file_path}` (list of slide outline objects with layout info)
-- PPTX template: `{template_fpath}`
-
-Steps you MUST follow in order:
-1. Use `run_code` to read and print `{json_file_path}` so you understand the structure.
-2. Use `run_code` to execute python-pptx code that generates the slide deck.
-3. Use `list_files` to confirm `{generated_slide_fname}` exists in the sandbox.
-4. If the file does not exist, fix and re-run the code.
-5. When `{generated_slide_fname}` is confirmed present, output: "Done. {generated_slide_fname} has been saved."
-
-Requirements for the generated code:
-- Load the template from `{template_fpath}` using Presentation()
-- Loop over all items in `{json_file_path}`; create one slide per outline item
-- Layout lookup — add_slide() requires a SlideLayout object, NOT a string or int:
-      layout = next(l for l in prs.slide_layouts if l.name == item['layout_name'])
-      slide  = prs.slides.add_slide(layout)
-- Placeholder fill with null guard — idx values are None for visual-only layouts:
-      if item['idx_title_placeholder'] is not None:
-          slide.placeholders[item['idx_title_placeholder']].text = item['title']
-      if item['idx_content_placeholder'] is not None:
-          slide.placeholders[item['idx_content_placeholder']].text = item['content']
-- For layouts with no text placeholders (e.g. THREE_PHOTO, FULL_PHOTO, BLANK),
-  add the slide with the correct layout and leave all placeholders unfilled
-- The JSON already contains ALL slides in the correct order, including the front page
-  and thank-you slides. Loop through EVERY item — do NOT skip any,
-  do NOT add extra slides outside the loop.
-- If a placeholder has auto_size=TEXT_TO_FIT_SHAPE, use MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-  and do NOT set font size
-- Save the final file as `/sandbox/{generated_slide_fname}` using prs.save()
-
-CRITICAL: You MUST use `run_code` to actually execute the code. Do not output code as text only.
-CRITICAL: Task is complete only when `list_files` confirms `{generated_slide_fname}` exists.
-
-"""
-# - For each key heading in the paper summary, create a different text box in the slide
-# - For different level of heading in the summary markdown, create paragraph with
-#  appropriate font size in the text box
 
 SLIDE_VALIDATION_PMT = """
-You are an AI that validates the slide deck generated according to following rules:
-- The slide texts are clearly readable, not cut off, not overflowing the textbox
- and not overlapping with other elements
+You are an AI that validates a PowerPoint slide image.
 
-If any of the above rules are violated, you need to provide suggestion on how to fix it.
- Note: missing key aspect can be due to the 
- font size being too large and the text is not visible in the slide, make sure to suggest checking the original 
- slide content texts to see if they exist, and reducing the font size of the corresponding content 
- text box as a solution.
-If all rules are satisfied, you need to provide a message that the slide deck is valid.
+Rules — a slide is invalid if:
+- Text is cut off, overflows its text box, or is too small to read (font < ~10pt equivalent)
+- Two elements visually overlap each other
+- A placeholder that should have content appears empty
 
+If the slide is invalid, you MUST set issue_type to exactly one of:
+  "content_too_long"  — text is present but too small/clipped (LLM will trim the content)
+  "content_missing"   — a placeholder appears empty (will re-render from source JSON)
+  "visual_overlap"    — two visible elements overlap (Python will adjust position)
+  "ok"               — slide is valid (use when is_valid=true)
+
+Output the JSON fields: is_valid, issue_type, suggestion_to_fix.
 """
 
-SLIDE_MODIFICATION_PMT = """
-You are an AI assistant specialized in modifying slide decks based on user feedback using the python-pptx library. 
-Follow these steps precisely:
-1. Understand Feedback and plan for modifications.
-	- Analyzes the user’s feedback to grasp the required changes.
-	- Develops a clear strategy on how to implement feedback points effectively in the slide deck.
-	
-2. Generate Python Code:
-   - Write Python code using the python-pptx library that applies the modifications 
-   to the latest version of the slide deck.
-   - Ensure the code accurately reflects all aspects of the feedback.
+CONTENT_FIX_PMT = """
+You are an AI that shortens slide content that is too long to display clearly.
 
-3. Execute the Code:
-   - Run the generated Python code to modify the slide deck.
-   - Handle any potential errors during execution to ensure the process completes successfully.
+The slide at index {slide_idx} has the following content that is too long:
+---
+{current_content}
+---
 
-4. Store the Modified Slide Deck:
-   - Save the newly modified slide deck as a new file (file path specified by user).
-   - Confirm that the file is stored correctly.
-   
-5. Confirm Completion:
-   - Only after successfully completing all the above steps, provide a confirmation message to the user
-    indicating that the slide deck has been modified and stored successfully.
-   - Do not provide any user-facing responses before ensuring the slide deck is properly updated and saved.
-
-**Important**: Do not skip any steps or provide responses to the user until the entire process
- is fully completed and the new slide deck file is securely stored.
+Shorten this content to approximately 60% of its current length.
+Requirements:
+- Preserve the bullet point format (* or -)
+- Keep the most important points; remove redundant detail
+- Do not add new information
+- Output ONLY the shortened content text, no explanation
 """

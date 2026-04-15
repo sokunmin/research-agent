@@ -10,18 +10,13 @@ from typing import Optional
 import click
 
 import inspect
-from llama_index.core import (
-    SimpleDirectoryReader,
-    PromptTemplate,
-)
+from llama_index.core import SimpleDirectoryReader
 from llama_index.core.workflow import (
     Context,
     StartEvent,
     StopEvent,
     step,
 )
-from llama_index.core.tools import FunctionTool
-from llama_index.core.agent.workflow import ReActAgent, AgentStream, ToolCall, ToolCallResult
 from llama_index.core.llms import ChatMessage
 from llama_index.core.program import (
     FunctionCallingProgram,
@@ -30,19 +25,14 @@ from llama_index.core.program import (
 
 from config import settings
 from prompts.prompts import (
-    SLIDE_GEN_PMT,
-    REACT_PROMPT_SUFFIX,
-    SANDBOX_STOP_RULE_PMT,
     SUMMARY2OUTLINE_PMT,
     AUGMENT_LAYOUT_PMT,
     SLIDE_VALIDATION_PMT,
-    SLIDE_MODIFICATION_PMT,
     MODIFY_SUMMARY2OUTLINE_PMT,
+    CONTENT_FIX_PMT,
 )
 from services.model_factory import model_factory
-from tools.sandbox_tools import LlmSandboxToolSpec, SANDBOX_DIR
-from tools.pptx_tools import PptxLayoutToolSpec, PptxConversionToolSpec
-from tools.debug_tools import WorkflowDebugToolSpec
+from tools.pptx_tools import PptxLayoutToolSpec, PptxConversionToolSpec, PptxRenderer
 from agent_workflows.events import *
 from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow
 import mlflow
@@ -83,24 +73,14 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         )
         self.workflow_artifacts_path.mkdir(parents=True, exist_ok=True)
 
-        self.sandbox = LlmSandboxToolSpec(
-            local_save_path=self.workflow_artifacts_path.as_posix(),
-        )
         # ToolSpec instances — each domain's tools are managed by its own class.
-        # to_tool_list() controls which specs are exposed to the ReActAgent.
         self.pptx_spec            = PptxLayoutToolSpec(self.slide_template_path)
         self.pptx_conversion_spec = PptxConversionToolSpec()
-        self.debug_spec           = WorkflowDebugToolSpec(self.workflow_artifacts_path)
+        self.renderer             = PptxRenderer(self.slide_template_path, self.workflow_artifacts_path)
 
         self.parent_workflow = None
         self.user_input_future = asyncio.Future()
         self.user_input = None
-
-    def __del__(self) -> None:
-        try:
-            self.sandbox.close()
-        except Exception:
-            pass
 
     def _fc_program(self, output_cls, prompt_template_str, llm=None):
         """FunctionCallingProgram factory — structured output via tool calling API."""
@@ -133,6 +113,23 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         )
         return resp.message.content.strip()
 
+    async def _generate_subtitle(
+        self, paper_titles: list[str], presentation_title: str
+    ) -> str:
+        """Generate a concise presentation subtitle from paper titles and the already-generated title."""
+        prompt = (
+            f"Presentation title: '{presentation_title}'\n"
+            "Research paper titles:\n"
+            + "\n".join(f"- {t}" for t in paper_titles)
+            + "\n\nGenerate a concise subtitle (max 8 words) that complements "
+              "the presentation title above. "
+              "Output the subtitle only, no explanation."
+        )
+        resp = await self._fast_llm.achat(
+            [ChatMessage(role="user", content=prompt)]
+        )
+        return resp.message.content.strip()
+
     def copy_final_slide(self, latest_pptx_filename: str):
         """
         Copy the latest validated pptx (identified by latest_pptx_filename) to final.pptx
@@ -159,52 +156,6 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             logger.info(f"Copied final PDF to {destination_pdf}")
         else:
             logger.warning(f"Corresponding PDF file {final_pdf_file} not found.")
-
-    def download_all_files_from_session(self) -> list[str]:
-        """Download all files from the sandbox container to the workflow artifacts path."""
-        local_files = []
-        for f in self.sandbox.list_files():
-            local_path = f"{self.workflow_artifacts_path.as_posix()}/{f.filename}"
-            logger.info(f"Downloading sandbox file: {f.file_full_path} → {local_path}")
-            self.sandbox.download_file_to_local(
-                remote_file_path=f.file_full_path,
-                local_file_path=local_path,
-            )
-            local_files.append(local_path)
-        return local_files
-
-    async def run_react_agent(
-        self, agent: ReActAgent, prompt: str, wf_ctx: Context
-    ) -> None:
-        """Run agent and forward streaming events to the workflow context.
-
-        Uses llama-index 0.14.x event streaming API:
-          handler = agent.run(prompt)
-          async for ev in handler.stream_events(): ...
-          response = await handler
-        """
-        handler = agent.run(prompt)
-        async for ev in handler.stream_events():
-            if isinstance(ev, AgentStream) and ev.delta:
-                self._emit_message(wf_ctx, "react_agent", message=ev.delta)
-            elif isinstance(ev, ToolCall):
-                logger.info(f"[Tool call] {ev.tool_name}({ev.tool_kwargs})")
-            elif isinstance(ev, ToolCallResult):
-                logger.info(f"[Tool result] {ev.tool_name}: {ev.tool_output}")
-        response = await handler
-        self._emit_message(wf_ctx, "react_agent", message=f"Agent response: {response}")
-
-    def to_tool_list(self) -> list[FunctionTool]:
-        """Assemble tools exposed to the slide generation ReActAgent.
-
-        Each tool domain is managed by its own ToolSpec class.
-        To re-enable a disabled tool domain, uncomment the corresponding line.
-        """
-        return (
-            self.sandbox.to_tool_list()
-            # + self.pptx_spec.to_tool_list()    # disabled: agent reads layout from JSON
-            # + self.debug_spec.to_tool_list()   # disabled: debug tools not for agent
-        )
 
     @step(num_workers=1)
     async def get_summaries(self, ctx: Context, ev: StartEvent) -> SummaryEvent:
@@ -348,21 +299,24 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
 
         # Inject front page and thank-you slide deterministically so the agent
         # only needs to loop the JSON without conditional logic.
-        idx_title, idx_content = self.pptx_spec.get_placeholder_indices("TITLE_SLIDE")
-        presentation_title = await self._generate_title(
-            [s.title for s in slides_w_layout]
+        cover_layout = self.pptx_spec.find_cover_layout_name()
+        idx_title, idx_content = self.pptx_spec.get_placeholder_indices(cover_layout)
+        paper_titles = [s.title for s in slides_w_layout]
+        presentation_title = await self._generate_title(paper_titles)
+        presentation_subtitle = await self._generate_subtitle(
+            paper_titles, presentation_title
         )
         front_slide = SlideOutlineWithLayout(
             title=presentation_title,
-            content="Research Paper Survey",
-            layout_name="TITLE_SLIDE",
+            content=presentation_subtitle,
+            layout_name=cover_layout,
             idx_title_placeholder=idx_title,
             idx_content_placeholder=idx_content,
         )
         thankyou_slide = SlideOutlineWithLayout(
             title="Thank You",
             content="Questions and Discussion",
-            layout_name="TITLE_SLIDE",
+            layout_name=cover_layout,
             idx_title_placeholder=idx_title,
             idx_content_placeholder=idx_content,
         )
@@ -389,161 +343,188 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
     async def slide_gen(
         self, ctx: Context, ev: OutlinesWithLayoutEvent
     ) -> SlideGeneratedEvent:
-        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
-                           message="Agent is generating slide deck...")
-        agent = ReActAgent(
-            tools=self.to_tool_list(),
-            llm=self._smart_llm,
-            verbose=True,
-            timeout=300,
+        self._emit_message(ctx, "slide_gen", message="Generating slide deck...")
+        with open(ev.outlines_fpath) as f:
+            outlines = json.load(f)
+        output_path = self.renderer.generate_pptx(outlines, self.generated_slide_fname)
+        self._emit_message(
+            ctx, "slide_gen", message=f"Slide deck generated: {output_path.name}"
         )
-        # Build REACT_PROMPT_SUFFIX with the sandbox stop rule injected before
-        # "## Current Conversation". Uses str.replace() to avoid conflicting with
-        # LlamaIndex's {tool_desc}/{tool_names} template substitution.
-        react_suffix = REACT_PROMPT_SUFFIX.replace(
-            "{sandbox_stop_rule}",
-            SANDBOX_STOP_RULE_PMT.format(max_retries=settings.SLIDE_GEN_MAX_RETRY_ATTEMPTS),
+        return SlideGeneratedEvent(
+            pptx_fpath=output_path.as_posix(),
+            outlines_fpath=str(ev.outlines_fpath),
         )
-        system_prompt = (
-            SLIDE_GEN_PMT.format(
-                json_file_path=f"{SANDBOX_DIR}/{ev.outlines_fpath.name}",
-                template_fpath=f"{SANDBOX_DIR}/{Path(self.slide_template_path).name}",
-                generated_slide_fname=self.generated_slide_fname,
-            )
-            + react_suffix
-        )
-        agent.update_prompts({"react_header": PromptTemplate(system_prompt)})
-
-        # Upload both input files so the agent can access them at /sandbox/<filename>
-        upload_result = self.sandbox.upload_file(local_file_path=self.slide_template_path)
-        logger.info(upload_result)
-        upload_result = self.sandbox.upload_file(local_file_path=str(ev.outlines_fpath))
-        logger.info(upload_result)
-
-        await self.run_react_agent(
-            agent,
-            f"An example of outline item in json is {ev.outline_example.model_dump()},"
-            f" generate a slide deck",
-            ctx,
-        )
-        local_files = self.download_all_files_from_session()
-        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
-                           message=f"Agent finished! Downloaded files to local path: {local_files}")
-        expected_pptx = self.workflow_artifacts_path / self.generated_slide_fname
-        if not expected_pptx.exists():
-            raise RuntimeError(
-                f"[slide_gen] Agent did not produce expected file: {expected_pptx}. "
-                "Agent may have misunderstood the task or failed to execute run_code."
-            )
-        return SlideGeneratedEvent(pptx_fpath=expected_pptx.as_posix())
 
     @step(num_workers=settings.NUM_WORKERS_VISION)
     async def validate_slides(
         self, ctx: Context, ev: SlideGeneratedEvent
-    ) -> StopEvent | SlideValidationEvent:
-        """Validate the generated slide deck"""
+    ) -> StopEvent | ContentFixEvent | ContentMissingFixEvent | VisualFixEvent:
+        """Validate generated slides with two-layer check.
+
+        Layer A (cheap): programmatic content integrity check — no VLM.
+        Layer B (expensive): VLM visual validation with structured issue_type.
+        Triage routes to the appropriate fix step based on issue_type priority.
+        """
         await asyncio.sleep(settings.DELAY_SECONDS_VISION)
         async with ctx.store.edit_state() as state:
             state["n_retry"] = state.get("n_retry", 0) + 1
             state["latest_pptx_file"] = Path(ev.pptx_fpath).name
         n_retry = await ctx.store.get("n_retry")
-        latest_pptx_file = await ctx.store.get("latest_pptx_file")
-        logger.info(f"[validate_slides] the retry count is: {n_retry}")
-        logger.info(
-            f"[validate_slides] Validating the generated slide deck"
-            f" {Path(ev.pptx_fpath).name} | {latest_pptx_file}..."
+        outlines_fpath = ev.outlines_fpath or str(
+            self.workflow_artifacts_path / self.slide_outlines_fname
         )
-        # slide to images
-        img_dir = self.pptx_conversion_spec.pptx2images(Path(ev.pptx_fpath))
-        logger.info(f"[validate_slides] Storing pptx as images in" f" {img_dir}...")
-        # upload image w. prompt for validation to llm and get structured response
-        image_documents = SimpleDirectoryReader(img_dir).load_data()
-        fn_name = inspect.currentframe().f_code.co_name
+        with open(outlines_fpath) as f:
+            outlines = json.load(f)
 
-        self._emit_message(ctx, fn_name, message=f"{n_retry}th try for validating the generated slide deck...")
-        needs_modify = []
-        for img_doc in image_documents:
+        self._emit_message(
+            ctx, "validate_slides", message=f"{n_retry}th validation pass..."
+        )
+
+        # ── Stop immediately if max retries reached ──────────────────────────
+        if n_retry >= self.max_validation_retries:
+            self._emit_message(
+                ctx, "validate_slides",
+                message=f"Max retries ({self.max_validation_retries}) reached, stopping.",
+            )
+            self.copy_final_slide(await ctx.store.get("latest_pptx_file"))
+            return StopEvent(str(self.workflow_artifacts_path / "final.pptx"))
+
+        # ── Layer A: content integrity (cheap, no VLM) ───────────────────────
+        empty_indices = self.renderer.content_integrity_check(
+            Path(ev.pptx_fpath), outlines
+        )
+        if empty_indices:
+            self._emit_message(
+                ctx, "validate_slides",
+                message=f"Layer-A: {len(empty_indices)} empty slides found, re-rendering...",
+            )
+            return ContentMissingFixEvent(outlines_fpath=outlines_fpath)
+
+        # ── Layer B: VLM visual validation ───────────────────────────────────
+        img_dir = self.pptx_conversion_spec.pptx2images(Path(ev.pptx_fpath))
+        image_documents = SimpleDirectoryReader(img_dir).load_data()
+        needs_modify: list[SlideNeedModifyResult] = []
+        for i, img_doc in enumerate(image_documents):
             response = await self._vlm.acomplete(
                 prompt=SLIDE_VALIDATION_PMT,
                 image_documents=[img_doc],
                 response_format=SlideValidationResult,
             )
             result = SlideValidationResult.model_validate_json(response.text)
-            if result.is_valid:
-                continue
-            page_idx = Path(img_doc.metadata.get("file_name", "")).stem.split("_")[-1]
-            needs_modify.append(
-                SlideNeedModifyResult(
-                    slide_idx=int(page_idx),
-                    suggestion_to_fix=result.suggestion_to_fix,
+            if not result.is_valid:
+                needs_modify.append(
+                    SlideNeedModifyResult(
+                        slide_idx=i,
+                        issue_type=result.issue_type,
+                        suggestion_to_fix=result.suggestion_to_fix,
+                    )
                 )
+
+        if not needs_modify:
+            self._emit_message(ctx, "validate_slides", message="Slides validated!")
+            self.copy_final_slide(await ctx.store.get("latest_pptx_file"))
+            return StopEvent(str(self.workflow_artifacts_path / "final.pptx"))
+
+        # ── Triage: content issues take priority over visual ──────────────────
+        content_issues = [
+            r for r in needs_modify
+            if r.issue_type in ("content_too_long", "content_missing")
+        ]
+        visual_issues = [r for r in needs_modify if r.issue_type == "visual_overlap"]
+
+        if content_issues:
+            too_long = [r for r in content_issues if r.issue_type == "content_too_long"]
+            if too_long:
+                self._emit_message(
+                    ctx, "validate_slides",
+                    message=f"Content too long on {len(too_long)} slides, trimming...",
+                )
+                return ContentFixEvent(
+                    results=too_long,
+                    pptx_fpath=ev.pptx_fpath,
+                    outlines_fpath=outlines_fpath,
+                )
+            else:
+                self._emit_message(
+                    ctx, "validate_slides", message="Content missing (VLM), re-rendering..."
+                )
+                return ContentMissingFixEvent(outlines_fpath=outlines_fpath)
+
+        if visual_issues:
+            self._emit_message(
+                ctx, "validate_slides",
+                message=f"Visual overlap on {len(visual_issues)} slides, fixing...",
             )
+            return VisualFixEvent(results=visual_issues, pptx_fpath=ev.pptx_fpath)
 
-        if needs_modify and n_retry < self.max_validation_retries:
-            self._emit_message(ctx, fn_name, message="The slides are not fixed, retrying...")
-            return SlideValidationEvent(results=needs_modify)
-
-        validation_passed = not needs_modify
-        self._emit_message(
-            ctx, fn_name,
-            message=(
-                "The slides are fixed!"
-                if validation_passed
-                else f"The slides are not fixed after {self.max_validation_retries} retries!"
-            ),
-        )
+        # Fallback — should not reach here
         self.copy_final_slide(await ctx.store.get("latest_pptx_file"))
-        return StopEvent(
-            str(self.workflow_artifacts_path / "final.pptx")
-            if validation_passed
-            else f"The slides are not fixed after {self.max_validation_retries} retries!"
+        return StopEvent(str(self.workflow_artifacts_path / "final.pptx"))
+
+    @step
+    async def content_fix(
+        self, ctx: Context, ev: ContentFixEvent
+    ) -> SlideGeneratedEvent:
+        """Trim content_too_long slides: LLM shortens JSON text, then re-render."""
+        with open(ev.outlines_fpath) as f:
+            outlines = json.load(f)
+        for issue in ev.results:
+            messages = [
+                ChatMessage(
+                    role="user",
+                    content=CONTENT_FIX_PMT.format(
+                        slide_idx=issue.slide_idx,
+                        current_content=outlines[issue.slide_idx].get("content", ""),
+                    ),
+                )
+            ]
+            response = await self._fast_llm.achat(messages)
+            outlines[issue.slide_idx]["content"] = response.message.content.strip()
+            self._emit_message(
+                ctx, "content_fix",
+                message=f"Trimmed content for slide {issue.slide_idx}",
+            )
+        with open(ev.outlines_fpath, "w") as f:
+            json.dump(outlines, f, indent=4)
+        output_path = self.renderer.generate_pptx(outlines, self.generated_slide_fname)
+        return SlideGeneratedEvent(
+            pptx_fpath=output_path.as_posix(),
+            outlines_fpath=ev.outlines_fpath,
         )
 
     @step
-    async def modify_slides(
-        self, ctx: Context, ev: SlideValidationEvent
+    async def content_missing_fix(
+        self, ctx: Context, ev: ContentMissingFixEvent
     ) -> SlideGeneratedEvent:
-        """Modify the slides based on the validation feedback"""
-
-        # give agent code_interpreter and get_layout tools
-        # use feedback as prompt to agent
-        # agent make changes to the slides and save slide
-        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
-                           message="Modifying the slides based on the feedback...")
-
-        latest_filename = await ctx.store.get("latest_pptx_file")
-        n_retry = await ctx.store.get("n_retry")
-        slide_pptx_path = f"{SANDBOX_DIR}/{latest_filename}"
-        modified_pptx_path = f"{Path(self.generated_slide_fname).stem}_v{n_retry}.pptx"
-        logger.info(f"[modify_slides] slide_pptx_path={slide_pptx_path}, modified={modified_pptx_path}")
-
-        react_suffix = REACT_PROMPT_SUFFIX.replace(
-            "{sandbox_stop_rule}",
-            SANDBOX_STOP_RULE_PMT.format(max_retries=settings.SLIDE_GEN_MAX_RETRY_ATTEMPTS),
+        """Re-render from JSON only — no LLM. JSON content is correct."""
+        with open(ev.outlines_fpath) as f:
+            outlines = json.load(f)
+        output_path = self.renderer.generate_pptx(outlines, self.generated_slide_fname)
+        self._emit_message(
+            ctx, "content_missing_fix", message="Re-rendered slides from JSON."
         )
-        agent = ReActAgent(
-            # TODO: all_layout_tool removed — modify step does not need to query layouts.
-            # Confirm with end-to-end test, then remove the commented reference.
-            tools=self.to_tool_list(),
-            llm=self._smart_llm,
-            verbose=True,
-            timeout=300,
-        )
-        agent.update_prompts(
-            {"react_header": PromptTemplate(SLIDE_MODIFICATION_PMT + react_suffix)}
-        )
-
-        await self.run_react_agent(
-            agent,
-            f"The latest version of the slide deck is at `{slide_pptx_path}`.\n"
-            f"The feedback is: '{ev.model_dump()}'\n"
-            f"Save the modified slide deck as `{modified_pptx_path}`.",
-            ctx,
-        )
-
-        self.download_all_files_from_session()
         return SlideGeneratedEvent(
-            pptx_fpath=f"{self.workflow_artifacts_path.as_posix()}/{Path(modified_pptx_path).name}"
+            pptx_fpath=output_path.as_posix(),
+            outlines_fpath=ev.outlines_fpath,
+        )
+
+    @step
+    async def visual_fix(
+        self, ctx: Context, ev: VisualFixEvent
+    ) -> SlideGeneratedEvent:
+        """Adjust placeholder positions for visual_overlap slides — no LLM."""
+        n_retry = await ctx.store.get("n_retry")
+        output_fname = f"{Path(self.generated_slide_fname).stem}_v{n_retry}.pptx"
+        output_path = self.renderer.apply_visual_fix(
+            Path(ev.pptx_fpath), ev.results, output_fname
+        )
+        outlines_fpath = str(self.workflow_artifacts_path / self.slide_outlines_fname)
+        self._emit_message(
+            ctx, "visual_fix", message=f"Adjusted placeholder positions → {output_fname}"
+        )
+        return SlideGeneratedEvent(
+            pptx_fpath=output_path.as_posix(),
+            outlines_fpath=outlines_fpath,
         )
 
 
