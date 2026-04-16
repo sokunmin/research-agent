@@ -34,7 +34,7 @@ from prompts.prompts import (
 from services.model_factory import model_factory
 from tools.pptx_tools import PptxLayoutToolSpec, PptxConversionToolSpec, PptxRenderer
 from agent_workflows.events import *
-from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow
+from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow, CLOUD_LLM_RETRY_POLICY
 import mlflow
 from utils.logger import get_logger
 
@@ -176,7 +176,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                                message=f"Sending {i}th summaries...")
             ctx.send_event(SummaryEvent(summary=s))
 
-    @step(num_workers=settings.NUM_WORKERS_FAST)
+    @step(num_workers=settings.NUM_WORKERS_FAST, retry_policy=CLOUD_LLM_RETRY_POLICY)
     async def summary2outline(
         self, ctx: Context, ev: SummaryEvent | OutlineFeedbackEvent
     ) -> OutlineEvent:
@@ -269,7 +269,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         else:
             logger.info("User input future is already done, skipping await.")
 
-    @step
+    @step(retry_policy=CLOUD_LLM_RETRY_POLICY)
     async def outlines_with_layout(
         self, ctx: Context, ev: OutlineOkEvent
     ) -> OutlinesWithLayoutEvent:
@@ -474,7 +474,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         self.copy_final_slide(await ctx.store.get("latest_pptx_file"))
         return StopEvent(str(self.workflow_artifacts_path / "final.pptx"))
 
-    @step
+    @step(retry_policy=CLOUD_LLM_RETRY_POLICY)
     async def content_fix(
         self, ctx: Context, ev: ContentFixEvent
     ) -> SlideGeneratedEvent:

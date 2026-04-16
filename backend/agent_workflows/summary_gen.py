@@ -16,7 +16,7 @@ from llama_index.core.workflow import (
 
 from utils.file_processing import pdf2images
 from agent_workflows.events import *
-from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow
+from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow, LOCAL_LLM_RETRY_POLICY
 from agent_workflows.paper_scraping import (
     download_paper_pdfs,
     PaperRelevanceFilter,
@@ -110,7 +110,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         for paper in papers:
             ctx.send_event(PaperEvent(paper=paper))
 
-    @step(num_workers=settings.NUM_WORKERS_FAST)
+    @step(num_workers=settings.NUM_WORKERS_FAST, retry_policy=LOCAL_LLM_RETRY_POLICY)
     async def filter_papers(self, ctx: Context, ev: PaperEvent) -> FilteredPaperEvent:
         research_topic = await ctx.store.get("research_topic")
         is_relevant, similarity_score = self._relevance_filter.assess_relevance(
