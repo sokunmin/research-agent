@@ -105,8 +105,9 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         prompt = (
             "Given these research paper titles:\n"
             + "\n".join(f"- {t}" for t in paper_titles)
-            + "\n\nGenerate a concise academic presentation title "
-              "(max 10 words). Output the title only, no explanation."
+            + "\n\nWhat is the unifying research theme across all these papers, "
+              "expressed as an academic presentation title (max 10 words)? "
+              "Output the title only."
         )
         resp = await self._fast_llm.achat(
             [ChatMessage(role="user", content=prompt)]
@@ -179,22 +180,22 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
     async def summary2outline(
         self, ctx: Context, ev: SummaryEvent | OutlineFeedbackEvent
     ) -> OutlineEvent:
-        """Convert the summary content of one paper to slide outline of one page, mainly
-        condense and shorten the elaborated summary content to short sentences or bullet points.
+        """Convert the summary content of one paper to a PaperSlideOutline containing
+        a section title slide plus 4 content slides per paper.
         """
         await asyncio.sleep(settings.DELAY_SECONDS_FAST)
         self._emit_message(ctx, inspect.currentframe().f_code.co_name,
                            message="Making summary to slide outline...")
         if isinstance(ev, OutlineFeedbackEvent):
-            program = self._text_program(SlideOutline, MODIFY_SUMMARY2OUTLINE_PMT)
+            program = self._text_program(PaperSlideOutline, MODIFY_SUMMARY2OUTLINE_PMT)
             response = await program.acall(
                 summary_txt=ev.summary,
-                outline_txt=ev.outline.model_dump(),
+                outline_txt=ev.paper_outline.model_dump(),
                 feedback=ev.feedback,
             )
 
         else:
-            program = self._text_program(SlideOutline, SUMMARY2OUTLINE_PMT)
+            program = self._text_program(PaperSlideOutline, SUMMARY2OUTLINE_PMT)
             response = await program.acall(
                 summary=ev.summary,
             )
@@ -203,7 +204,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         json_resp = {"original_summary": ev.summary}
         json_resp.update(json.loads(response.json()))
 
-        return OutlineEvent(summary=ev.summary, outline=response)
+        return OutlineEvent(summary=ev.summary, paper_outline=response)
 
     @step
     async def gather_feedback_outline(
@@ -221,7 +222,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             event_type="request_user_input",
             eid="".join(random.choices(string.ascii_lowercase + string.digits, k=10)),
             summary=ev.summary,
-            outline=ev.outline.dict(),
+            paper_outline=ev.paper_outline.dict(),
             message="Do you approve this outline? If not, please provide feedback.",
         )
         # Initialize the future if it's None
@@ -260,10 +261,10 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                 raise Exception("Invalid user response format")
 
             if approval == ":material/thumb_up:":
-                return OutlineOkEvent(summary=ev.summary, outline=ev.outline)
+                return OutlineOkEvent(summary=ev.summary, paper_outline=ev.paper_outline)
             else:
                 return OutlineFeedbackEvent(
-                    summary=ev.summary, outline=ev.outline, feedback=feedback
+                    summary=ev.summary, paper_outline=ev.paper_outline, feedback=feedback
                 )
         else:
             logger.info("User input future is already done, skipping await.")
@@ -284,22 +285,36 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                            message="Outlines for all papers are ready! Adding layout info...")
         all_layout_names = [layout["layout_name"] for layout in self.pptx_spec.all_layout]
 
-        # add layout to outline
-        program = self._text_program(SlideOutlineWithLayout, AUGMENT_LAYOUT_PMT)
-        slides_w_layout = []
-        for n, ev in enumerate(ready):
-            response = await program.acall(
-                slide_content=ev.outline.model_dump(),
-                available_layout_names=all_layout_names,
-                available_layouts=self.pptx_spec.all_layout,
-            )
-            slides_w_layout.append(response)
-
         # Inject front page and thank-you slide deterministically so the agent
         # only needs to loop the JSON without conditional logic.
         cover_layout = self.pptx_spec.find_cover_layout_name()
         idx_title, idx_content = self.pptx_spec.get_placeholder_indices(cover_layout)
-        paper_titles = [s.title for s in slides_w_layout]
+
+        # add layout to outline
+        program = self._text_program(SlideOutlineWithLayout, AUGMENT_LAYOUT_PMT)
+        slides_w_layout = []
+        for ev in ready:
+            # Paper section title slide — paper title + "authors, year" as subtitle
+            slides_w_layout.append(SlideOutlineWithLayout(
+                title=ev.paper_outline.paper_title,
+                content=[ParagraphItem(
+                    text=f"{ev.paper_outline.paper_authors}, {ev.paper_outline.paper_year}",
+                    level=0,
+                )],
+                layout_name=cover_layout,
+                idx_title_placeholder=idx_title,
+                idx_content_placeholder=idx_content,
+            ))
+            # 4 content slides — augment each with layout
+            for slide in ev.paper_outline.content_slides:
+                response = await program.acall(
+                    slide_content=slide.model_dump(),
+                    available_layout_names=all_layout_names,
+                    available_layouts=self.pptx_spec.all_layout,
+                )
+                slides_w_layout.append(response)
+
+        paper_titles = [ev.paper_outline.paper_title for ev in ready]
         presentation_title = await self._generate_title(paper_titles)
         presentation_subtitle = await self._generate_subtitle(
             paper_titles, presentation_title
