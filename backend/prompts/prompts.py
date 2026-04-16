@@ -101,60 +101,68 @@ Instructions:
  and if there are any benchmarks associated with it.
 - Evaluation Methods and Metrics: Detail the evaluation process used to assess the model's performance.
  Include the methods, benchmarks, and metrics employed.
-- Conclusion: Summarize the conclusions drawn by the authors. Include the significance of the findings, 
+- Conclusion: Summarize the conclusions drawn by the authors. Include the significance of the findings,
 any potential applications, limitations acknowledged by the authors, and suggested future work.
+- Authors: List the authors as shown on the paper's title page. If more than 3 authors, use "First Author et al." format.
+- Year: Publication year as a 4-digit number. Extract from the paper header or footer.
 
 Ensure that the summary is clear and concise, avoiding unnecessary jargon or overly technical language.
  Aim to be understandable to someone with a general background in the field.
- Ensure that all details are accurate and faithfully represent the content of the original paper. 
+ Ensure that all details are accurate and faithfully represent the content of the original paper.
  Avoid introducing any bias or interpretation beyond what is presented by the authors. Do not add any
  information that is not explicitly stated in the paper. Stick to the content presented by the authors.
 
 """
 
 summary2outline_requirements = """
-- title: use the paper title as the slide title
-- content: a JSON list of paragraph objects. Each of the six headings (Key Approach,
- Key Components/Steps, Model Training/Finetuning, Dataset Details,
- Evaluation Methods and Metrics, Conclusion) becomes one item at level=0.
- Format: [{"text": "<heading>: <rephrased content>", "level": 0}, ...]
- Rules for text values:
-   - Plain text only: no **bold**, no *italic*, no backticks, no * or - prefix
-   - Maximum 20 words per item
-   - Use level=1 for sub-points only if genuinely needed
+Extract paper_title, paper_authors, paper_year, and generate exactly 4 content_slides.
+
+paper_authors: as listed on the title page; if more than 3, use "First Author et al."
+paper_year: 4-digit publication year
+
+Each slide title answers one of these questions about the paper:
+  1. What problem does this work address and what is the proposed solution?
+  2. How was the approach designed and what resources or data were used?
+  3. What evidence or experiments support the claims?
+  4. What are the key contributions and open challenges?
+
+Each slide:
+  - title: concise academic heading (max 5 words) that answers the question
+  - content: max 4 bullets, each ≤ 15 words, level=0
+
+Plain text only: no **bold**, no *italic*, no backticks, no * or - prefix.
 """
 
 SUMMARY2OUTLINE_PMT = (
     """
-You are an AI specialized in generating PowerPoint slide outlines based on the content provided.
-You will receive a markdown string that contains the summary of papers and
-you will generate a slide outlines for each paper.
+You are an AI that generates PowerPoint slide outlines from academic paper summaries.
 Requirements:"""
     + summary2outline_requirements
     + """
-
-Here is the markdown content: {summary}
+Here is the paper summary: {summary}
 
 Output the following fields:
-- title: the slide title text
-- content: a JSON list, e.g. [{"text": "Key Approach: novel method...", "level": 0}, ...]
+- paper_title: the paper title
+- paper_authors: authors (e.g. "Guo et al.")
+- paper_year: publication year as integer
+- content_slides: list of exactly 4 slides, each with title and content list
 """
 )
 
 MODIFY_SUMMARY2OUTLINE_PMT = (
     """
-You are an AI that modifies the slide outlines generated according to given user feedback.
-The original summary is '''{summary_txt}'''.
-Previously generated outline is '''{outline_txt}'''.
-The feedback provided is: '''{feedback}'''.
-Please modify the outline based on the feedback and provide the updated outline, respecting
- the original requirements:"""
+You are an AI that modifies slide outlines based on user feedback.
+Original summary: '''{summary_txt}'''
+Current outline: '''{outline_txt}'''
+Feedback: '''{feedback}'''
+Apply the feedback while respecting the original requirements:"""
     + summary2outline_requirements
     + """
-
-Output the following fields:
-- title: the slide title text
-- content: a JSON list, e.g. [{"text": "Key Approach: novel method...", "level": 0}, ...]
+Output the same fields:
+- paper_title: unchanged
+- paper_authors: unchanged
+- paper_year: unchanged
+- content_slides: list of exactly 4 slides, each with title and content list
 """
 )
 
