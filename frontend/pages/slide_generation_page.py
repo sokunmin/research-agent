@@ -254,7 +254,7 @@ def gather_outline_feedback():
                     f"current submit state: {st.session_state.get('user_response_submitted')}"
                 )
                 summary = data.get("event_content").get("summary")
-                outline = data.get("event_content").get("outline")
+                outline = data.get("event_content").get("paper_outline")
                 prompt_message = data.get("event_content").get(
                     "message", "Please review the outline."
                 )

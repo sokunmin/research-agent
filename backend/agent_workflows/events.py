@@ -40,18 +40,18 @@ class SummaryEvent(Event):
 
 class OutlineFeedbackEvent(Event):
     summary: str
-    outline: SlideOutline
+    paper_outline: PaperSlideOutline
     feedback: str
 
 
 class OutlineEvent(Event):
     summary: str
-    outline: SlideOutline
+    paper_outline: PaperSlideOutline
 
 
 class OutlineOkEvent(Event):
     summary: str
-    outline: SlideOutline
+    paper_outline: PaperSlideOutline
 
 
 class OutlinesWithLayoutEvent(Event):
