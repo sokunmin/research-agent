@@ -2,7 +2,8 @@ import asyncio
 import mlflow
 from typing import Literal
 from config import settings
-from llama_index.core.workflow import Context, Event, RetryPolicy, Workflow
+from llama_index.core.workflow import Context, Event, Workflow
+from llama_index.core.workflow.retry_policy import RetryPolicy
 from agent_workflows.schemas import WorkflowStreamingEvent
 from utils.logger import get_logger
 
