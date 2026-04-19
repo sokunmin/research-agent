@@ -54,6 +54,10 @@ jobs:
             git rm -rf poc/
             REMOVED="${REMOVED:+$REMOVED, }poc"
           fi
+          if [ -f "experiments/REPORTING_GUIDE.md" ]; then
+            git rm -f experiments/REPORTING_GUIDE.md
+            REMOVED="${REMOVED:+$REMOVED, }experiments/REPORTING_GUIDE.md"
+          fi
 
           if [ -n "$REMOVED" ]; then
             git commit -m "chore(release): remove ${REMOVED} before merging to main"
