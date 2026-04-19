@@ -1,4 +1,12 @@
 ---
+## [2026-04-19] Ollama fallback 對 optional str 欄位回傳 `null`，Pydantic v2 拒絕（`default=""` 不處理 explicit null）`[通用: Pydantic v2 + Ollama fallback]`
+原因：Pydantic v2 的 `field: str = Field(default="")` 只在 key 缺席時套用 default；Ollama 輸出 `"suggestion_to_fix": null`（key 存在但值為 null），Pydantic 嚴格拒絕 `null → str` 強制轉換，拋 `Input should be a valid string`。
+修正：定義 `NullableStr = Annotated[str, BeforeValidator(lambda v: "" if v is None else v)]`，在 parse 邊界將 null 正規化為空字串；所有語意等價於空字串的 str 欄位改用此 type alias，`Optional[str]` 只用在 None 與 "" 有不同語意的欄位。
+---
+## [2026-04-19] Ollama fallback 回傳 JSON 被 markdown fences 包裹，`model_validate_json` 失敗 `[通用: Ollama fallback + structured output]`
+原因：Cloud model（Gemini）支援 `response_format` JSON 約束，回傳純 JSON；Ollama fallback 不支援此約束，在 JSON 外包上 ` ```json...``` ` fences，`model_validate_json(response.text)` 第一個字為 `` ` `` 而非 `{`，解析失敗。
+修正：在 `LiteLLMMultiModal._clean_response_text()` 統一處理：`response_format is not None` 時自動 strip fences（`removeprefix("```json").removeprefix("```").removesuffix("```")`），集中於 service 層，workflow step 不需各自防禦。
+---
 ## [2026-04-15] `FunctionCallingProgram` + Ollama `qwen3.5:2b` + 巢狀 array schema（`List[ParagraphItem]`）輸出 `{"argument_name": ..., "argument_value": ...}` 包裝，Pydantic validation fail `[版本: litellm 1.82.0 / 模型: qwen3.5:2b]`
 原因：`SlideOutline.content` 從 `str` 改為 `List[ParagraphItem]`（巢狀 array of objects）後，`qwen3.5:2b` 的 function calling 無法正確處理複雜 nested schema，改以 `{"argument_name": "content", "argument_value": "[...]"}` 包裝格式輸出，導致 `title` 與 `content` 兩個 required fields 皆 missing。注意：同一模型在 `content: str`（簡單 schema）時 function calling 正常；schema 變複雜才觸發此問題，與 [2026-03-28] 的 `{"properties": {...}}` 格式是同類問題的不同表現。
 修正：`slide_gen.py` 的 `summary2outline` step 將 `_fc_program`（`FunctionCallingProgram`）換為 `_text_program`（`LLMTextCompletionProgram`）；`LLMTextCompletionProgram` 將 JSON schema 嵌入 prompt text，不走 tool calling API，對任何 LLM 均相容。`_text_program` 預設使用 `_smart_llm`，比原本的 `_fast_llm` 慢，可視需求明確傳入 `llm=self._fast_llm`（須先確認該 model 能正確解析巢狀 schema）。

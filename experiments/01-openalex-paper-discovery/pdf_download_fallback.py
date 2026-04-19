@@ -1,7 +1,8 @@
 """
-extract-id.py
-─────────────
-Validate OpenAlex ID extraction and PDF download with fallback chain.
+pdf_download_fallback.py
+────────────────────────
+Validate OpenAlex ID extraction and PDF download with a 4-strategy fallback chain.
+This script provides the evidence for 'Reliable PDF Acquisition via Multi-Strategy Fallback Chains'.
 
 Search strategy
   search(QUERY) + is_oa=True + cited_by_count > CITED_THRESHOLD
