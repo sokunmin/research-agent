@@ -1,6 +1,11 @@
-from typing import Optional, Any, Literal, Dict, List
+from typing import Optional, Any, Literal, Dict, List, Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, BeforeValidator
+
+# Coerces null → "" at parse boundary.
+# Ollama fallback models return null for optional text fields despite response_format.
+# Cloud models (Gemini, Groq) return str directly — BeforeValidator is a no-op for them.
+NullableStr = Annotated[str, BeforeValidator(lambda v: "" if v is None else v)]
 
 IssueType = Literal["content_too_long", "content_missing", "visual_overlap", "ok"]
 
@@ -59,13 +64,13 @@ class SlideValidationResult(BaseModel):
             "ok: no issues."
         ),
     )
-    suggestion_to_fix: str = Field(default="")
+    suggestion_to_fix: NullableStr = Field(default="")
 
 
 class SlideNeedModifyResult(BaseModel):
     slide_idx: int
     issue_type: IssueType = Field(default="content_missing")
-    suggestion_to_fix: str = Field(default="")
+    suggestion_to_fix: NullableStr = Field(default="")
     target_placeholder_name: Optional[str] = Field(default=None)
     delta_top_pt: Optional[float] = Field(default=None)
 
