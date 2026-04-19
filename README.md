@@ -1,5 +1,3 @@
-[English](README.md) | [繁體中文](README.zh-TW.md)
-
 # Research Agent
 
 An end-to-end system that takes a research topic, discovers relevant academic
@@ -7,23 +5,29 @@ papers via OpenAlex, summarizes them, and auto-generates a PowerPoint
 presentation. Built on LlamaIndex event-driven workflows with Human-in-the-Loop
 support and real-time streaming via Server-Sent Events.
 
----
+This repository is a fork of
+[lz-chen/research-agent](https://github.com/lz-chen/research-agent) (last updated May 2025). Original author's articles: [Part 1](https://medium.com/data-science/how-i-streamline-my-research-and-presentation-with-llamaindex-workflows-3d75a9a10564) · [Part 2](https://medium.com/data-science/building-an-interactive-ui-for-llamaindex-workflows-842dd7abedde).
 
 ## 📺 Demo Video
 [![Research Agent Demo](https://img.youtube.com/vi/9haxpPmvc_o/0.jpg)](https://www.youtube.com/watch?v=9haxpPmvc_o)
 > *Watch the Research Agent in action: from topic input to final slide generation.*
 
----
-
-> **Development hardware:** MacBook M1 (16 GB unified memory) — all local model
-> inference and experiments in this repository run on this machine.
-
-This repository is a fork of
-[lz-chen/research-agent](https://github.com/lz-chen/research-agent) (last updated May 2025). Original author's articles: [Part 1](https://medium.com/data-science/how-i-streamline-my-research-and-presentation-with-llamaindex-workflows-3d75a9a10564) · [Part 2](https://medium.com/data-science/building-an-interactive-ui-for-llamaindex-workflows-842dd7abedde).
+## 🔍 Table of Contents
+- [System Architecture](#system-architecture)
+- [What I Changed and Why](#what-i-changed-and-why)
+- [Experiments](#experiments)
+  - [Paper Discovery Pipeline](#experiments--paper-discovery-pipeline)
+  - [Slide Generation Pipeline](#experiments--slide-generation-pipeline)
+- [Setup](#setup)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+- [Roadmap](#roadmap)
 
 ---
 
 ## System Architecture
+> **Development hardware:** MacBook M1 (16 GB unified memory) — all local model
+> inference and experiments in this repository run on this machine.
 
 ```
   Original (lz-chen)                        My Implementation
@@ -31,7 +35,7 @@ This repository is a fork of
 
 ┌─────────────────────────── PAPER DISCOVERY ───────────────────────────-─────┐
 │                                                                             │
-│  ┌── 1. RETRIEVAL (學術檢索) ──────────────────────────────────────────┐   │
+│  ┌── 1. PAPER RETRIEVAL ────────────────────────────────────────────────┐   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
 │  │ Tavily Search                    │ OpenAlex Retrieval (BM25)         │   │
 │  │ → Semantic Scholar Discovery     │ + Metadata Quality Filters        │   │
@@ -40,7 +44,7 @@ This repository is a fork of
 │  └──────────────────────────────────┴───────────────────────────────────┘   │
 │                                     │                                       │
 │                                     ▼                                       │
-│  ┌── 2. RE-RANKING & VERIFICATION (重排序與驗證) ───────────────────────┐    │
+│  ┌── 2. RE-RANKING & VERIFICATION ─────────────────────────────────────┐    │
 │  ├──────────────────────────────────┬──────────────────────────────────┤    │
 │  │ GPT-4o scores every candidate    │ ① Local Embedding Re-scoring     │   │
 │  │ (single LLM, no pre-filter)      │ ② LLM Verification (Strict)      │   │
