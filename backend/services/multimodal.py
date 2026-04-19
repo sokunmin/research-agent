@@ -122,6 +122,19 @@ class LiteLLMMultiModal(MultiModalLLM):
 
     # ── Sync methods ──────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _clean_response_text(text: str, response_format: Optional[Type[BaseModel]]) -> str:
+        """Strip markdown code fences when a structured JSON response is expected.
+
+        Ollama and some open-source fallback models wrap JSON in ```json...```
+        fences even when response_format is set. Cloud models (Gemini, OpenAI)
+        return pure JSON, so stripping is a no-op for them.
+        Only applied when response_format is a Pydantic model class (JSON expected).
+        """
+        if response_format is None:
+            return text
+        return text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+
     def _litellm_kwargs(self) -> dict:
         """Common kwargs for every litellm call, including retry and fallback config."""
         kw = dict(
@@ -146,7 +159,8 @@ class LiteLLMMultiModal(MultiModalLLM):
         if response_format is not None:
             kw["response_format"] = response_format
         resp = litellm.completion(model=self.model, messages=messages, **kw, **kwargs)
-        return CompletionResponse(text=resp.choices[0].message.content, raw=resp)
+        text = self._clean_response_text(resp.choices[0].message.content, response_format)
+        return CompletionResponse(text=text, raw=resp)
 
     def chat(
         self,
@@ -177,7 +191,8 @@ class LiteLLMMultiModal(MultiModalLLM):
         if response_format is not None:
             kw["response_format"] = response_format
         resp = await litellm.acompletion(model=self.model, messages=messages, **kw, **kwargs)
-        return CompletionResponse(text=resp.choices[0].message.content, raw=resp)
+        text = self._clean_response_text(resp.choices[0].message.content, response_format)
+        return CompletionResponse(text=text, raw=resp)
 
     async def achat(
         self,
