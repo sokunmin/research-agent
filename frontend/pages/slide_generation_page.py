@@ -364,8 +364,8 @@ def main():
         with st.form(key="slide_gen_form"):
             query = st.text_input(
                 "Enter the topic of your research:",
-                value="powerpoint slides automation with machine learning",
-                placeholder="powerpoint slides automation with machine learning",
+                value="",
+                placeholder="",
             )
             submit_button = st.form_submit_button(label="Submit")
 
