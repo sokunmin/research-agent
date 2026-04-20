@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     LLM_SMART_MODEL: str = "groq/openai/gpt-oss-120b"
     LLM_FAST_MODEL: str = "groq/openai/gpt-oss-20b"
     LLM_VISION_MODEL: str = "gemini/gemini-2.5-flash"
-    LLM_DISABLE_THINK: bool = False  # set true for Ollama models with think mode (e.g. qwen3)
+    DISABLE_OLLAMA_THINK: bool = False  # set true for Ollama models with think mode (e.g. qwen3)
     LLM_VISION_FALLBACK_MODEL: str = "openrouter/google/gemma-3-27b-it:free"
     LLM_EMBED_MODEL: str = "gemini/gemini-embedding-001"
 
@@ -37,6 +37,10 @@ class Settings(BaseSettings):
 
     # ── Paper discovery tuning ────────────────────────────────────────────────
     NUM_MAX_FINAL_PAPERS: int = 5        # top-N papers to download after filtering
+    ENABLE_QUERY_REFORMULATION: bool = False  # set true to reformulate user query via LLM before OpenAlex search
+    # Maximum consecutive run_code failures before the sandbox appends "LIMIT REACHED" to the
+    # observation, triggering the Critical Stop Rule in REACT_PROMPT_SUFFIX.
+    SLIDE_GEN_MAX_RETRY_ATTEMPTS: int = 3
     PAPER_CANDIDATE_LIMIT: int = 100         # max candidates fetched from OpenAlex
     PAPER_CANDIDATE_MIN_CITATIONS: int = 50  # minimum citation count filter
     PAPER_CANDIDATE_YEAR_WINDOW: int = 3     # publication recency window (years)

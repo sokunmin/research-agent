@@ -2,10 +2,6 @@ import asyncio
 import uuid
 
 import click
-from services.llms import llm
-from services.embeddings import embedder
-
-from llama_index.core import Settings
 from llama_index.core.workflow import (
     Context,
     StartEvent,
@@ -20,9 +16,6 @@ from agent_workflows.summary_gen import SummaryGenerationWorkflow
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-Settings.llm = llm
-Settings.embed_model = embedder
 
 
 class SummaryAndSlideGenerationWorkflow(Workflow):

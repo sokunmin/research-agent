@@ -17,10 +17,10 @@ API notes (verified from wheel source 2026-03):
 """
 import base64
 from pathlib import Path
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Type, Union
 
 import litellm
-from pydantic import Field
+from pydantic import BaseModel, Field
 from llama_index.core.callbacks import CallbackManager
 from llama_index.core.multi_modal_llms.base import MultiModalLLM, MultiModalLLMMetadata
 from llama_index.core.schema import ImageDocument, ImageNode
@@ -122,6 +122,19 @@ class LiteLLMMultiModal(MultiModalLLM):
 
     # ── Sync methods ──────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _clean_response_text(text: str, response_format: Optional[Type[BaseModel]]) -> str:
+        """Strip markdown code fences when a structured JSON response is expected.
+
+        Ollama and some open-source fallback models wrap JSON in ```json...```
+        fences even when response_format is set. Cloud models (Gemini, OpenAI)
+        return pure JSON, so stripping is a no-op for them.
+        Only applied when response_format is a Pydantic model class (JSON expected).
+        """
+        if response_format is None:
+            return text
+        return text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+
     def _litellm_kwargs(self) -> dict:
         """Common kwargs for every litellm call, including retry and fallback config."""
         kw = dict(
@@ -138,24 +151,27 @@ class LiteLLMMultiModal(MultiModalLLM):
         self,
         prompt: str,
         image_documents: Sequence[Union[ImageNode, ImageBlock]],
+        response_format: Optional[Type[BaseModel]] = None,
         **kwargs,
     ) -> CompletionResponse:
         messages = self._prompt_to_messages(prompt, image_documents)
-        resp = litellm.completion(
-            model=self.model,
-            messages=messages,
-            **self._litellm_kwargs(),
-            **kwargs,
-        )
-        return CompletionResponse(text=resp.choices[0].message.content, raw=resp)
+        kw = self._litellm_kwargs()
+        if response_format is not None:
+            kw["response_format"] = response_format
+        resp = litellm.completion(model=self.model, messages=messages, **kw, **kwargs)
+        text = self._clean_response_text(resp.choices[0].message.content, response_format)
+        return CompletionResponse(text=text, raw=resp)
 
-    def chat(self, messages: Sequence[ChatMessage], **kwargs) -> ChatResponse:
-        resp = litellm.completion(
-            model=self.model,
-            messages=self._chat_to_litellm_messages(messages),
-            **self._litellm_kwargs(),
-            **kwargs,
-        )
+    def chat(
+        self,
+        messages: Sequence[ChatMessage],
+        response_format: Optional[Type[BaseModel]] = None,
+        **kwargs,
+    ) -> ChatResponse:
+        kw = self._litellm_kwargs()
+        if response_format is not None:
+            kw["response_format"] = response_format
+        resp = litellm.completion(model=self.model, messages=self._chat_to_litellm_messages(messages), **kw, **kwargs)
         return ChatResponse(
             message=ChatMessage(role="assistant", content=resp.choices[0].message.content),
             raw=resp,
@@ -167,24 +183,27 @@ class LiteLLMMultiModal(MultiModalLLM):
         self,
         prompt: str,
         image_documents: Sequence[Union[ImageNode, ImageBlock]],
+        response_format: Optional[Type[BaseModel]] = None,
         **kwargs,
     ) -> CompletionResponse:
         messages = self._prompt_to_messages(prompt, image_documents)
-        resp = await litellm.acompletion(
-            model=self.model,
-            messages=messages,
-            **self._litellm_kwargs(),
-            **kwargs,
-        )
-        return CompletionResponse(text=resp.choices[0].message.content, raw=resp)
+        kw = self._litellm_kwargs()
+        if response_format is not None:
+            kw["response_format"] = response_format
+        resp = await litellm.acompletion(model=self.model, messages=messages, **kw, **kwargs)
+        text = self._clean_response_text(resp.choices[0].message.content, response_format)
+        return CompletionResponse(text=text, raw=resp)
 
-    async def achat(self, messages: Sequence[ChatMessage], **kwargs) -> ChatResponse:
-        resp = await litellm.acompletion(
-            model=self.model,
-            messages=self._chat_to_litellm_messages(messages),
-            **self._litellm_kwargs(),
-            **kwargs,
-        )
+    async def achat(
+        self,
+        messages: Sequence[ChatMessage],
+        response_format: Optional[Type[BaseModel]] = None,
+        **kwargs,
+    ) -> ChatResponse:
+        kw = self._litellm_kwargs()
+        if response_format is not None:
+            kw["response_format"] = response_format
+        resp = await litellm.acompletion(model=self.model, messages=self._chat_to_litellm_messages(messages), **kw, **kwargs)
         return ChatResponse(
             message=ChatMessage(role="assistant", content=resp.choices[0].message.content),
             raw=resp,

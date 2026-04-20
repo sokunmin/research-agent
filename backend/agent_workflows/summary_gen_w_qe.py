@@ -14,13 +14,13 @@ import qdrant_client
 from llama_index.core.agent.workflow import ReActAgent
 from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.llms import LLM
+from llama_index.embeddings.litellm import LiteLLMEmbedding
 from llama_index.core.node_parser import UnstructuredElementNodeParser
 from llama_index.core.tools import QueryEngineTool, ToolMetadata, FunctionTool
 from llama_index.storage.docstore.redis import RedisDocumentStore
 from llama_index.storage.index_store.redis import RedisIndexStore
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.core import (
-    Settings,
     PromptTemplate,
     SimpleDirectoryReader,
     StorageContext,
@@ -29,8 +29,7 @@ from llama_index.core import (
 )
 from config import settings
 from prompts.prompts import SUMMARIZE_PAPER_PMT, REACT_PROMPT_SUFFIX
-from services.llms import llm
-from services.embeddings import embedder
+from services.model_factory import model_factory
 from utils.visualization import visualize_nodes_with_attributes
 import logging
 import sys
@@ -42,10 +41,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-
-Settings.llm = llm
-Settings.embed_model = embedder
-
 
 def fname_to_collection_name(fname: str):
     return re.sub(r"\W+", "_", fname.split("/")[-1]).lower()
@@ -105,7 +100,7 @@ def setup_index_store(namespace: str, collection_suffix: str):
     )
 
 
-def create_qe(parsed_paper_dir: Path, llm: LLM, force_reingest: bool = False):
+def create_qe(parsed_paper_dir: Path, llm: LLM, embed_model: LiteLLMEmbedding, force_reingest: bool = False):
     documents = SimpleDirectoryReader(
         input_dir=parsed_paper_dir.as_posix(),
         # file_extractor=file_extractor
@@ -129,7 +124,7 @@ def create_qe(parsed_paper_dir: Path, llm: LLM, force_reingest: bool = False):
     # node_parser = MarkdownElementNodeParser(llm=llm, num_workers=8).from_defaults()
     node_parser = UnstructuredElementNodeParser(llm=llm).from_defaults()
     pipeline = IngestionPipeline(
-        transformations=[node_parser],
+        transformations=[node_parser, embed_model],
         vector_store=vector_store,
         # cache=cache,
         docstore=doc_store,
@@ -166,6 +161,7 @@ def create_qe(parsed_paper_dir: Path, llm: LLM, force_reingest: bool = False):
             # nodes=base_nodes + objects,
             nodes=nodes,
             storage_context=storage_context,
+            embed_model=embed_model,
         )
         index.set_index_id(collection_name)
     else:
@@ -174,7 +170,7 @@ def create_qe(parsed_paper_dir: Path, llm: LLM, force_reingest: bool = False):
         )
         index = load_index_from_storage(storage_context, index_id=collection_name)
 
-    query_engine = index.as_query_engine(similarity_top_k=10)
+    query_engine = index.as_query_engine(similarity_top_k=10, llm=llm)
 
     return query_engine
 
@@ -196,11 +192,11 @@ def save_paper_sumamry(
     logging.info(f"Saved summary to '{summary_file}'")
 
 
-def create_agent(file_dir: Path, force_reingest: bool):
+def create_agent(file_dir: Path, force_reingest: bool, llm: LLM, embed_model: LiteLLMEmbedding):
     toc_file = list(file_dir.glob("*.json"))[0]
     toc_md = toc_json_to_markdown(toc_file)
     logging.info(f"Creating query engine for '{file_dir}'")
-    query_engine = create_qe(file_dir, llm, force_reingest)
+    query_engine = create_qe(file_dir, llm, embed_model, force_reingest)
     logging.info(f"Creating agent for querying '{file_dir}'")
     query_tool = QueryEngineTool(
         query_engine=query_engine,
@@ -221,7 +217,8 @@ def create_agent(file_dir: Path, force_reingest: bool):
         verbose=True,
         timeout=300,
     )
-    prompt = SUMMARIZE_PAPER_PMT + REACT_PROMPT_SUFFIX
+    react_suffix = REACT_PROMPT_SUFFIX.replace("{sandbox_stop_rule}", "")
+    prompt = SUMMARIZE_PAPER_PMT + react_suffix
     agent.update_prompts({"react_header": PromptTemplate(prompt)})
     asyncio.run(agent.run(f"I want a summary of paper {file_dir}"))
 
@@ -243,9 +240,11 @@ def create_agent(file_dir: Path, force_reingest: bool):
     help="Force re-ingest the data to the vector store",
 )
 def main(parsed_paper_dir: str, force_reingest: bool):
+    llm = model_factory.smart_llm()
+    embed_model = model_factory.embed_model()
     parsed_paper_folders = [f for f in Path(parsed_paper_dir).iterdir() if f.is_dir()]
     for f in parsed_paper_folders:
-        create_agent(f, force_reingest)
+        create_agent(f, force_reingest, llm, embed_model)
 
     # create_agent(file_name)
     # query_engine = parse_and_create_qe(Path(file_name), llm)

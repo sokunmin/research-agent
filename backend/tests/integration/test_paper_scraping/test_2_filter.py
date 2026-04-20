@@ -137,10 +137,9 @@ class TestPaperRelevanceFilterIntegration:
     def test_vit_paper_scores_above_stock_paper(self, vit_paper, stock_paper):
         """Stage-1 similarity for ViT must exceed stock prediction paper for vision topic."""
         from services.model_factory import model_factory
-        from services.llms import new_fast_llm
         rf = PaperRelevanceFilter(
             embed_model=model_factory.relevance_embed_model(),
-            llm=new_fast_llm(temperature=0.0),
+            llm=model_factory.fast_llm(temperature=0.0),
         )
         topic = "Vision Transformer image classification"
         _, vit_score = rf.assess_relevance(vit_paper, topic)

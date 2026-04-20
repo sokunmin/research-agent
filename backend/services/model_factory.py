@@ -30,7 +30,7 @@ class ModelConfig(BaseModel):
     embed_model: str           # embedding model
     relevance_embed_model: str # embedding model for paper relevance pre-screening
     max_tokens: int = 4096
-    disable_think: bool = False  # pass extra_body={"think": False} (Ollama think-mode models)
+    disable_ollama_think: bool = False  # pass extra_body={"think": False} (Ollama think-mode models)
 
 
 class ModelFactory:
@@ -43,7 +43,7 @@ class ModelFactory:
                   callback_manager: Optional[CallbackManager] = None) -> LiteLLM:
         kw = dict(model=self._config.smart_model, temperature=temperature,
                   max_tokens=self._config.max_tokens)
-        if self._config.disable_think:
+        if self._config.disable_ollama_think:
             kw["additional_kwargs"] = {"extra_body": {"think": False}}
         if callback_manager:
             kw["callback_manager"] = callback_manager
@@ -51,7 +51,7 @@ class ModelFactory:
 
     def fast_llm(self, temperature: float = 0.0) -> LiteLLM:
         kw = dict(model=self._config.fast_model, temperature=temperature)
-        if self._config.disable_think:
+        if self._config.disable_ollama_think:
             kw["additional_kwargs"] = {"extra_body": {"think": False}}
         return LiteLLM(**kw)
 
@@ -127,7 +127,7 @@ def _build() -> ModelFactory:
         embed_model=settings.LLM_EMBED_MODEL,
         relevance_embed_model=settings.LLM_RELEVANCE_EMBED_MODEL,
         max_tokens=settings.MAX_TOKENS,
-        disable_think=settings.LLM_DISABLE_THINK,
+        disable_ollama_think=settings.DISABLE_OLLAMA_THINK,
     )
     _register_ollama_function_calling(config)
     return ModelFactory(config)

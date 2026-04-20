@@ -4,9 +4,7 @@ import uuid
 import click
 
 from config import settings
-from services.llms import llm, new_fast_llm
-from services.embeddings import embedder
-from llama_index.core import Settings
+from llama_index.core import SimpleDirectoryReader
 from llama_index.core.llms import ChatMessage
 from llama_index.core.tools import FunctionTool
 from llama_index.core.workflow import (
@@ -18,26 +16,18 @@ from llama_index.core.workflow import (
 
 from utils.file_processing import pdf2images
 from agent_workflows.events import *
-from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow
+from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow, LOCAL_LLM_RETRY_POLICY
 from agent_workflows.paper_scraping import (
-    fetch_candidate_papers,
     download_paper_pdfs,
     PaperRelevanceFilter,
     PaperRelevanceResult,
 )
-from agent_workflows.summary_using_images import (
-    summarize_paper_images,
-    save_summary_as_markdown,
-)
-from prompts.prompts import ACADEMIC_QUERY_REFORMULATION_PMT
+from tools.paper_tools import PaperSearchToolSpec
+from prompts.prompts import ACADEMIC_QUERY_REFORMULATION_PMT, SUMMARIZE_PAPER_PMT
 from services.model_factory import model_factory
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-Settings.llm = llm
-Settings.embed_model = embedder
 
 
 async def _generate_search_query(user_query: str, llm) -> str:
@@ -71,20 +61,24 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         self.papers_images_path.mkdir(parents=True, exist_ok=True)
         self.paper_summary_path = self.papers_images_path
         self.paper_summary_path.mkdir(parents=True, exist_ok=True)
+        self._fast_llm = model_factory.fast_llm(temperature=0.0)
+        self._vlm = model_factory.vision_llm()
         self._relevance_filter = PaperRelevanceFilter(
             embed_model=model_factory.relevance_embed_model(),
-            llm=new_fast_llm(temperature=0.0),
+            llm=self._fast_llm,
         )
-        self._search_tool = FunctionTool.from_defaults(
-            fn=fetch_candidate_papers,
-            name="search_academic_papers",
-            description=(
-                "Search OpenAlex for recent open-access academic papers on a research topic. "
-                "Returns Papers sorted by citation count."
-            ),
-        )
-        # _search_tool is stored for potential LLM agent use; the workflow step calls
-        # fetch_candidate_papers directly for type-safe access to the Paper list.
+        self.paper_search_spec = PaperSearchToolSpec()
+        # fetch_candidate_papers is called directly by discover_candidate_papers step;
+        # paper_search_spec.to_tool_list() is available if a future agent needs search.
+
+    def to_tool_list(self) -> list[FunctionTool]:
+        """Assemble tools exposed to a SummaryGenerationWorkflow ReActAgent.
+
+        Currently returns an empty list: workflow steps call functions directly.
+        To expose paper search to an agent, uncomment the line below.
+        """
+        return []
+        # + self.paper_search_spec.to_tool_list()
 
     @step
     async def discover_candidate_papers(
@@ -97,11 +91,14 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
 
         self._emit_message(ctx, "discover_candidate_papers", message=f"Searching papers on: {topic}")
 
-        search_query = await _generate_search_query(topic, new_fast_llm(temperature=0.0))
-        logger.info(f"Search query reformulated: '{topic}' → '{search_query}'")
+        if settings.ENABLE_QUERY_REFORMULATION:
+            search_query = await _generate_search_query(topic, self._fast_llm)
+            logger.info(f"Search query reformulated: '{topic}' → '{search_query}'")
+        else:
+            search_query = topic
+            logger.info(f"Query reformulation disabled, using original query: '{topic}'")
 
-        # fetch_candidate_papers is also available as self._search_tool for LLM agent use
-        papers = fetch_candidate_papers(search_query)
+        papers = self.paper_search_spec.fetch_papers(search_query)
         papers = list({p.entry_id: p for p in papers}.values())  # deduplicate
 
         async with ctx.store.edit_state() as state:
@@ -113,7 +110,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         for paper in papers:
             ctx.send_event(PaperEvent(paper=paper))
 
-    @step(num_workers=settings.NUM_WORKERS_FAST)
+    @step(num_workers=settings.NUM_WORKERS_FAST, retry_policy=LOCAL_LLM_RETRY_POLICY)
     async def filter_papers(self, ctx: Context, ev: PaperEvent) -> FilteredPaperEvent:
         research_topic = await ctx.store.get("research_topic")
         is_relevant, similarity_score = self._relevance_filter.assess_relevance(
@@ -178,8 +175,20 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         await asyncio.sleep(settings.DELAY_SECONDS_VISION)
         self._emit_message(ctx, "paper2summary", message=f"Summarizing: {ev.pdf_path.name}")
         pdf2images(ev.pdf_path, ev.image_output_dir)
-        summary_txt = await summarize_paper_images(ev.image_output_dir)
-        save_summary_as_markdown(summary_txt, ev.summary_path)
+        # Summarize paper page images using VLM
+        image_documents = SimpleDirectoryReader(ev.image_output_dir).load_data()
+        response = await self._vlm.acomplete(
+            prompt=SUMMARIZE_PAPER_PMT,
+            image_documents=image_documents,
+        )
+        # removeprefix/removesuffix strips substring (str.strip() strips individual chars — bug)
+        text = response.text.strip()
+        text = text.removeprefix("```markdown").removeprefix("```")
+        summary_txt = text.removesuffix("```").strip()
+        # Persist summary as markdown
+        with open(ev.summary_path, "w") as f:
+            f.write(summary_txt)
+        logger.info(f"Summary saved to {ev.summary_path}")
         return SummaryStoredEvent(fpath=ev.summary_path)
 
     @step
@@ -211,7 +220,7 @@ class SummaryGenerationDummyWorkflow(HumanInTheLoopWorkflow):
     @step
     async def dummy_stop_step(self, ev: DummyEvent) -> StopEvent:
         return StopEvent(
-            result="workflow_artifacts/SummaryGenerationWorkflow/5sn92wndsx/data/paper_summaries"
+            result="workflow_artifacts/SummaryGenerationWorkflow/dummy-id/papers_images"
         )
 
 

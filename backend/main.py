@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 import uuid
 import json
 from models import SlideGenFileDirectory, ResearchTopic
+from agent_workflows.schemas import WorkflowStreamingEvent
 from agent_workflows.slide_gen import SlideGenerationWorkflow
 from agent_workflows.summarize_and_generate_slides import SummaryAndSlideGenerationWorkflow
 from agent_workflows.summary_gen import (
@@ -96,7 +97,12 @@ async def run_workflow_endpoint(topic: ResearchTopic):
         except Exception as e:
             error_message = f"Error in workflow: {str(e)}"
             logger.error(error_message)
-            yield f"data: {json.dumps({'event': 'error', 'message': error_message})}\n\n"
+            error_event = WorkflowStreamingEvent(
+                event_type="server_message",
+                event_sender="system",
+                event_content={"message": error_message},
+            )
+            yield f"data: {json.dumps(error_event.model_dump())}\n\n"
         finally:
             # Clean up
             workflows.pop(workflow_id, None)

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from llama_index.core.workflow import Event
 
@@ -40,18 +40,18 @@ class SummaryEvent(Event):
 
 class OutlineFeedbackEvent(Event):
     summary: str
-    outline: SlideOutline
+    paper_outline: PaperSlideOutline
     feedback: str
 
 
 class OutlineEvent(Event):
     summary: str
-    outline: SlideOutline
+    paper_outline: PaperSlideOutline
 
 
 class OutlineOkEvent(Event):
     summary: str
-    outline: SlideOutline
+    paper_outline: PaperSlideOutline
 
 
 class OutlinesWithLayoutEvent(Event):
@@ -69,11 +69,26 @@ class PythonCodeEvent(Event):
 
 
 class SlideGeneratedEvent(Event):
-    pptx_fpath: str  # remote pptx path
+    pptx_fpath: str
+    outlines_fpath: Optional[str] = None
 
 
-class SlideValidationEvent(Event):
+class ContentFixEvent(Event):
+    """LLM trims JSON content for content_too_long slides, then re-renders."""
     results: List[SlideNeedModifyResult]
+    pptx_fpath: str
+    outlines_fpath: str
+
+
+class ContentMissingFixEvent(Event):
+    """Re-render from JSON only — no LLM. JSON is correct, pptx was empty."""
+    outlines_fpath: str
+
+
+class VisualFixEvent(Event):
+    """Python adjusts placeholder positions for visual_overlap slides."""
+    results: List[SlideNeedModifyResult]
+    pptx_fpath: str
 
 
 class DummyEvent(Event):

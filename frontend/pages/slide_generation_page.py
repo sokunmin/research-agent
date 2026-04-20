@@ -192,6 +192,9 @@ def process_messages():
                 st.session_state.workflow_complete = (
                     True  # Set the flag to stop auto-refresh
                 )
+                # Fragment re-renders only itself; force full app rerun so
+                # right_column (outside the fragment) can render the download buttons.
+                st.rerun()
 
             elif msg_type == "error":
                 st.error(content)
@@ -199,7 +202,7 @@ def process_messages():
             pass
 
 
-_run_every = None if st.session_state.workflow_complete else "2s"
+_run_every = None if st.session_state.workflow_complete else "5s"
 
 
 @st.fragment(run_every=_run_every)
@@ -231,9 +234,8 @@ def workflow_display():
             status.update(label="✅ Agent finished!", state="complete", expanded=False)
 
 
-def gather_outline_feedback(placeholder):
-    container = placeholder.container()
-    with container:
+@st.fragment
+def gather_outline_feedback():
         logging.debug(
             f"gather_outline_feedback: "
             f"st.session_state.user_input_required: {st.session_state.user_input_required}"
@@ -252,7 +254,7 @@ def gather_outline_feedback(placeholder):
                     f"current submit state: {st.session_state.get('user_response_submitted')}"
                 )
                 summary = data.get("event_content").get("summary")
-                outline = data.get("event_content").get("outline")
+                outline = data.get("event_content").get("paper_outline")
                 prompt_message = data.get("event_content").get(
                     "message", "Please review the outline."
                 )
@@ -362,8 +364,8 @@ def main():
         with st.form(key="slide_gen_form"):
             query = st.text_input(
                 "Enter the topic of your research:",
-                value="powerpoint slides automation with machine learning",
-                placeholder="powerpoint slides automation with machine learning",
+                value="",
+                placeholder="",
             )
             submit_button = st.form_submit_button(label="Submit")
 
@@ -375,7 +377,6 @@ def main():
 
     with right_column:
         st.write("Workflow Artifacts:")
-        artifact_render = st.empty()
 
     if submit_button:
         # Reset the workflow_complete flag for a new workflow
@@ -405,45 +406,36 @@ def main():
     with left_column:
         workflow_display()
 
-    # Include the user input fragment
-    gather_outline_feedback(artifact_render)
-
-    # Render the PDF and download button in the right_column
     with right_column:
-        # Display the PDF if available
-        if "download_url_pdf" in st.session_state and st.session_state.download_url_pdf:
-            download_url_pdf = st.session_state.download_url_pdf
-            try:
-                # Fetch the PDF content
-                pdf_response = httpx.get(download_url_pdf)
-                pdf_response.raise_for_status()
-                st.session_state.pdf_data = pdf_response.content
+        gather_outline_feedback()
 
-                st.markdown("### Generated Slide Deck:")
-                st.pdf(st.session_state.pdf_data, height=600)
-            except Exception as e:
-                st.error(f"Failed to load the PDF file: {str(e)}")
+    # Render PDF preview and download button full-width below both columns
+    if "download_url_pdf" in st.session_state and st.session_state.download_url_pdf:
+        st.divider()
+        st.markdown("### Generated Slide Deck:")
+        try:
+            pdf_response = httpx.get(st.session_state.download_url_pdf)
+            pdf_response.raise_for_status()
+            st.session_state.pdf_data = pdf_response.content
+            st.pdf(st.session_state.pdf_data, height=800)
+        except Exception as e:
+            st.error(f"Failed to load the PDF file: {str(e)}")
 
-        # Provide the download button for PPTX if available
-        if (
-            "download_url_pptx" in st.session_state
-            and st.session_state.download_url_pptx
-        ):
-            download_url_pptx = st.session_state.download_url_pptx
-            try:
-                # Fetch the PPTX content
-                pptx_response = httpx.get(download_url_pptx)
-                pptx_response.raise_for_status()
-                pptx_data = pptx_response.content
-
-                st.download_button(
-                    label="Download Generated PPTX",
-                    data=pptx_data,
-                    file_name="generated_slides.pptx",
-                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                )
-            except Exception as e:
-                st.error(f"Failed to load the PPTX file: {str(e)}")
+    if (
+        "download_url_pptx" in st.session_state
+        and st.session_state.download_url_pptx
+    ):
+        try:
+            pptx_response = httpx.get(st.session_state.download_url_pptx)
+            pptx_response.raise_for_status()
+            st.download_button(
+                label="Download Generated PPTX",
+                data=pptx_response.content,
+                file_name="generated_slides.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            )
+        except Exception as e:
+            st.error(f"Failed to load the PPTX file: {str(e)}")
 
 
 main()

@@ -33,7 +33,7 @@ services:
         required: true
     environment:
       WORKFLOW_ARTIFACTS_ROOT: /app/workflow_artifacts
-      SLIDE_TEMPLATE_PATH: /app/assets/pptx-template.pptx
+      SLIDE_TEMPLATE_PATH: /app/assets/template.pptx
       MLFLOW_TRACKING_URI: http://mlflow:8080
       OLLAMA_API_BASE: http://host.docker.internal:11434
     volumes:
