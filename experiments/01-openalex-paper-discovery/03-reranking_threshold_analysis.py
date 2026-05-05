@@ -1,11 +1,13 @@
 """
-Threshold analysis for Stage-1 embedding model (nomic-embed-text).
+reranking_threshold_analysis.py
+───────────────────────────────
+Analyzes the score distribution of the Stage-1 embedding model (nomic-embed-text)
+to define optimal handover thresholds for multi-stage reranking.
 
-Standard approach:
-  1. ROC curve        — find optimal single threshold via Youden's J statistic
-  2. Precision-Recall curve — visualise precision/recall trade-off
-  3. Score distribution     — per-label histogram to confirm overlap zone
-  4. Coverage vs Load curve — band equivalent of ROC for Stage-2 routing decision
+Objectives:
+  1. ROC/PR Curves   — Evaluate baseline discriminative power.
+  2. Distribution    — Identify the semantic overlap zone between classes.
+  3. Coverage v Load — Optimize the "Uncertainty Band" for routing to Stage-2 LLM.
 
 Scores are cached to disk so subsequent runs skip re-embedding.
 """

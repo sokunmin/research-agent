@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="420" viewBox="0 0 860 420" font-family="system-ui, -apple-system, sans-serif">
+  <!-- Background -->
+  <rect width="860" height="420" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="430" y="28" text-anchor="middle" font-size="15" font-weight="600" fill="#333333">12 PPTX Layouts — Placeholder Structure</text>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- GROUP A — Column 1  x=14..296 -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <rect x="14" y="38" width="282" height="368" rx="6" fill="#f5f7fa" stroke="#d0d4db" stroke-width="1"/>
+
+  <!-- Column header -->
+  <text x="155" y="58" text-anchor="middle" font-size="12" font-weight="700" fill="#2c5f9e">Group A — Text Layouts</text>
+  <text x="155" y="73" text-anchor="middle" font-size="10" fill="#555">(text only, no photo placeholder)</text>
+
+  <!-- ── Mini slides: 2 per row, 3 rows ── -->
+
+  <!-- Row 1: TITLE_SLIDE | TITLE_AND_BODY -->
+
+  <!-- TITLE_SLIDE: title centered vertically (17-51%), subtitle below (52-63%) -->
+  <rect x="26" y="84" width="118" height="78" rx="3" fill="#ffffff" stroke="#aab0bb" stroke-width="1"/>
+  <!-- title: starts ~17% top, spans ~34% height → in 78px slide: top=13, height=27 -->
+  <rect x="30" y="97" width="110" height="26" rx="2" fill="#b0bec5"/>
+  <!-- subtitle: starts ~52% top, spans ~11% height → top=40, height=9 -->
+  <rect x="40" y="127" width="80" height="9" rx="2" fill="#cfd8dc"/>
+  <text x="85" y="172" text-anchor="middle" font-size="9" fill="#444">TITLE_SLIDE</text>
+
+  <!-- TITLE_AND_BODY: thin title bar at very top (0-15%), large body below (27-91%) -->
+  <rect x="158" y="84" width="118" height="78" rx="3" fill="#ffffff" stroke="#aab0bb" stroke-width="1"/>
+  <rect x="162" y="84" width="110" height="11" rx="2" fill="#b0bec5"/>
+  <rect x="162" y="99" width="110" height="52" rx="2" fill="#cfd8dc"/>
+  <text x="217" y="172" text-anchor="middle" font-size="9" fill="#444">TITLE_AND_BODY</text>
+
+  <!-- Row 2: QUOTE | SECTION_HEADER_CENTER -->
+
+  <!-- QUOTE: NO title placeholder. idx=2 body at 44-51% (quote text), idx=1 body at 65-70% (attribution) -->
+  <rect x="26" y="182" width="118" height="78" rx="3" fill="#ffffff" stroke="#aab0bb" stroke-width="1"/>
+  <!-- idx=2 body: 44-51% → top=34, height=6 -->
+  <rect x="30" y="216" width="110" height="8" rx="2" fill="#cfd8dc"/>
+  <!-- idx=1 body: 65-70% → top=51, height=4 -->
+  <rect x="40" y="230" width="68" height="5" rx="2" fill="#cfd8dc"/>
+  <!-- "no title" indicator: italic note -->
+  <text x="85" y="199" text-anchor="middle" font-size="7.5" font-style="italic" fill="#888">(no title placeholder)</text>
+  <text x="85" y="270" text-anchor="middle" font-size="9" fill="#444">QUOTE</text>
+
+  <!-- SECTION_HEADER_CENTER: title only, centered vertically (33-67%) -->
+  <rect x="158" y="182" width="118" height="78" rx="3" fill="#ffffff" stroke="#aab0bb" stroke-width="1"/>
+  <!-- centered title: 33-67% → top=26, height=26 -->
+  <rect x="174" y="208" width="86" height="22" rx="2" fill="#b0bec5"/>
+  <text x="217" y="270" text-anchor="middle" font-size="9" fill="#444">SECTION_HEADER</text>
+  <text x="217" y="281" text-anchor="middle" font-size="9" fill="#444">_CENTER</text>
+
+  <!-- Row 3: SECTION_HEADER_TOP | BULLET_LIST -->
+
+  <!-- SECTION_HEADER_TOP: title at very top (0-22%), no body -->
+  <rect x="26" y="290" width="118" height="78" rx="3" fill="#ffffff" stroke="#aab0bb" stroke-width="1"/>
+  <!-- title: 0-22% → top=0, height=17 -->
+  <rect x="30" y="290" width="110" height="17" rx="2" fill="#b0bec5"/>
+  <text x="85" y="378" text-anchor="middle" font-size="9" fill="#444">SECTION_HEADER</text>
+  <text x="85" y="389" text-anchor="middle" font-size="9" fill="#444">_TOP</text>
+
+  <!-- BULLET_LIST: thin title at very top (0-15%), large body below starting at 19% -->
+  <rect x="158" y="290" width="118" height="78" rx="3" fill="#ffffff" stroke="#aab0bb" stroke-width="1"/>
+  <rect x="162" y="290" width="110" height="11" rx="2" fill="#b0bec5"/>
+  <!-- bullet lines starting at 19% (top=15) -->
+  <rect x="166" y="305" width="6" height="6" rx="1" fill="#b0bec5"/>
+  <rect x="176" y="305" width="82" height="6" rx="1" fill="#cfd8dc"/>
+  <rect x="166" y="315" width="6" height="6" rx="1" fill="#b0bec5"/>
+  <rect x="176" y="315" width="70" height="6" rx="1" fill="#cfd8dc"/>
+  <rect x="166" y="325" width="6" height="6" rx="1" fill="#b0bec5"/>
+  <rect x="176" y="325" width="76" height="6" rx="1" fill="#cfd8dc"/>
+  <text x="217" y="378" text-anchor="middle" font-size="9" fill="#444">BULLET_LIST</text>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- GROUP B — Column 2  x=302..556 -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <rect x="302" y="38" width="254" height="368" rx="6" fill="#f5f7fa" stroke="#d0d4db" stroke-width="1"/>
+
+  <text x="429" y="58" text-anchor="middle" font-size="12" font-weight="700" fill="#2c5f9e">Group B — Photo Layouts</text>
+  <text x="429" y="73" text-anchor="middle" font-size="10" fill="#555">(title + photo placeholder)</text>
+
+  <!-- PHOTO_LANDSCAPE: photo fills top 7-67%, title at bottom 69-83%, body 84-96% -->
+  <rect x="314" y="84" width="230" height="78" rx="3" fill="#ffffff" stroke="#aab0bb" stroke-width="1"/>
+  <!-- photo: top 7-67% → top=5, height=46 -->
+  <rect x="318" y="89" width="222" height="46" rx="2" fill="#eaf3ff" stroke="#6699cc" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="429" y="117" text-anchor="middle" font-size="14" fill="#6699cc">&#9707;</text>
+  <!-- title at bottom: 69-83% → top=54, height=11 -->
+  <rect x="318" y="138" width="222" height="11" rx="2" fill="#b0bec5"/>
+  <!-- body: 84-96% → top=65 (clipped to slide bottom) -->
+  <rect x="318" y="151" width="222" height="7" rx="2" fill="#cfd8dc"/>
+  <text x="429" y="172" text-anchor="middle" font-size="9" fill="#444">PHOTO_LANDSCAPE</text>
+
+  <!-- PHOTO_PORTRAIT: photo right side 52-93% width, title top-left 7-47%, body bottom-left 49-91% -->
+  <rect x="314" y="182" width="230" height="78" rx="3" fill="#ffffff" stroke="#aab0bb" stroke-width="1"/>
+  <!-- photo: right 52-93% width, full height 7-91% → left=120, width=96, top=6, height=66 -->
+  <rect x="434" y="188" width="96" height="66" rx="2" fill="#eaf3ff" stroke="#6699cc" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="482" y="226" text-anchor="middle" font-size="18" fill="#6699cc">&#9707;</text>
+  <!-- title: left 7-48% width, top 7-47% → left=0, width=108, top=6, height=30 -->
+  <rect x="318" y="188" width="108" height="30" rx="2" fill="#b0bec5"/>
+  <!-- body: left 7-48% width, top 49-91% → left=0, width=108, top=38, height=32 -->
+  <rect x="318" y="220" width="108" height="34" rx="2" fill="#cfd8dc"/>
+  <text x="429" y="270" text-anchor="middle" font-size="9" fill="#444">PHOTO_PORTRAIT</text>
+
+  <!-- CONTENT_WITH_PHOTO: title thin at top (0-15%), body left 27-91%, photo right 27-91% -->
+  <rect x="314" y="290" width="230" height="78" rx="3" fill="#ffffff" stroke="#aab0bb" stroke-width="1"/>
+  <!-- title: top 0-15% → height=11 -->
+  <rect x="318" y="290" width="222" height="11" rx="2" fill="#b0bec5"/>
+  <!-- body: left 7-48% width, top 27-91% → left=0, width=95, top=21, height=50 -->
+  <rect x="318" y="311" width="95" height="50" rx="2" fill="#cfd8dc"/>
+  <!-- photo: right 52-93% width, top 27-91% → left=100, width=100, top=21, height=50 -->
+  <rect x="419" y="311" width="113" height="50" rx="2" fill="#eaf3ff" stroke="#6699cc" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="475" y="341" text-anchor="middle" font-size="14" fill="#6699cc">&#9707;</text>
+  <text x="429" y="378" text-anchor="middle" font-size="9" fill="#444">CONTENT_WITH_PHOTO</text>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- GROUP C — Column 3  x=562..846  — light red highlight -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <rect x="562" y="38" width="284" height="368" rx="6" fill="#fff5f5" stroke="#e8b4b4" stroke-width="1.5"/>
+
+  <text x="704" y="55" text-anchor="middle" font-size="12" font-weight="700" fill="#b91c1c">Group C — No-text Layouts</text>
+  <text x="704" y="68" text-anchor="middle" font-size="9.5" fill="#888">idx_title_placeholder = null</text>
+  <text x="704" y="80" text-anchor="middle" font-size="9.5" fill="#888">idx_content_placeholder = null</text>
+
+  <!-- THREE_PHOTO: 1 large photo left (7-48% width, 9-91% height), top-right + bottom-right photos (52-93% width) -->
+  <rect x="574" y="90" width="260" height="78" rx="3" fill="#fff0f0" stroke="#e8b4b4" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <!-- left large photo: 7-48% width, 9-91% height → x=593, width=107, y=97, height=64 -->
+  <rect x="593" y="97" width="107" height="64" rx="2" fill="#ffe5e5" stroke="#d07070" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="646" y="132" text-anchor="middle" font-size="18" fill="#d07070">&#9707;</text>
+  <!-- top-right photo: 52-93% width, 9-48% height → x=708, width=107, y=97, height=30 -->
+  <rect x="708" y="97" width="107" height="30" rx="2" fill="#ffe5e5" stroke="#d07070" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="761" y="116" text-anchor="middle" font-size="12" fill="#d07070">&#9707;</text>
+  <!-- bottom-right photo: 52-93% width, 52-91% height → x=708, width=107, y=131, height=30 -->
+  <rect x="708" y="131" width="107" height="30" rx="2" fill="#ffe5e5" stroke="#d07070" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="761" y="150" text-anchor="middle" font-size="12" fill="#d07070">&#9707;</text>
+  <text x="704" y="182" text-anchor="middle" font-size="9" fill="#444">THREE_PHOTO</text>
+  <text x="704" y="193" text-anchor="middle" font-size="8.5" font-style="italic" fill="#b91c1c">idx = null</text>
+
+  <!-- FULL_PHOTO: photo covers entire slide 0-100% -->
+  <rect x="574" y="205" width="260" height="78" rx="3" fill="#ffe5e5" stroke="#d07070" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="704" y="249" text-anchor="middle" font-size="24" fill="#d07070">&#9707;</text>
+  <text x="704" y="292" text-anchor="middle" font-size="9" fill="#444">FULL_PHOTO</text>
+  <text x="704" y="303" text-anchor="middle" font-size="8.5" font-style="italic" fill="#b91c1c">idx = null</text>
+
+  <!-- BLANK: no placeholders at all -->
+  <rect x="574" y="315" width="260" height="60" rx="3" fill="#fafafa" stroke="#d07070" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="704" y="350" text-anchor="middle" font-size="10" fill="#aaa">(empty)</text>
+  <text x="704" y="385" text-anchor="middle" font-size="9" fill="#444">BLANK</text>
+  <text x="704" y="396" text-anchor="middle" font-size="8.5" font-style="italic" fill="#b91c1c">idx = null</text>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- LEGEND  -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <text x="20" y="413" font-size="9" fill="#888">Legend:</text>
+  <!-- gray fill = title/content placeholder -->
+  <rect x="65" y="404" width="14" height="9" rx="1" fill="#b0bec5"/>
+  <text x="82" y="413" font-size="9" fill="#555">title/content placeholder</text>
+  <!-- dashed = photo placeholder -->
+  <rect x="215" y="404" width="14" height="9" rx="1" fill="#eaf3ff" stroke="#6699cc" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="232" y="413" font-size="9" fill="#555">photo placeholder</text>
+  <!-- red tint = null indices -->
+  <rect x="338" y="404" width="14" height="9" rx="1" fill="#ffe5e5" stroke="#d07070" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="355" y="413" font-size="9" fill="#b91c1c">idx_title/content = null  (schema: Optional[str] = None)</text>
+</svg>

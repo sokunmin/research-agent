@@ -15,7 +15,7 @@ This project generates PowerPoint slides from academic paper summaries via a mul
 [markdown summaries]
   → summary2outline  (LLM, FunctionCallingProgram)       → SlideOutline {title, content}
   → outlines_with_layout (LLM, LLMTextCompletionProgram) → SlideOutlineWithLayout {title, content, layout_name, idx_*}
-                                                             serialised → slide_outlines.json
+                                                             serialized → slide_outlines.json
   → slide_gen        (ReActAgent)                         → agent writes + runs python-pptx code in Docker sandbox
   → validate_slides / modify_slides                       → final .pptx
 ```
@@ -257,7 +257,7 @@ P5 is P4 plus the following section appended to the suffix:
 ## Critical Stop Rule
 If you see "LIMIT REACHED" in any Observation, output IMMEDIATELY:
   Thought: Maximum attempts reached. Cannot complete the task.
-  Answer: Task failed after 3 attempts. Error: [summarise the last error seen]
+  Answer: Task failed after 3 attempts. Error: [summarize the last error seen]
 Do NOT call run_code again after seeing "LIMIT REACHED".
 ```
 
@@ -343,7 +343,7 @@ Note: the `subprocess.check_call` form is functionally valid Python (not Jupyter
 #### Does P5's "LIMIT REACHED" signal help the model stop correctly vs P4?
 
 **ministral-3:14b-cloud: yes, decisively.**  
-With P4 (no stop rule), ministral terminated correctly in only 1/3 runs (33.3%) and had a format violation in another 1/3 run. With P5, it terminated correctly in all 3/3 runs (100%), always emitting `Answer:` with a failure message after 3 turns (2 tool calls). The "LIMIT REACHED" keyword in the Observation directly triggers the stop behaviour as intended.
+With P4 (no stop rule), ministral terminated correctly in only 1/3 runs (33.3%) and had a format violation in another 1/3 run. With P5, it terminated correctly in all 3/3 runs (100%), always emitting `Answer:` with a failure message after 3 turns (2 tool calls). The "LIMIT REACHED" keyword in the Observation directly triggers the stop behavior as intended.
 
 **gemma3:4b: the signal is ignored; format violation dominates.**  
 With P4, gemma3:4b ran all 10 turns (9 tool calls) and broke on format violation on turn 10. With P5, it broke on format violation at turn 1, using 0 tool calls — it never even attempted a tool call. In both cases `format_viol%=100%`. The model does not reach the point where it can read "LIMIT REACHED" because it violates the ReAct format before dispatching any tool. This is the same fundamental format compliance failure observed in Experiments 3 and 4 under error conditions. P5 actually makes it worse by truncating to 1 turn instead of 10 — suggesting the P5 suffix text itself disrupts the gemma3:4b format compliance for the error scenario (possibly conflicting instructions between the `## Critical Stop Rule` section and the normal `Thought/Action` format).

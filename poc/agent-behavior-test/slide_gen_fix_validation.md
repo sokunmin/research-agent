@@ -15,7 +15,7 @@ This project generates PowerPoint slides from academic paper summaries via a mul
 [markdown summaries]
   → summary2outline (LLM)          → SlideOutline {title, content}
   → outlines_with_layout (LLM)     → SlideOutlineWithLayout {title, content, layout_name, idx_*}
-                                      serialised to slide_outlines.json
+                                      serialized to slide_outlines.json
   → slide_gen (ReActAgent)          → agent writes + executes python-pptx code in Docker sandbox
   → validate_slides / modify_slides → final .pptx
 ```
@@ -39,7 +39,7 @@ not in the backend container (`/app/`). Files must be explicitly uploaded before
 **Line:** `json.dump([o.json() for o in slides_w_layout], f, indent=4)`
 
 `o.json()` is a Pydantic v1 compatibility method that returns a **JSON string**, not a dict.
-`json.dump` then serialises that string again, producing a file containing `list[str]` instead of `list[dict]`.
+`json.dump` then serializes that string again, producing a file containing `list[str]` instead of `list[dict]`.
 When the agent reads the file, `item['layout_name']` raises `TypeError: string indices must be integers`.
 
 **Fix:** `json.dump([o.model_dump() for o in slides_w_layout], f, indent=4)`
@@ -140,7 +140,7 @@ CWD is not `/sandbox/`, Fix B would silently fail. Fix A is unambiguous.
 
 ## 3. Experiment Results (17/17 PASS)
 
-All experiments passed. "PASS" means the expected behaviour was observed — including bugs (confirming they exist) and fixes (confirming they work).
+All experiments passed. "PASS" means the expected behavior was observed — including bugs (confirming they exist) and fixes (confirming they work).
 
 ### Bug #1 — JSON serialisation
 

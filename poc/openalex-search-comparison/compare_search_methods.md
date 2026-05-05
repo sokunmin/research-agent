@@ -2,7 +2,7 @@
 
 ### Abstract
 
-This study evaluates whether the Tavily web-search dependency in the paper-discovery pipeline of a research-agent system can be replaced by direct OpenAlex API queries augmented with quality filters. Ten experiments across five research domains compare three OpenAlex search modalities (keyword, BM25, semantic), characterise Tavily's failure modes, determine an appropriate candidate pool size, and conduct a head-to-head pipeline comparison between the production path (Tavily-seeded citation expansion, Path A) and a proposed replacement (OpenAlex standalone with quality filters, Path B). Path A achieves the target of 10 or more relevant papers in only 2 of 5 domains and produces zero candidates for the flagship topic; Path B meets the target in 2 of 5 domains but retrieves candidates in all 5 domains and is fully deterministic. The results demonstrate that OpenAlex standalone is a viable and more reliable replacement for Tavily-assisted search, though both paths face challenges in narrow or ambiguous topic domains where strict relevance filtering reduces yield.
+This study evaluates whether the Tavily web-search dependency in the paper-discovery pipeline of a research-agent system can be replaced by direct OpenAlex API queries augmented with quality filters. Ten experiments across five research domains compare three OpenAlex search modalities (keyword, BM25, semantic), characterize Tavily's failure modes, determine an appropriate candidate pool size, and conduct a head-to-head pipeline comparison between the production path (Tavily-seeded citation expansion, Path A) and a proposed replacement (OpenAlex standalone with quality filters, Path B). Path A achieves the target of 10 or more relevant papers in only 2 of 5 domains and produces zero candidates for the flagship topic; Path B meets the target in 2 of 5 domains but retrieves candidates in all 5 domains and is fully deterministic. The results demonstrate that OpenAlex standalone is a viable and more reliable replacement for Tavily-assisted search, though both paths face challenges in narrow or ambiguous topic domains where strict relevance filtering reduces yield.
 
 ---
 
@@ -10,7 +10,7 @@ This study evaluates whether the Tavily web-search dependency in the paper-disco
 
 The research-agent pipeline automatically discovers academic papers on a given topic, filters them for relevance, downloads PDFs, generates summaries, and produces presentation slides. In the original production system, paper discovery relies on Tavily web search to find ArXiv-related results, which are then matched to OpenAlex records and expanded via citation chains. This design introduces three concerns:
 
-1. **External dependency**: Tavily is a paid third-party API whose availability, pricing, and behaviour are outside the project's control.
+1. **External dependency**: Tavily is a paid third-party API whose availability, pricing, and behavior are outside the project's control.
 2. **Non-determinism**: Web search results vary across runs, making the pipeline non-reproducible.
 3. **Indirect seeding**: Tavily returns web pages (blog posts, documentation sites) that must be title-matched into OpenAlex, introducing a lossy translation step.
 
@@ -39,7 +39,7 @@ E14 achieves F1 = 0.974, Precision = 1.000, and Recall = 0.950 on a balanced 120
 
 #### 2.3 Download Validation
 
-A separate validation script (`extract-id.py`) confirms that papers passing the open-access status filter (`oa_status` in {diamond, gold, green}) are downloadable, achieving 5/5 successful downloads using a four-strategy fallback chain. Download reliability is not evaluated in this study.
+A separate validation script (`pdf_download_fallback.py`) confirms that papers passing the open-access status filter (`oa_status` in {diamond, gold, green}) are downloadable, achieving 5/5 successful downloads using a four-strategy fallback chain. Download reliability is not evaluated in this study.
 
 #### 2.4 Evaluation Metric
 
@@ -143,14 +143,14 @@ Experiment 07 uses the arxiv-prefix Tavily query and attempts to match each retu
 | Coffee Time Papers: Attention Is All You Need | "Embracing Chinese Global Security Ambitions" (cited: 26) | Wrong paper |
 | Selective Attention Improves Transformer - arXiv | No match | Lost |
 
-Of five Tavily titles, only one (20%) produces a correct OpenAlex match. Two titles return no match at all, and two titles match to completely wrong papers. The title "Attention Is All You Need - arXiv" — one of the most cited papers in machine learning — fails to match because the suffix "- arXiv" disrupts the `search_filter` AND logic, and the query instead matches an unrelated paper. This reveals a critical brittleness in the Tavily-to-OpenAlex translation: web-scraped titles contain suffixes, prefixes, and formatting artefacts that cause `search_filter` to return incorrect or empty results.
+Of five Tavily titles, only one (20%) produces a correct OpenAlex match. Two titles return no match at all, and two titles match to completely wrong papers. The title "Attention Is All You Need - arXiv" — one of the most cited papers in machine learning — fails to match because the suffix "- arXiv" disrupts the `search_filter` AND logic, and the query instead matches an unrelated paper. This reveals a critical brittleness in the Tavily-to-OpenAlex translation: web-scraped titles contain suffixes, prefixes, and formatting artifacts that cause `search_filter` to return incorrect or empty results.
 
 #### 4.4 Synthesis: Tavily Failure Modes
 
 The three experiments identify four distinct failure modes:
 
-1. **Non-academic results**: Even with an optimised query prefix, 40% of Tavily results are non-academic (Exp 05).
-2. **Title mismatch**: Web-scraped titles contain artefacts (e.g., "- arXiv", blog post prefixes) that cause OpenAlex `search_filter` to return wrong papers or no match (Exp 07: 80% failure rate).
+1. **Non-academic results**: Even with an optimized query prefix, 40% of Tavily results are non-academic (Exp 05).
+2. **Title mismatch**: Web-scraped titles contain artifacts (e.g., "- arXiv", blog post prefixes) that cause OpenAlex `search_filter` to return wrong papers or no match (Exp 07: 80% failure rate).
 3. **Topical drift**: When Tavily returns non-academic titles, `search_filter` maps them to the closest lexical match in OpenAlex, yielding papers unrelated to the query (Exp 06, Exp 07).
 4. **Redundant cost**: Tavily requires a paid API call plus N additional OpenAlex calls, while direct OpenAlex search achieves equal or better results with a single call (Exp 06).
 
@@ -194,7 +194,7 @@ Tavily("arxiv papers about the state of the art of {topic}", max_results=2)
 | Run 2 | 1 | 0 | 0 | No |
 | Run 3 | 1 | 0 | 0 | No |
 
-All three runs returned the same seed paper ("Local Attention Mechanism: Boosting the Transformer Architecture") and zero citing candidates. The delta across runs is 0, indicating that Tavily returned identical results across the three runs — likely due to server-side caching. The structural failure is that the single seed paper has zero citing works in OpenAlex that pass the filter, producing an empty candidate pool regardless of Tavily's behaviour.
+All three runs returned the same seed paper ("Local Attention Mechanism: Boosting the Transformer Architecture") and zero citing candidates. The delta across runs is 0, indicating that Tavily returned identical results across the three runs — likely due to server-side caching. The structural failure is that the single seed paper has zero citing works in OpenAlex that pass the filter, producing an empty candidate pool regardless of Tavily's behavior.
 
 **Part 2 — Five-domain results (1 run per topic)**
 
@@ -206,7 +206,7 @@ All three runs returned the same seed paper ("Local Attention Mechanism: Boostin
 | TOPIC_S | Computer Vision | 2 | 52 | 11 | Yes |
 | TOPIC_NEW | Biomedical | 1 | 50 | 37 | Yes |
 
-Path A meets the target (relevant >= 10) in **2 of 5 topics**. The RESEARCH_TOPIC — the project's primary use case — yields zero candidates due to the seed paper having no citing works. TOPIC_Q and TOPIC_R fail because Tavily finds only 1--2 seeds whose citation networks are small (4--6 citing papers). An additional failure is observed for TOPIC_NEW, where one of the two Tavily seeds causes an OpenAlex API error because the Tavily-scraped title contains web-page formatting artefacts (truncation and a "- arXiv" suffix: "Gene and RNA Editing: Methods, Enabling ... - arXiv"), which generates an invalid query parameter. This is the same title-artefact failure mode documented in Exp 07, reducing the effective seed count to 1.
+Path A meets the target (relevant >= 10) in **2 of 5 topics**. The RESEARCH_TOPIC — the project's primary use case — yields zero candidates due to the seed paper having no citing works. TOPIC_Q and TOPIC_R fail because Tavily finds only 1--2 seeds whose citation networks are small (4--6 citing papers). An additional failure is observed for TOPIC_NEW, where one of the two Tavily seeds causes an OpenAlex API error because the Tavily-scraped title contains web-page formatting artifacts (truncation and a "- arXiv" suffix: "Gene and RNA Editing: Methods, Enabling ... - arXiv"), which generates an invalid query parameter. This is the same title-artifact failure mode documented in Exp 07, reducing the effective seed count to 1.
 
 #### 6.2 Path B: Replacement Path (Exp 10)
 
@@ -258,7 +258,7 @@ Path B meets the target in **2 of 5 topics**. Critically, it retrieves candidate
 
 **Where Path B succeeds**: Path B retrieves 92--100 candidates for every topic, eliminating zero-candidate failures entirely. For TOPIC_Q (federated learning privacy preservation), Path B triples the relevant count from 4 to 12, crossing the target threshold. For TOPIC_NEW (CRISPR gene editing), Path B matches Path A's strong performance (40 vs. 37 relevant). The deterministic nature of Path B means these results are exactly reproducible.
 
-**Where Path B underperforms**: Path B yields only 4 relevant papers for RESEARCH_TOPIC and 2 for TOPIC_R. These low counts arise from the interaction between BM25 search and the `cited_by_count > 50` filter. BM25 ranks papers by term frequency, which favours application-domain papers that use transformers or reinforcement learning as tools (e.g., medical image segmentation, time-series forecasting, robotics) over papers that study these methods in the abstract. The quality filters then retain only high-cited papers among these results. E14 correctly identifies that most of these high-cited application papers are not relevant to the core topic, producing a low relevant count. This is the intended behaviour of the pipeline — it surfaces only genuinely relevant, downloadable papers — but it means that for topics where the core literature has fewer high-cited open-access papers published after 2023, the yield will be below the target.
+**Where Path B underperforms**: Path B yields only 4 relevant papers for RESEARCH_TOPIC and 2 for TOPIC_R. These low counts arise from the interaction between BM25 search and the `cited_by_count > 50` filter. BM25 ranks papers by term frequency, which favors application-domain papers that use transformers or reinforcement learning as tools (e.g., medical image segmentation, time-series forecasting, robotics) over papers that study these methods in the abstract. The quality filters then retain only high-cited papers among these results. E14 correctly identifies that most of these high-cited application papers are not relevant to the core topic, producing a low relevant count. This is the intended behavior of the pipeline — it surfaces only genuinely relevant, downloadable papers — but it means that for topics where the core literature has fewer high-cited open-access papers published after 2023, the yield will be below the target.
 
 ---
 
@@ -270,7 +270,7 @@ RESEARCH_TOPIC ("attention mechanism in transformer models") yields only 4 relev
 
 1. **Quality filters select for high-impact recent papers**: The `cited_by_count > 50` and `publication_year > 2023` constraints exclude the long tail of recent but less-cited papers and the highly-cited but older foundational works. For RESEARCH_TOPIC, the most relevant papers (e.g., "Attention Is All You Need" with 6,507 citations, published 2017) predate the year filter, while newer attention mechanism papers may not yet have accumulated 50 citations.
 
-2. **E14 strictly rejects application papers**: BM25 search for "attention mechanism in transformer models" returns papers that use transformers with attention in applied domains (damage detection, medical imaging, crop yield prediction). These papers contain the query terms but are not about attention mechanisms per se. E14's high precision (1.000) means it rejects these papers with zero false positives, which is the desired behaviour for a pipeline that must produce topically relevant summaries and slides.
+2. **E14 strictly rejects application papers**: BM25 search for "attention mechanism in transformer models" returns papers that use transformers with attention in applied domains (damage detection, medical imaging, crop yield prediction). These papers contain the query terms but are not about attention mechanisms per se. E14's high precision (1.000) means it rejects these papers with zero false positives, which is the desired behavior for a pipeline that must produce topically relevant summaries and slides.
 
 The relevant papers that do pass both filters are genuinely relevant and downloadable. For a pipeline that requires a minimum of 5 papers per slide deck, the 4 papers found for RESEARCH_TOPIC approach viability, and the count can be increased by relaxing the citation threshold or expanding the year window.
 
@@ -284,7 +284,7 @@ Path B is fully deterministic: the same query parameters always return the same 
 
 #### Downloadability
 
-All papers returned by Path B satisfy the `oa_status` in {diamond, gold, green} filter, ensuring they are open-access and downloadable. The separate validation in `extract-id.py` confirms a 100% download success rate (5/5 papers) using a four-strategy fallback chain. Path A does not apply an OA status filter, so some of its relevant papers may not be downloadable.
+All papers returned by Path B satisfy the `oa_status` in {diamond, gold, green} filter, ensuring they are open-access and downloadable. The separate validation in `pdf_download_fallback.py` confirms a 100% download success rate (5/5 papers) using a four-strategy fallback chain. Path A does not apply an OA status filter, so some of its relevant papers may not be downloadable.
 
 ---
 
@@ -294,7 +294,7 @@ This study evaluates whether the Tavily web-search dependency in the research-ag
 
 1. **OpenAlex standalone is more robust than Tavily-assisted search.** Path B retrieves candidates for all 5 topics (92--100 per topic), while Path A produces zero candidates for the project's primary topic (RESEARCH_TOPIC) due to the fragile Tavily-to-OpenAlex seed-matching chain. Across all five domains, Path B retrieves 64 total relevant papers compared to Path A's 53.
 
-2. **Tavily introduces unnecessary complexity and fragility.** Four distinct failure modes are identified: non-academic results (0--60% academic hit rate depending on query format), title mismatch artefacts (80% failure rate in OpenAlex matching), topical drift from lexical title matching, and redundant API cost (6 calls vs. 1).
+2. **Tavily introduces unnecessary complexity and fragility.** Four distinct failure modes are identified: non-academic results (0--60% academic hit rate depending on query format), title mismatch artifacts (80% failure rate in OpenAlex matching), topical drift from lexical title matching, and redundant API cost (6 calls vs. 1).
 
 3. **Both paths achieve the target in 2 of 5 domains.** Path B meets the >= 10 relevant paper threshold for TOPIC_Q (12) and TOPIC_NEW (40). Path A meets it for TOPIC_S (11) and TOPIC_NEW (37). Neither path achieves the target for RESEARCH_TOPIC, TOPIC_R, or (in the case of Path A) TOPIC_Q.
 

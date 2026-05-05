@@ -61,7 +61,7 @@ The requirements section differs incrementally:
 TC2 specifically tests whether the LLM handles None-valued idx fields (visual-only layouts).
 `idx` values are integers (not strings) — reflecting the target state after `schemas.py` Fix #2a
 (`Optional[str]` → `Optional[int]`). If schemas.py has not been updated yet, interpret TC1/TC2
-results as representative of post-fix production behaviour only.
+results as representative of post-fix production behavior only.
 
 ### 2.4 Evaluation Checks (Static Analysis)
 
@@ -179,7 +179,7 @@ P1+: null=100% for all cases
 ```
 
 **Interpretation (ministral):** ministral is less reliable at the boundary case (TC2 with actual
-None values, text-only instruction). P1's layout pattern is enough to stabilise it because the
+None values, text-only instruction). P1's layout pattern is enough to stabilize it because the
 structured code context anchors its output format. P2 makes it explicit.
 
 ### P2 → P3: import_correct — why P3 is not recommended (Occam's Razor)

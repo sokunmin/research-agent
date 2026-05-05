@@ -1,4 +1,4 @@
-# extract-id.py — Research Report
+# pdf_download_fallback.py — Research Report
 
 ## Purpose
 
@@ -131,7 +131,7 @@ ArXiv usually comes **before** the conference, not after. Post-publication, auth
 
 **Consequence:** The ArXiv latest version is typically the most complete and corrected version, making it the preferred source for downstream tasks like summarization and slide generation.
 
-**Version behaviour of each download strategy:**
+**Version behavior of each download strategy:**
 
 | Strategy | URL | Version obtained |
 |----------|-----|-----------------|
