@@ -42,40 +42,49 @@ jobs:
           CLEAN_BRANCH="release/clean-${SHORT_SHA}"
           echo "name=${CLEAN_BRANCH}" >> $GITHUB_OUTPUT
 
-          git checkout -b "${CLEAN_BRANCH}"
-
-          # 移除 dev-tracker 與 poc（只在存在時才 commit）
-          REMOVED=""
-          if [ -d "dev-tracker" ]; then
-            git rm -rf dev-tracker/
-            REMOVED="dev-tracker"
-          fi
-          if [ -d "poc" ]; then
-            git rm -rf poc/
-            REMOVED="${REMOVED:+$REMOVED, }poc"
-          fi
-          if [ -f "experiments/REPORTING_GUIDE.md" ]; then
-            git rm -f experiments/REPORTING_GUIDE.md
-            REMOVED="${REMOVED:+$REMOVED, }experiments/REPORTING_GUIDE.md"
-          fi
-
-          if [ -n "$REMOVED" ]; then
-            git commit -m "chore(release): remove ${REMOVED} before merging to main"
-            echo "removed=${REMOVED}" >> $GITHUB_OUTPUT
+          # 若 release branch 已存在（前次 run 失敗殘留），直接重用，跳過建立與 push
+          if git ls-remote --exit-code origin "${CLEAN_BRANCH}"; then
+            echo "Branch ${CLEAN_BRANCH} already exists on remote, reusing"
+            echo "removed=reused" >> $GITHUB_OUTPUT
           else
-            echo "removed=none" >> $GITHUB_OUTPUT
-          fi
+            git checkout -b "${CLEAN_BRANCH}"
 
-          git push origin "${CLEAN_BRANCH}"
+            # 移除 dev-tracker 與 poc（只在存在時才 commit）
+            REMOVED=""
+            if [ -d "dev-tracker" ]; then
+              git rm -rf dev-tracker/
+              REMOVED="dev-tracker"
+            fi
+            if [ -d "poc" ]; then
+              git rm -rf poc/
+              REMOVED="${REMOVED:+$REMOVED, }poc"
+            fi
+            if [ -f "experiments/REPORTING_GUIDE.md" ]; then
+              git rm -f experiments/REPORTING_GUIDE.md
+              REMOVED="${REMOVED:+$REMOVED, }experiments/REPORTING_GUIDE.md"
+            fi
+
+            if [ -n "$REMOVED" ]; then
+              git commit -m "chore(release): remove ${REMOVED} before merging to main"
+              echo "removed=${REMOVED}" >> $GITHUB_OUTPUT
+            else
+              echo "removed=none" >> $GITHUB_OUTPUT
+            fi
+
+            git push origin "${CLEAN_BRANCH}"
+          fi
 
       - name: Create PR to main
         id: create_pr
         run: |
+          cat > /tmp/pr_body.md << 'PRBODY'
+          ${{ inputs.pr_body }}
+          PRBODY
           PR_URL=$(gh pr create \
             --base main \
             --head "${{ steps.clean_branch.outputs.name }}" \
             --title "${{ inputs.pr_title }}" \
-            --body "${{ inputs.pr_body }}")
+            --body-file /tmp/pr_body.md)
           echo "url=${PR_URL}" >> $GITHUB_OUTPUT
           echo "PR created: ${PR_URL}"
         env:
