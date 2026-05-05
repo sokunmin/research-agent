@@ -1,6 +1,7 @@
 name: Clean Merge to Main
 
 # 由 git-pr-description skill 透過 gh workflow run 觸發
+# 從 main 建 release branch，cherry-pick dev 上的 public commits（跳過 chore(poc)）
 # 不直接對 main 操作，而是建立 clean release branch → 開 PR → 等人工 review merge
 on:
   workflow_dispatch:
@@ -22,10 +23,10 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout dev branch
+      - name: Checkout main branch
         uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: main
           fetch-depth: 0
 
       - name: Setup git identity
@@ -35,44 +36,54 @@ jobs:
           # Suppress co-author trailer added by some git tools
           git config trailer.co-authored-by.ifexists doNothing
 
-      - name: Create clean release branch
+      - name: Fetch dev branch
+        run: git fetch origin dev
+
+      - name: Create release branch and cherry-pick public commits
         id: clean_branch
         run: |
-          SHORT_SHA=$(git rev-parse --short HEAD)
+          SHORT_SHA=$(git rev-parse --short origin/dev)
           CLEAN_BRANCH="release/clean-${SHORT_SHA}"
           echo "name=${CLEAN_BRANCH}" >> $GITHUB_OUTPUT
 
           # 若 release branch 已存在（前次 run 失敗殘留），直接重用，跳過建立與 push
           if git ls-remote --exit-code origin "${CLEAN_BRANCH}"; then
             echo "Branch ${CLEAN_BRANCH} already exists on remote, reusing"
-            echo "removed=reused" >> $GITHUB_OUTPUT
-          else
-            git checkout -b "${CLEAN_BRANCH}"
-
-            # 移除 dev-tracker 與 poc（只在存在時才 commit）
-            REMOVED=""
-            if [ -d "dev-tracker" ]; then
-              git rm -rf dev-tracker/
-              REMOVED="dev-tracker"
-            fi
-            if [ -d "poc" ]; then
-              git rm -rf poc/
-              REMOVED="${REMOVED:+$REMOVED, }poc"
-            fi
-            if [ -f "experiments/REPORTING_GUIDE.md" ]; then
-              git rm -f experiments/REPORTING_GUIDE.md
-              REMOVED="${REMOVED:+$REMOVED, }experiments/REPORTING_GUIDE.md"
-            fi
-
-            if [ -n "$REMOVED" ]; then
-              git commit -m "chore(release): remove ${REMOVED} before merging to main"
-              echo "removed=${REMOVED}" >> $GITHUB_OUTPUT
-            else
-              echo "removed=none" >> $GITHUB_OUTPUT
-            fi
-
-            git push origin "${CLEAN_BRANCH}"
+            echo "cherry_picked=reused" >> $GITHUB_OUTPUT
+            exit 0
           fi
+
+          git checkout -b "${CLEAN_BRANCH}"
+
+          # 找出 dev 上還沒進 main 的 commits（依 patch 內容比對，非 SHA）
+          # + 表示尚未進 main，- 表示已進 main
+          NEW_COMMITS=$(git cherry origin/main origin/dev | grep '^+' | awk '{print $2}')
+
+          if [ -z "$NEW_COMMITS" ]; then
+            echo "No new commits to cherry-pick — nothing to merge"
+            exit 1
+          fi
+
+          # 逐一檢查：跳過 chore(poc) commits，cherry-pick 其餘 public commits
+          PICKED=""
+          while IFS= read -r sha; do
+            MSG=$(git log -1 --format="%s" "$sha")
+            if echo "$MSG" | grep -qE '^chore\(poc\)'; then
+              echo "Skipping dev-only commit: $sha — $MSG"
+            else
+              echo "Cherry-picking: $sha — $MSG"
+              git cherry-pick "$sha"
+              PICKED="${PICKED:+$PICKED, }$sha"
+            fi
+          done <<< "$NEW_COMMITS"
+
+          if [ -z "$PICKED" ]; then
+            echo "All new commits are dev-only (chore(poc)) — nothing to merge"
+            exit 1
+          fi
+
+          echo "cherry_picked=${PICKED}" >> $GITHUB_OUTPUT
+          git push origin "${CLEAN_BRANCH}"
 
       - name: Create PR to main
         id: create_pr
@@ -107,5 +118,5 @@ jobs:
           echo "| 項目 | 值 |" >> $GITHUB_STEP_SUMMARY
           echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
           echo "| Clean Branch | \`${{ steps.clean_branch.outputs.name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| dev-tracker / poc 已移除 | ${{ steps.clean_branch.outputs.removed }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cherry-picked commits | ${{ steps.clean_branch.outputs.cherry_picked }} |" >> $GITHUB_STEP_SUMMARY
           echo "| PR | ${{ steps.create_pr.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
