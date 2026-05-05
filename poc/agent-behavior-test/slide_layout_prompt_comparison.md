@@ -199,7 +199,7 @@ Appended to every prompt template. Specifies 5 output fields:
 
 **ID:** `P3_positive_examples`
 **Strategy:** One semantic `USE <LAYOUT> when:` rule per layout, describing purpose and content type in natural language. No negative constraints, no decision tree, no reasoning steps.
-**Rationale:** Semantic rules describe intent rather than surface text patterns, which generalises better across paper types and domains. Keeping the prompt purely positive avoids conflicting constraints.
+**Rationale:** Semantic rules describe intent rather than surface text patterns, which generalizes better across paper types and domains. Keeping the prompt purely positive avoids conflicting constraints.
 **Key feature:** Each rule is 2–4 lines describing purpose and content type. For example: "USE TITLE_SLIDE when: The slide is the opening cover page of the presentation / The slide introduces the paper with its title, author, or institutional information / The slide is the closing thank-you, Q&A, or conclusion page / The content is presentational rather than informational." Followed by `LAYOUT_DESCRIPTIONS`.
 
 ---
@@ -461,7 +461,7 @@ The model appears to stop at the role-labelling step (STEP 1) rather than procee
 - `academic_content` → `CONTENT_WITH_PHOTO`×3 in P4 (the negative rules against TITLE_AND_BODY redirect the model to an unexpected layout)
 - `closing_slide` → `BULLET_LIST`×3 in P4 (the negative rule against TITLE_AND_BODY/BULLET_LIST for closing slides appears to mismatch the model's pattern matching)
 - `photo_landscape` → `CONTENT_WITH_PHOTO`×3 in P4 and P5 (the model detects a visual element reference in the content and picks the combined-content-plus-photo layout)
-- `full_photo` → `PHOTO_LANDSCAPE`×3 in P2 (the model recognises a full-image slide but picks the single-landscape-image layout instead)
+- `full_photo` → `PHOTO_LANDSCAPE`×3 in P2 (the model recognizes a full-image slide but picks the single-landscape-image layout instead)
 - `three_photo` → `CONTENT_WITH_PHOTO`×3 in P4 (similar to `photo_landscape` — visual element detected, wrong layout chosen)
 
 **ministral-3:14b-cloud:** No failures on P1–P5 (zero wrong choices across all 180 calls). P0 has 7 wrong choices: `cover/title_slide` (0/3, `TITLE_AND_BODY`×3), `closing_slide` (0/3, `TITLE_AND_BODY`×3), `photo_landscape` (2/3, `CONTENT_WITH_PHOTO`×1).
@@ -594,7 +594,7 @@ P0 is the fastest prompt for gemma3:4b (9.5s vs 11.1–13.2s for P1–P5) becaus
 
 **P1 (LAYOUT_DESCRIPTIONS alone) is the most impactful change.** Moving from P0 to P1 closes most of the accuracy gap: gemma3:4b goes from 15/36 to 33/36 (+18 calls), ministral from 29/36 to 36/36 (+7 calls). The addition of structured layout descriptions (Use for / Structure / Signals per layout) is the dominant improvement over the production prompt — not routing rules or negative constraints.
 
-**Best prompt for deployment:** P1 or P3 (tied at 69/72 combined). For gemma3:4b, both achieve 33/36. For ministral-3:14b-cloud, all P1–P5 achieve 36/36. P3 (Positive Examples) is semantically richer and may generalise better across paper types; P1 is simpler. P5 Chain-of-Thought (66/72) is a viable alternative if reasoning transparency is valued. P2 Decision-Tree and P4 Negative Examples should be avoided for gemma3:4b — they are worse than P1/P3 and introduce new failure modes.
+**Best prompt for deployment:** P1 or P3 (tied at 69/72 combined). For gemma3:4b, both achieve 33/36. For ministral-3:14b-cloud, all P1–P5 achieve 36/36. P3 (Positive Examples) is semantically richer and may generalize better across paper types; P1 is simpler. P5 Chain-of-Thought (66/72) is a viable alternative if reasoning transparency is valued. P2 Decision-Tree and P4 Negative Examples should be avoided for gemma3:4b — they are worse than P1/P3 and introduce new failure modes.
 
 **P0 failure pattern:** The production prompt has no layout descriptions, biasing models to pick `TITLE_AND_BODY` for any slide with text and creating no guidance for specialist layouts (QUOTE, SECTION_HEADER_*, THREE_PHOTO, BLANK). For gemma3:4b, 7 out of 12 slide types fail under P0. For ministral-3:14b-cloud, 2 slide types fail completely (`cover/title_slide`, `closing_slide`) with a third partial failure (`photo_landscape`). The Norwegian legacy text ("Plassholder for innhold") in P0 does not appear to cause visible harm to either model's layout name output, but is a maintenance liability.
 

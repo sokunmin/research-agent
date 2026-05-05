@@ -14,7 +14,6 @@ This repository is a fork of
 
 ## 🔍 Table of Contents
 - [System Architecture](#system-architecture)
-- [What I Changed and Why](#what-i-changed-and-why)
 - [Experiments](#experiments)
   - [Paper Discovery Pipeline](#experiments--paper-discovery-pipeline)
   - [Slide Generation Pipeline](#experiments--slide-generation-pipeline)
@@ -56,9 +55,9 @@ This repository is a fork of
 │                                     ▼                                       │
 │  ┌── 3. PDF ACQUISITION & PARSING ───────────────────────────────────-──┐   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
-│  │ LlamaParse (cloud-only,          │ Download: 4-strategy fallback     │   │
-│  │ credit-based)                    │ (ArXiv → URL → pyalex → OA)       │   │
-│  │                                  │ Parsing: Docling (local, planned) │   │
+│  │ arxiv library (ArXiv ID          │ Download: 4-strategy fallback     │   │
+│  │ required; no fallback)           │ (ArXiv → URL → pyalex → OA)       │   │
+│  │ Parsing: marker-pdf              │ Parsing: Docling (local, planned) │   │
 │  └──────────────────────────────────┴───────────────────────────────────┘   │
 │                                     │                                       │
 │                                     ▼                                       │
@@ -97,57 +96,24 @@ This repository is a fork of
 │  │                                  │ content_missing  → re-render      │   │
 │  │                                  │ visual_overlap   → Python adjusts │   │
 │  └──────────────────────────────────┴───────────────────────────────────┘   │
+│                                     │                                       │
+│                                     ▼                                       │
+│  ┌── 8. FINAL OUTPUT ───────────────────────────────────────────────────┐   │
+│  ├──────────────────────────────────┬───────────────────────────────────┤   │
+│  │ 1 slide per paper                │ N slides per paper (configurable  │   │
+│  │ final.pptx + final.pdf           │ via SLIDES_PER_PAPER, default 4)  │   │
+│  │                                  │ final.pptx + final.pdf            │   │
+│  └──────────────────────────────────┴───────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-                           << final .pptx + .pdf >>
 ```
 
 **Stack:** Python · FastAPI · LlamaIndex 0.14 · LiteLLM · Ollama · MLflow · Streamlit
 
 ---
 
-## What I Changed and Why
-
-**1. Unblocked development — LlamaIndex 0.12 → 0.14 full migration**  
-The forked codebase was frozen: LlamaIndex's breaking API changes across
-workflow, agent, and tool layers prevented any further work. Migrated the
-entire codebase as a prerequisite for all changes below.
-
-**2. Optimized Retrieval & Re-ranking Pipeline**  
-- *Problem:* The original **two-stage discovery** (Tavily → Semantic Scholar) suffered from an 80% candidate loss due to web-scraped title mismatches and non-deterministic results.
-- *Fix:* Transitioned to **One-stage OpenAlex Standalone Discovery** (BM25 + native Semantic Search) + Local Embedding Re-scoring + Selective LLM Verification.
-- *Result:* F1=0.974, Precision=1.000 · 3.3× faster · Fully deterministic retrieval pool.
-
-**3. Replaced LLM code generation with deterministic rendering**  
-- *Problem:* ReActAgent (GPT-4o) generated python-pptx code at runtime. After switching to local 4B models, systematic prompt engineering (48 LLM calls, 4 variants) brought static correctness from 8% → 100% — but end-to-end pipeline runs still showed non-deterministic failures when rendering complex nested slide structures, undetectable by visual validation.
-- *Fix:* LLM outputs schema-validated JSON only; a deterministic Python renderer constructs the PPTX directly
-- *Result:* Eliminates runtime unpredictability regardless of model size
-
-**4. Identified correct structured output method per schema complexity**  
-- *Problem:* FunctionCallingProgram returns the schema definition itself on all tested local Ollama models (0% success rate)
-- *Fix:* LLMTextCompletionProgram for complex nested schemas; Ollama grammar-constrained decoding for flat schemas
-- *Result:* 0% → 100% structured output reliability
-
-**5. Typed error routing for slide validation**  
-- *Problem:* VLM could only return valid/invalid — no actionable signal for downstream fix logic
-- *Fix:* Three-way failure classification routes each issue to the correct fix path: `content_too_long` → LLM trims JSON · `content_missing` → re-render · `visual_overlap` → Python adjusts placeholder position
-
-**6. Provider-agnostic inference layer**  
-Designed `ModelFactory` backed by LiteLLM; any LLM or VLM switched via `.env` only. Custom `LiteLLMMultiModal` class bridges LiteLLM's API with LlamaIndex's multimodal workflow layer, with automatic fallback on rate-limit errors. MLflow auto-logging tracks cost, token usage, and latency on every LLM call.
-
-**7. PDF parser evaluation**  
-Evaluated LlamaParse (rejected: cloud-only, credit-based), marker-pdf (rejected: 12–18 min/paper on M1 due to PyTorch MPS lacking FlashAttention), and selected Docling for its native Apple MLX support. Full evaluation notes in the experiments section.
-
----
 
 
 ## Experiments
-
-All experiments were run locally on an Apple MacBook M1 (16 GB unified memory).
-LLM and embedding models were served locally via Ollama using Apple Metal.
-Reported times reflect M1 execution and should not be treated as estimates for
-GPU server or cloud deployments.
 
 ---
 
@@ -168,11 +134,10 @@ Research Topic
  Which architecture achieves best F1/speed?
       │  ~10–20 relevant papers
       ▼
- [Exp 3] What cosine score threshold routes
- papers to LLM verification in production?
+ [Exp 3] Determining the optimal score threshold for Stage-2 LLM escalation.
       │
       ▼
- [Exp 4] Can open-access papers be
+ [Exp 4] Can open-access papers be 
  reliably downloaded?
       │
       ▼
@@ -183,43 +148,7 @@ Research Topic
 
 #### Experiment 1 — Retrieval Method Comparison & Tavily Replacement
 
-**Goal:** Determine whether the original Tavily + Semantic Scholar path can be fully replaced by OpenAlex and identify the optimal retrieval method.
-
-> ✅ **In current pipeline** — OpenAlex BM25 search with metadata filtering is the primary retrieval method, replacing the two-stage Tavily path entirely.
-
-**Why the original design was structurally fragile:**
-
-```
-Path A — Original (Tavily + SS):           Path B — Replacement (OpenAlex):
-
-Tavily web search                        OpenAlex semantic search
-      │                                        │
-      │  ← 80% title match failure rate        │
-      │   (4/5 titles: wrong or no record)     │  quality filters
-      ▼                                        │  (OA status / citations / year)
-Semantic Scholar ID Mapping                    ▼
-      │                                  Two-stage relevance filter
-      │  ← seed quality determines all         │
-      ▼                                        ▼
-LLM relevance filter                     Relevant papers
-
-Two-stage serial chain —                 One-stage discovery, deterministic,
-any failure breaks the pipeline          no external dependency
-```
-
-**Three OpenAlex search methods compared** (same topic, 25 results each):
-
-| Search method | Relevant papers | Relevance rate | ArXiv availability |
-|---|---|---|---|
-| Keyword match (title + abstract) | 15 / 25 | 60% | 12% |
-| BM25 full-text | 13 / 25 | 52% | 24% |
-| Semantic (embedding-based) | **17 / 25** | **68%** | **36%** |
-
-Semantic search returns a completely disjoint result set from keyword/BM25
-(0% overlap) — the three methods are complementary rather than redundant.
-
-**Head-to-head pipeline comparison across 5 research domains**
-(NLP, Distributed Systems, RL, Computer Vision, Biomedical):
+**System Architecture:** Step 1 — Paper Retrieval
 
 | | Path A: Tavily + citation expansion | Path B: OpenAlex direct |
 |---|---|---|
@@ -229,24 +158,18 @@ Semantic search returns a completely disjoint result set from keyword/BM25
 | Deterministic results | No | Yes |
 | External paid API required | Yes (Tavily) | No |
 
-**Decision:** Replace Tavily + Semantic Scholar with OpenAlex standalone. Path B
-retrieves 20.8% more relevant papers, fails on zero domains, and removes all
-paid API dependencies.
+- *Problem:* The original Tavily → Semantic Scholar path loses 80% of candidates to title-match failures — one of five tested domains returns zero papers entirely.
+- *Change:* Replaced with direct OpenAlex BM25 search and quality filters applied at retrieval time.
+- *Result:* Zero-candidate failure eliminated across all five domains; +20.8% total relevant papers; no paid external API required.
 
-> → Full report: [experiments/01-openalex-paper-discovery/search_method_comparison.md](experiments/01-openalex-paper-discovery/search_method_comparison.md)
+> ✅ **In current pipeline**
+> → Full report: [experiments/01-openalex-paper-discovery/01-search_method_comparison.md](experiments/01-openalex-paper-discovery/01-search_method_comparison.md)
 
 ---
 
 #### Experiment 2 — Re-ranking & Verification Pipeline
 
-**Goal:** Design a two-stage pipeline to re-rank retrieved candidates and verify their relevance using a cost-effective combination of embedding similarity and LLM judgment.
-
-> ✅ **In current pipeline** — Two-stage re-ranking and verification (`nomic-embed-text` Stage 1 + LLM Stage 2) is the primary relevance filtering step.
-
-**Dataset:** 120 papers manually labelled for *"attention mechanism in
-transformer models"* — 60 relevant, 60 irrelevant.
-
-**Four architectures compared:**
+**System Architecture:** Step 2 — Re-ranking & Verification
 
 | Approach | Description | F1 | Precision | Recall | Time (s) |
 |---|---|---|---|---|---|
@@ -255,92 +178,18 @@ transformer models"* — 60 relevant, 60 irrelevant.
 | Standalone embedding | Cosine similarity, paper vs topic | 0.861 | 0.766 | 0.983 | 127.8 |
 | **Two-stage (selected)** | **Embedding pre-screen + LLM** | **0.974** | **1.000** | **0.950** | **26.0** |
 
-The standalone LLM (F1 = 0.739) underperforms even the simple keyword baseline
-(F1 = 0.847) — a 2B model does not reliably generalise relevance judgement
-from zero-shot prompts alone.
+- *Problem:* lz-chen's LLM-only filter scores every candidate and achieves F1=0.739 — below the simple keyword baseline (F1=0.847).
+- *Change:* Two-stage filter: embedding pre-screen skips the LLM for clear cases; LLM verification handles the ambiguous band only.
+- *Result:* F1=0.974, Precision=1.000, 3.3× faster; ~58% of papers skip the LLM entirely.
 
-**How the two-stage design achieves better accuracy at lower cost:**
-
-```
-All 120 papers
-       │
-       ▼
-Stage 1: nomic-embed-text cosine similarity  (~22s for 120 papers)
-       │
-       ├── score > 0.610 ──────────────────→  ✅ Relevant
-       │                                       (~58% of corpus, no LLM call)
-       │
-       ├── score 0.500–0.610 ──→  Stage 2: LLM strict prompt  (~4s)
-       │   (ambiguous zone)              │
-       │                                ├──→  ✅ Relevant
-       │                                └──→  ❌ Rejected
-       │                                       (~42% of corpus sent to LLM)
-       │
-       └── score < 0.500 ──────────────────→  ❌ Rejected
-                                               (~0% of corpus, no LLM call)
-
-Result: F1 = 0.974 · Precision = 1.000 · Recall = 0.950
-        3.3× faster than standalone LLM · ~58% of papers skip the LLM entirely
-```
-
-**Three key findings from the ablation study:**
-
-**Finding 1 — Chain-of-Thought prompting degrades small model performance**
-
-| Prompt | F1 | Precision | Recall |
-|---|---|---|---|
-| Standard | 0.739 | 0.804 | 0.683 |
-| Chain-of-Thought | 0.604 | 0.806 | 0.483 |
-
-Adding CoT to a 2B model drops F1 by 13.5 points. Precision is unchanged;
-recall collapses. Small models are harmed, not helped, by extended reasoning
-chains.
-
-**Finding 2 — Embedding model recall vs compute trade-off**
-
-| Model | Parameters | F1 | Recall | Time (s) |
-|---|---|---|---|---|
-| nomic-embed-text | ~300M | 0.832 | 0.950 | 22.2 |
-| qwen3-embedding:0.6b | 0.6B | 0.813 | 0.833 | 38.4 |
-| qwen3-embedding:4b | 4B | 0.861 | 0.983 | 116.8 |
-
-Scaling from 0.6B to 4B improves recall by 15 points but costs 3× more
-compute. nomic-embed-text achieves the best recall-to-cost ratio and is
-selected for Stage 1.
-
-**Finding 3 — Stage-1 model choice matters more than Stage-2 prompt tuning**
-
-Stage 2 can filter out bad results, but it can't recover papers that Stage 1
-already missed. Getting Stage-1 recall right matters more than tuning Stage-2.
-nomic-embed-text misses 3 papers vs 8 for qwen3-embedding:0.6b — that gap
-directly determines the recall ceiling (0.950 vs 0.917), no matter how well
-Stage 2 is tuned.
-
-> → Full report: [experiments/01-openalex-paper-discovery/relevance_filter_ablation.md](experiments/01-openalex-paper-discovery/relevance_filter_ablation.md)
+> ✅ **In current pipeline**
+> → Full report: [experiments/01-openalex-paper-discovery/02-relevance_filter_ablation.md](experiments/01-openalex-paper-discovery/02-relevance_filter_ablation.md)
 
 ---
 
-#### Experiment 3 — Threshold Analysis for Production Routing
+#### Experiment 3 — Threshold Analysis for System Routing
 
-**Goal:** The two-stage filter uses ground-truth labels to decide which papers
-go to Stage 2 during experiments. In the actual pipeline, labels are unavailable —
-routing must rely solely on the Stage-1 cosine similarity score. This
-experiment determines the score band that should trigger Stage-2 LLM review.
-
-> ✅ **In current pipeline** — The `[0.500, 0.610)` band is used by the two-stage filter to route ambiguous papers to LLM review.
-
-ROC analysis on the 120-paper benchmark (AUC = 0.921):
-
-![ROC Curve — nomic-embed-text Stage-1](experiments/01-openalex-paper-discovery/imgs/roc_curve.png)
-
-The score distributions for relevant and irrelevant papers overlap in the range
-[0.457, 0.607] — papers in this zone are ambiguous and benefit from LLM review:
-
-![Score Distribution by Label](experiments/01-openalex-paper-discovery/imgs/score_distribution.png)
-
-**Production routing trade-off:**
-
-![Coverage vs Load — Score-Band Routing](experiments/01-openalex-paper-discovery/imgs/coverage_vs_load.png)
+**System Architecture:** Step 2 — Re-ranking & Verification (routing threshold)
 
 | Band sent to Stage-2 LLM | Papers routed | % of corpus | Errors captured |
 |---|---|---|---|
@@ -348,67 +197,103 @@ The score distributions for relevant and irrelevant papers overlap in the range
 | Wide [0.480, 0.610) | 60 | 50.0% | 91% |
 | Full [0.455, 0.610) | 77 | 64.2% | 100% |
 
-**Selected:** [0.500, 0.610) — captures all false positives while keeping
-Stage-2 LLM load at 41.7% of corpus. The 3 papers missed in every band cannot
-be recovered by Stage 2 regardless of band width, since Stage 1 missed them
-entirely.
+- *Problem:* The two-stage ablation uses oracle routing requiring ground-truth labels — not deployable at inference time where labels are unavailable.
+- *Change:* Derived score-band [0.500, 0.610) from ROC analysis on the 120-paper benchmark using only cosine similarity scores.
+- *Result:* Identical final output to oracle routing (F1=0.974, Precision=1.000) with no labels required.
 
-> → Full report: [experiments/01-openalex-paper-discovery/stage1_threshold_analysis.md](experiments/01-openalex-paper-discovery/stage1_threshold_analysis.md)
+> ✅ **In current pipeline**
+> → Full report: [experiments/01-openalex-paper-discovery/03-reranking_threshold_analysis.md](experiments/01-openalex-paper-discovery/03-reranking_threshold_analysis.md)
 
 ---
 
 #### Experiment 4 — PDF Download Reliability
 
-**Goal:** Validate that open-access papers found via OpenAlex can be reliably
-downloaded, and identify the correct method for extracting ArXiv IDs.
+**System Architecture:** Step 3 — PDF Acquisition & Parsing
 
-> ✅ **In current pipeline** — A four-strategy fallback chain with **Browser-mimicking headers** is used to bypass HTTP 403 blocks (e.g., AAAI OJS).
+- *Problem:* lz-chen's single-strategy download silently drops non-ArXiv papers. OpenAlex buries ArXiv IDs in a nested locations array — not in the top-level IDs field where Semantic Scholar placed them.
+- *Change:* Four-strategy fallback chain with OA status pre-filter at retrieval time; ArXiv IDs parsed from location URLs with version suffix stripped.
+- *Result:* 5/5 papers downloaded; structural guarantee that every OA-filtered paper has at least one viable download path.
 
-**Quality Gate:** The discovery pipeline only accepts papers with `diamond`, `gold`, or `green` Open Access status to guarantee stable programmatic access.
-
-A four-strategy fallback chain was designed and validated:
-
-```
-OpenAlex paper record
-        │
-        ▼  extract ArXiv ID from locations[].landing_page_url
-   ┌────┴────────────────────────────────────────────────┐
-   │  Strategy 1: ArXiv API  (arxiv.Client)              │
-   │  ── if fail ──────────────────────────────────────  │
-   │  Strategy 2: Constructed URL  arxiv.org/pdf/{id}    │
-   │  ── if fail ──────────────────────────────────────  │
-   │  Strategy 3: pyalex PDF endpoint                    │
-   │  ── if fail ──────────────────────────────────────  │
-   │  Strategy 4: OpenAlex OA URL                        │
-   └─────────────────────────────────────────────────────┘
-        │
-        ▼
-     PDF file
-```
-
-Filtering candidates to open-access status (`diamond`/`gold`/`green`) at the
-search stage guarantees at least one fallback strategy will succeed for every
-paper in the pool.
-
-> → Full report: [experiments/01-openalex-paper-discovery/pdf_download_fallback.md](experiments/01-openalex-paper-discovery/pdf_download_fallback.md)
+> ✅ **In current pipeline**
+> → Full report: [experiments/01-openalex-paper-discovery/04-pdf_download_fallback.md](experiments/01-openalex-paper-discovery/04-pdf_download_fallback.md)
 
 ---
 
 ### Experiments — Slide Generation Pipeline
 
-The slide generation pipeline went through a significant architecture change.
-The experiments below document the systematic evaluation that informed the
-decision to replace LLM code generation with deterministic rendering.
+The experiments below are the systematic evaluation that led to replacing LLM code generation with deterministic rendering.
 
 ---
 
-#### Experiment 5 — ReAct Agent: Model & Prompt Evaluation
+#### Experiment 5 — Structured Output Method Comparison
 
-**Goal:** After switching from GPT-4o to local 4B models, identify which model
-and prompt strategy produces reliable ReAct agent behavior — and determine
-whether the approach is viable for the full pipeline.
+**System Architecture:** Step 5 — Slide Outline + HITL (layout selection sub-step)
 
-> 🚫 **Replaced** — ReActAgent was replaced with deterministic rendering before reaching the full pipeline. These experiments are the evidence trail for that decision.
+| Method | Where structure is enforced | gemma3:4b | qwen3.5:4b |
+|---|---|---|---|
+| FunctionCallingProgram | LLM provider's function-calling API | **0%** | **0%** |
+| **LLMTextCompletionProgram** | **Client-side Pydantic parser** | **0–100%** | **100%** |
+| Ollama format parameter | Ollama server (grammar-constrained decoding) | 100% | 100% |
+| Structured LLM Wrapper | Client-side Pydantic parser | 0–100% | 100% |
+| Structured Predict | Client-side Pydantic parser | 0–100% | 100% |
+
+- *Problem:* FunctionCallingProgram (lz-chen's method) fails unconditionally on all tested local Ollama models — 0% success, crashes before inference.
+- *Change:* LLMTextCompletionProgram with client-side Pydantic parsing works across all LiteLLM providers including local Ollama.
+- *Result:* 0% → 100% structured output reliability.
+
+> ✅ **In current pipeline**
+> → Full report: [experiments/02-agent-behavior/05-structured_output_method_comparison.md](experiments/02-agent-behavior/05-structured_output_method_comparison.md)
+
+---
+
+#### Experiment 6 — Slide Layout Selection
+
+**System Architecture:** Step 5 — Slide Outline + HITL (layout selection sub-step)
+
+| Prompt | Design | Combined | gemma3:4b |
+|---|---|---|---|
+| P0 Original | No descriptions (baseline) | 44/72 (61%) | 15/36 (42%) |
+| **P1 Descriptions Only ✅** | **Layout descriptions (Use for / Structure / Signals)** | **69/72 (96%)** | **33/36** |
+| P3 Positive Examples | "USE \<LAYOUT\> when:" rules | 69/72 (96%) | 33/36 |
+| P5 Chain-of-Thought | 4-step reasoning before selection | 66/72 (92%) | 30/36 |
+| P2/P4 Routing/Elimination | Decision-tree or negative rules | 57/72 (79%) | 21/36 |
+
+- *Problem:* The original layout prompt (P0, no descriptions) achieves only 61% accuracy — gemma3:4b picks wrong layouts for one-third of slides.
+- *Change:* Added layout descriptions (Use for / Structure / Signals) to the prompt.
+- *Result:* 61% → 96% combined accuracy; P3 ties P1 but costs +1.9s per call on small models.
+
+> ✅ **In current pipeline**
+> → Full report: [experiments/02-agent-behavior/06-slide_layout_prompt_comparison.md](experiments/02-agent-behavior/06-slide_layout_prompt_comparison.md)
+
+---
+
+⚠️ **Experiments 7–9 form a sequential diagnostic chain** — each experiment fixed one failure layer of the ReActAgent approach, and together they produced the evidence for replacing it with deterministic rendering.
+
+```
+Exp 7 — Which local model works for the ReActAgent?
+      │  gemma3:4b selected — but agent writes invalid python-pptx code (8.3%)
+      ▼
+Exp 8 — Does fixing the task prompt fix code quality?
+      │  P2 achieves 100% — but tool dispatch is still broken
+      ▼
+Exp 9 — Does fixing the tool dispatch suffix fix agent reliability?
+      │  P4 achieves 100% — but error path still hallucinates failures
+      ▼
+Architectural finding (2026-04-15): python-pptx has no markdown parser —
+LLM-generated content collapsed all bullets into one paragraph, `*` appeared
+literally on slides. Docker sandbox added latency and infrastructure dependency
+on top of non-deterministic code generation.
+      │
+      ▼
+Decision: LLM → List[ParagraphItem] JSON → PptxRenderer (deterministic)
+          Eliminates ReActAgent + Docker sandbox entirely
+```
+
+---
+
+#### Experiment 7 — ReAct Agent: Model & Prompt Evaluation
+
+**System Architecture:** Step 6 — PPTX Rendering (original ReAct approach, superseded)
 
 | Model | Size | Slide generation | Tool calls | Slide modification |
 |---|---|---|---|---|
@@ -417,83 +302,38 @@ whether the approach is viable for the full pipeline.
 | gemma3n:e2b | 2B | ❌ Timeout (600s) | 0 | — |
 | gemma3n:e4b | 4B | ❌ Incompatible | 0 | — |
 
-**Key findings:**
-- Root cause of original failure was prompt ambiguity, not model capability: *"Respond user with the python code"* caused models to output text instead of calling the tool. An explicit directive resolved it.
-- Prompt style is task-dependent: the directive that fixes slide generation causes the modification task to fail completely (20-round loop, zero tool calls). Each agent step requires independently designed prompts.
-- gemma3n:e4b fails silently: it outputs a Gemini-specific `tool_code` format that LlamaIndex's ReAct parser can't read — the loop just exits at turn 1 with no error, no warning.
+- *Problem:* Switching from GPT-4o to local 4B models breaks the ReAct agent — vague task phrasing causes models to output text instead of calling tools.
+- *Change:* Evaluated 4 local models with explicit task directives; gemma3:4b identified as viable with 1 tool call vs 16 for qwen3.5:4b.
+- *Result:* Task completes but generated code fails 8.3% of the time — motivating Exp 8.
 
-> → Full report: [experiments/02-agent-behavior/react_agent_slide_gen.md](experiments/02-agent-behavior/react_agent_slide_gen.md)
-
----
-
-#### Experiment 6 — Structured Output Method Comparison
-
-**Goal:** Identify a reliable method to extract structured JSON (matching a Pydantic schema) from local Ollama models.
-
-| Method | Where structure is enforced | gemma3:4b | qwen3.5:4b |
-|---|---|---|---|
-| FunctionCallingProgram | LLM provider's function-calling API | **0%** | **0%** |
-| **LLMTextCompletionProgram** | **Client-side Pydantic parser** | **0–100%** | **100%** |
-| Ollama format parameter | Ollama server (token-sampling) | 100% | 100% |
-
-**Key Finding:** `FunctionCallingProgram` fails unconditionally on local Ollama models because they return the schema definition itself rather than populated values. While the Ollama `format` parameter is highly robust for flat schemas, it struggles with the complex nested structures required for slide outlines. `LLMTextCompletionProgram` was selected for its superior reliability in multi-level JSON parsing across various model sizes.
-
-> → Full report: [experiments/02-agent-behavior/structured_output_methods.md](experiments/02-agent-behavior/structured_output_methods.md)
+> 🚫 **Superseded** — replaced with deterministic rendering.
+> → Full report: [experiments/02-agent-behavior/07-react_agent_model_prompt_eval.md](experiments/02-agent-behavior/07-react_agent_model_prompt_eval.md)
 
 ---
 
-#### Experiment 7 — Slide Layout Selection
+#### Experiment 8 — ReAct Agent: Task Prompt Engineering for PPTX Code Generation
 
-**Goal:** Measure whether LLMs can correctly choose the right PPTX layout
-(e.g., `title_slide`, `bullet_list`, `academic_content`) given slide content,
-and improve accuracy through prompt design.
+**System Architecture:** Step 6 — PPTX Rendering (original ReAct approach, superseded)
 
-> ✅ **In current pipeline** — Negative Examples prompt strategy is used in the `outlines_with_layout` step for layout selection.
-
-**Baseline** — 3 models × 6 slide types × 3 runs = 54 inferences:
-
-| Model | Parameters | Appropriate selections | Avg latency |
-|---|---|---|---|
-| gemma3:4b (local) | 4B | 6 / 18 **(33%)** | 8.8s |
-| gpt-oss:20b (cloud) | 20B | 10 / 18 (56%) | 2.5s |
-| ministral-3b (cloud) | 14B | 12 / 18 (67%) | 2.8s |
-
-All three models universally fail on `title_slide` and `closing_slide` — a
-systematic bias toward the most common layout regardless of content.
-
-**Prompt engineering** — 4 strategies × 3 models × 6 slide types × 3 runs =
-216 inferences:
-
-| Prompt strategy | Description | gemma3:4b | ministral-3b | gpt-oss:20b |
+| Prompt | layout% | null% | overall% | Verdict |
 |---|---|---|---|---|
-| Decision-tree routing | Explicit if/else layout rules | 83% | 100% | 100% |
-| **Negative examples (selected)** | **"Do NOT use X when Y"** | **100%** | **100%** | **100%** |
-| Chain-of-Thought | Step-by-step reasoning | 67% | 100% | 100% |
-| Minimal layout list | Shortest possible prompt | 67% | 100% | 89% |
+| P0 — vague text only (lz-chen baseline) | 8.3% | 91.7% | 8.3% | Baseline |
+| P1 — + layout lookup pattern | 100% | 75.0% | 75.0% | Partial |
+| **P2 — + null guard pattern** | **100%** | **100%** | **100%** | **Selected** |
+| P3 — + import statement | 100% | 100% | 100% | Same as P2, unnecessary |
 
-The Negative Examples prompt is the only strategy reaching 100% across all
-three models including the weakest local 4B model — from 33% to 100% for
-gemma3:4b (+67 points). Consistent with the relevance filter finding: CoT
-degrades performance on small models.
+- *Problem:* lz-chen's original prompt (P0) generates valid code only 8.3% of the time — gemma3:4b copies the style of the provided code example, including what it omits.
+- *Change:* Added explicit layout lookup and null guard code patterns to the prompt (P2).
+- *Result:* 100% code correctness — but tool dispatch still broken, leading to Exp 9.
 
-> → Full report: [experiments/02-agent-behavior/layout_selection_prompt_eng.md](experiments/02-agent-behavior/layout_selection_prompt_eng.md)
+> 🚫 **Superseded** — replaced with deterministic rendering.
+> → Full report: [experiments/02-agent-behavior/08-react_agent_task_prompt_eval.md](experiments/02-agent-behavior/08-react_agent_task_prompt_eval.md)
 
 ---
 
-#### Experiment 8 — ReAct Agent: How a Prompt Example Key Breaks Tool Dispatch in 4B Models
+#### Experiment 9 — ReAct Agent: How a Prompt Example Key Breaks Tool Dispatch in 4B Models
 
-**Goal:** Even with the correct task prompt and best model (gemma3:4b), tool
-dispatch still failed. This experiment isolates the ReAct format template as
-the failure source and identifies the root cause.
-
-> 🚫 **Replaced** — The fix was valid, but the ReActAgent step was replaced with deterministic rendering before this was deployed. The finding about small-model prompt sensitivity remains transferable.
-
-**Root cause:** The format example in the prompt template contained
-`{"input": "hello world"}`. The `run_code` tool expects `code` as its
-parameter name. A 4B model uses the example key as a prior — generating
-`{"input": ...}` instead of `{"code": ...}` on every call.
-
-**Fix:** Changed the example to `{"code": "print('hello')"} for run_code`.
+**System Architecture:** Step 6 — PPTX Rendering (original ReAct approach, superseded)
 
 | Model | Before | After | Delta |
 |---|---|---|---|
@@ -501,12 +341,12 @@ parameter name. A 4B model uses the example key as a prior — generating
 | gemma3:4b — avg turns | 9.0 | **3.0** | −67% |
 | ministral-3:14b — task completed | 100% | 100% | unchanged |
 
-**Key insight:** For models ≤ 4B, the argument key name in a few-shot format
-example has stronger influence on tool call behavior than the tool's own
-parameter description. Larger models (14B+) read the tool spec correctly
-regardless of example content.
+- *Problem:* gemma3:4b dispatches 0% of tool calls with the correct argument key — it copies the example key `"input"` instead of reading the tool's own parameter spec `"code"`.
+- *Change:* Changed the format example key from `"input"` to `"code"` in the ReAct template.
+- *Result:* 0% → 100% task completion, avg turns 9.0 → 3.0; python-pptx's lack of markdown parsing then drove the decision to replace ReActAgent with deterministic rendering.
 
-> → Full report: [experiments/02-agent-behavior/slide_gen_react_suffix_eng.md](experiments/02-agent-behavior/slide_gen_react_suffix_eng.md)
+> 🚫 **Superseded** — replaced with deterministic rendering.
+> → Full report: [experiments/02-agent-behavior/09-react_agent_tool_dispatch_eval.md](experiments/02-agent-behavior/09-react_agent_tool_dispatch_eval.md)
 
 ---
 
