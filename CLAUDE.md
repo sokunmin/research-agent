@@ -140,7 +140,8 @@ To support clean cherry-picking, **never mix dev-only changes with public change
 |---|---|---|
 | `feat/fix/refactor/perf` | `backend/`, `frontend/`, `.github/` | ✅ |
 | `docs(experiments)` | `experiments/` | ✅ |
-| `chore(poc)` | `poc/`, `REPORTING_GUIDE.md`, `dev-tracker/` | ❌ |
+| `chore(poc)` | `poc/` PoC experiment code | ❌ |
+| `chore(dev)` | `dev-tracker/` (error-log, backlog, feature-spec), `REPORTING_GUIDE.md` | ❌ |
 | `docs(claude)` | `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, any AI agent instruction file | ❌ |
 
 **Before every commit: check that staged files do not mix `chore(poc)` paths with public paths.**
