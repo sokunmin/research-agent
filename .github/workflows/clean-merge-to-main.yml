@@ -68,7 +68,7 @@ jobs:
           PICKED=""
           while IFS= read -r sha; do
             MSG=$(git log -1 --format="%s" "$sha")
-            if echo "$MSG" | grep -qE '^chore\(poc\)'; then
+            if echo "$MSG" | grep -qE '^chore\(poc\)|^docs\(claude\)'; then
               echo "Skipping dev-only commit: $sha — $MSG"
             else
               echo "Cherry-picking: $sha — $MSG"
