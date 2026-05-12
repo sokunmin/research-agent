@@ -1,4 +1,21 @@
 ---
+## [2026-05-09] shadcn ToggleGroup (base-ui) `value` 型別是 `string[]` 非 `string` `[版本: shadcn@4.7+ / base-ui]`
+原因：shadcn 4.7+ 預設使用 base-ui 的 ToggleGroup，`value` 是 `readonly string[]`，`onValueChange` 簽名是 `(groupValue: string[], ...) => void`；Radix UI 的 `type="single"` 模式不存在，直接套用會有 TypeScript 型別錯誤。
+修正：state 改為 `useState<string[]>([])`，用 `selection[0] ?? ""` 取得單選值；`multiple={false}`（預設）維持單選行為。
+---
+## [2026-05-09] `ResizablePanelGroup` prop 是 `orientation` 不是 `direction` `[版本: react-resizable-panels 新版]`
+原因：舊版 react-resizable-panels 使用 `direction`，新版改為 `orientation`，TypeScript 會報 property does not exist，但 shadcn 的 wrapper 透過 `...props` spread，錯誤訊息不直觀。
+修正：將 `direction="horizontal"` 改為 `orientation="horizontal"`。
+---
+## [2026-05-09] `ScrollArea` 在 flex column 中需加 `min-h-0` 才能滾動 `[通用]`
+原因：flex item 預設 `min-height: auto`，內容超出時 flex item 跟著撐高而非被壓縮，導致 ScrollArea 無固定高度可滾動，內容直接溢出容器。
+修正：ScrollArea 加上 `min-h-0` class（`min-height: 0`），允許 flex item 被壓縮至 flex-1 分配的空間，ScrollArea 才有確定高度可滾動。
+---
+## [2026-05-09] 新增 `event_type` 值需同步更新 Pydantic `Literal` 約束 `[版本: 專案 WorkflowStreamingEvent]`
+原因：`schemas.py` 的 `WorkflowStreamingEvent.event_type` 定義為 `Literal["server_message", "request_user_input"]`，新增 `"paper_total"` 後若未更新 Literal，Pydantic 解析時直接拋 ValidationError，錯誤訊息指向 `event_type` field 但原因不直觀。
+修正：在 `schemas.py` 的 Literal 加入新值 `"paper_total"`，再於 `main.py` 的 event_generator 加對應 elif 分支。
+---
+---
 ## [2026-04-19] Ollama fallback 對 optional str 欄位回傳 `null`，Pydantic v2 拒絕（`default=""` 不處理 explicit null）`[通用: Pydantic v2 + Ollama fallback]`
 原因：Pydantic v2 的 `field: str = Field(default="")` 只在 key 缺席時套用 default；Ollama 輸出 `"suggestion_to_fix": null`（key 存在但值為 null），Pydantic 嚴格拒絕 `null → str` 強制轉換，拋 `Input should be a valid string`。
 修正：定義 `NullableStr = Annotated[str, BeforeValidator(lambda v: "" if v is None else v)]`，在 parse 邊界將 null 正規化為空字串；所有語意等價於空字串的 str 欄位改用此 type alias，`Optional[str]` 只用在 None 與 "" 有不同語意的欄位。
@@ -48,13 +65,18 @@
 修正：`slide_gen.py` 的 `outlines_with_layout` step 將 `FunctionCallingProgram` 換為 `LLMTextCompletionProgram`（不走 tool/function calling API，改走 prompt 內嵌 JSON schema 路徑，對任何 LLM 均相容）；若僅使用 Ollama，可改在 `LiteLLM` 的 `additional_kwargs` 傳入 `{"format": SlideOutlineWithLayout.model_json_schema()}`（Ollama server-side constrained generation），兩者均可達 100% success rate；cloud provider（Groq、Gemini）的 `FunctionCallingProgram` 呼叫不受影響，可透過 `config.py` flag 區分路徑。
 ---
 ## [2026-03-27] `ArtifactSandboxSession` init noise 污染 LLM tool observations，ReActAgent 無限 loop `[通用: llm-sandbox + ReActAgent]`
-原因：`ArtifactSandboxSession` 預設 `enable_plotting=True`，在每個 `session.run()` 的 stdout 前插入 "Python plot detection setup complete\n"；同時每次 `run()` 都在 `/sandbox/` 建立 UUID 命名的 `.py` 執行檔但從不清除，導致 `list_files` 回傳大量 UUID 殘檔。兩者共同污染 LLM tool observations，ReActAgent 誤判環境狀態後無限呼叫 `list_files`。
+原因：`ArtifactSandboxSession` 預設 `enable_plotting=True`，在每個 `session.run()` 的 stdout 前插入 "Python plot detection setup complete
+"；同時每次 `run()` 都在 `/sandbox/` 建立 UUID 命名的 `.py` 執行檔但從不清除，導致 `list_files` 回傳大量 UUID 殘檔。兩者共同污染 LLM tool observations，ReActAgent 誤判環境狀態後無限呼叫 `list_files`。
 修正：(1) `run_code()` 與 `list_files()` 中的 `ArtifactSandboxSession` 呼叫均加 `enable_plotting=False`；(2) 在 `list_files()` 加 `_SANDBOX_ARTIFACT_RE = re.compile(r'^[0-9a-f]{32}\.[a-z]+$')` 過濾器，從結果中移除所有 UUID 執行產物。驗證：`run_code` 回傳乾淨 stdout；空 sandbox 時 `list_files_str` 回傳 `'(no files in /sandbox)'`。
 影響檔案：`backend/services/sandbox.py`
 ---
 ## [2026-03-27] SSE 格式不符 W3C spec 且 `"Reasoning: "` prefix 重複拼接，Streamlit 顯示亂碼 `[通用: FastAPI SSE + Streamlit]`
-原因：`run_react_agent()` 對每個 streaming token delta 都拼接 `"Reasoning: "` prefix，前端收到後 concatenate 成 "Reasoning: ThoughtReasoning: :Reasoning:  I..." 亂碼；同時 SSE yield 格式為裸 JSON 字串，不符 W3C SSE `data: ...\n\n` 規格，與 Vercel AI SDK 不相容。
-修正：(1) `main.py` 所有 SSE yield 改為 `f"data: {msg_str}\n\n"`；(2) `slide_gen.py` 移除 `"Reasoning: "` prefix，改用 `_emit_message()` helper 直接傳遞 `ev.delta`；(3) `slide_generation_page.py` SSE 解析改為先 strip `data:` prefix 再 JSON.loads。戰略理由：對齊 W3C SSE 規格為未來遷移至 Vercel AI SDK 鋪路（Vercel AI SDK 是唯一同時支援 HITL 與自訂 workflow progress event 的前端選項）。
+原因：`run_react_agent()` 對每個 streaming token delta 都拼接 `"Reasoning: "` prefix，前端收到後 concatenate 成 "Reasoning: ThoughtReasoning: :Reasoning:  I..." 亂碼；同時 SSE yield 格式為裸 JSON 字串，不符 W3C SSE `data: ...
+
+` 規格，與 Vercel AI SDK 不相容。
+修正：(1) `main.py` 所有 SSE yield 改為 `f"data: {msg_str}
+
+"`；(2) `slide_gen.py` 移除 `"Reasoning: "` prefix，改用 `_emit_message()` helper 直接傳遞 `ev.delta`；(3) `slide_generation_page.py` SSE 解析改為先 strip `data:` prefix 再 JSON.loads。戰略理由：對齊 W3C SSE 規格為未來遷移至 Vercel AI SDK 鋪路（Vercel AI SDK 是唯一同時支援 HITL 與自訂 workflow progress event 的前端選項）。
 影響檔案：`backend/main.py`、`backend/agent_workflows/slide_gen.py`、`frontend/pages/slide_generation_page.py`
 ---
 ## [2026-03-27] Ollama 本地 LLM token-by-token streaming 在 Streamlit st.status 造成逐字顯示 `[環境: Ollama local LLM + Streamlit ≥1.55]`
