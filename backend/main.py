@@ -31,11 +31,16 @@ workflows = {}  # Store the workflow instances in a dictionary
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://frontend:8501"],  # Replace with your Streamlit frontend URL
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=["http://localhost:3001"],
+    allow_methods=["POST", "GET", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["x-vercel-ai-ui-message-stream"],
 )
+
+
+def _sse(event: dict) -> str:
+    """Format one AI SDK UIMessageStream v5 SSE event line."""
+    return f"data: {json.dumps(event)}\n\n"
 
 
 @app.post("/run-slide-gen")
@@ -63,51 +68,76 @@ async def run_workflow_endpoint(topic: ResearchTopic):
     workflows[workflow_id] = wf  # Store the workflow instance
 
     async def event_generator():
+        msg_id = f"msg-{uuid.uuid4().hex[:8]}"
         loop = asyncio.get_running_loop()
-        logger.debug(f"event_generator: loop id {id(loop)}")
-        yield f"data: {json.dumps({'workflow_id': workflow_id})}\n\n"
 
-        # llama-index-core 0.14.x: stream_events() lives on the Handler returned
-        # by Workflow.run(), not on the Workflow instance. Call base Workflow.run()
-        # directly to obtain the Handler (same approach as run_subworkflow).
-        wf.loop = asyncio.get_running_loop()
+        yield _sse({"type": "start", "messageId": msg_id})
+        yield _sse({"type": "data-workflow-id", "data": {"workflow_id": workflow_id}})
+
+        wf.loop = loop
         handler = Workflow.run(wf, user_query=topic.query)
-        logger.debug(f"event_generator: Created handler {handler}")
         try:
             async for ev in handler.stream_events():
                 if isinstance(ev, StopEvent):
                     continue
-                logger.info(f"Sending message to frontend: {ev.msg}")
-                msg_str = json.dumps(ev.msg) if isinstance(ev.msg, dict) else ev.msg
-                yield f"data: {msg_str}\n\n"
-                await asyncio.sleep(0.1)  # Small sleep to ensure proper chunking
+
+                raw = ev.msg if isinstance(ev.msg, dict) else json.loads(ev.msg)
+                streaming_event = WorkflowStreamingEvent(**raw)
+                event_type = streaming_event.event_type
+                sender = streaming_event.event_sender
+                content = streaming_event.event_content
+
+                if event_type == "server_message":
+                    part_type = "data-reasoning" if sender == "react_agent" else "data-step-progress"
+                    yield _sse({"type": part_type,
+                                "data": {"sender": sender, "message": content.get("message", "")},
+                                "transient": True})
+
+                elif event_type == "paper_total":
+                    yield _sse({"type": "data-paper-total",
+                                "data": {"total": content.get("total")},
+                                "transient": True})
+
+                elif event_type == "request_user_input":
+                    yield _sse({"type": "data-request-user-input",
+                                "id": content.get("eid", uuid.uuid4().hex),
+                                "data": {
+                                    "eid":           content.get("eid"),
+                                    "summary":       content.get("summary"),
+                                    "paper_outline": content.get("paper_outline"),
+                                    "message":       content.get("message"),
+                                }})
+
+                await asyncio.sleep(0.1)  # keep existing chunking sleep
+
             final_result = await handler
+            yield _sse({"type": "data-final-result",
+                        "data": {
+                            "download_pptx_url": f"http://localhost:8000/download_pptx/{workflow_id}",
+                            "download_pdf_url":  f"http://localhost:8000/download_pdf/{workflow_id}",
+                        }})
 
-            # Construct the download URL
-            download_pptx_url = f"http://backend:80/download_pptx/{workflow_id}"
-            download_pdf_url = f"http://backend:80/download_pdf/{workflow_id}"
-
-            final_result_with_url = {
-                "result": final_result,
-                "download_pptx_url": download_pptx_url,
-                "download_pdf_url": download_pdf_url,
-            }
-
-            yield f"data: {json.dumps({'final_result': final_result_with_url})}\n\n"
         except Exception as e:
             error_message = f"Error in workflow: {str(e)}"
             logger.error(error_message)
-            error_event = WorkflowStreamingEvent(
-                event_type="server_message",
-                event_sender="system",
-                event_content={"message": error_message},
-            )
-            yield f"data: {json.dumps(error_event.model_dump())}\n\n"
+            yield _sse({"type": "data-step-progress",
+                        "data": {"sender": "system", "message": error_message},
+                        "transient": True})
         finally:
-            # Clean up
             workflows.pop(workflow_id, None)
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+        yield _sse({"type": "finish"})
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "x-vercel-ai-ui-message-stream": "v1",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.post("/submit_user_input")

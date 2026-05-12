@@ -169,6 +169,8 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             state["n_summaries"] = len(markdown_files)
         n_summaries = await ctx.store.get("n_summaries")
         self._emit_message(ctx, inspect.currentframe().f_code.co_name,
+                           event_type="paper_total", total=n_summaries)
+        self._emit_message(ctx, inspect.currentframe().f_code.co_name,
                            message=f"Reading {n_summaries} summaries from markdown files...")
         for i, f in enumerate(markdown_files):
             s = read_summary_content(f)

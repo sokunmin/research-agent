@@ -76,7 +76,7 @@ class SlideNeedModifyResult(BaseModel):
 
 
 class WorkflowStreamingEvent(BaseModel):
-    event_type: Literal["server_message", "request_user_input"] = Field(
+    event_type: Literal["server_message", "request_user_input", "paper_total"] = Field(
         ..., description="Type of the event"
     )
     event_sender: str = Field(
