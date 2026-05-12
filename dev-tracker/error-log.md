@@ -1,4 +1,8 @@
 ---
+## [2026-05-12] Next.js standalone server fails to start in Docker: `getaddrinfo EAI_AGAIN <container-id>` `[版本: Next.js 15 / Node.js 20-alpine / Docker standalone mode]`
+原因：Next.js `output: 'standalone'` 的 `server.js` 呼叫 `http.server.listen(port, hostname)`，hostname 來自 `os.hostname()`，在 Docker 內部回傳 container ID（如 `ada83d192ec1`）；Node.js 呼叫 `getaddrinfo()` 解析此 hostname，但 Docker 內部 DNS 無法解析自身 container ID，拋出 `EAI_AGAIN`。
+修正：在 Dockerfile runner stage 加入 `ENV HOSTNAME=0.0.0.0`，覆蓋 `os.hostname()` 回傳值，使 server 直接 bind 到 wildcard address，不觸發 DNS 查詢。影響檔案：`frontend/Dockerfile`。
+---
 ## [2026-05-09] shadcn ToggleGroup (base-ui) `value` 型別是 `string[]` 非 `string` `[版本: shadcn@4.7+ / base-ui]`
 原因：shadcn 4.7+ 預設使用 base-ui 的 ToggleGroup，`value` 是 `readonly string[]`，`onValueChange` 簽名是 `(groupValue: string[], ...) => void`；Radix UI 的 `type="single"` 模式不存在，直接套用會有 TypeScript 型別錯誤。
 修正：state 改為 `useState<string[]>([])`，用 `selection[0] ?? ""` 取得單選值；`multiple={false}`（預設）維持單選行為。
