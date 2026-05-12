@@ -1,13 +1,13 @@
 """
 test_1_download.py
-Tests for PaperDownloader, _paper_filename, and download_paper_pdfs.
+Tests for PaperDownloader, _paper_filename, and download_paper_pdf.
 Unit tests require no network. Integration smoke test requires network access.
 """
 import pytest
 from unittest.mock import MagicMock, patch
 
 from agent_workflows.paper_scraping import (
-    Paper, PaperDownloader, download_paper_pdfs,
+    Paper, PaperDownloader, download_paper_pdf,
     _paper_filename,
 )
 
@@ -138,21 +138,22 @@ class TestPaperDownloaderFallback:
         assert result is None
 
 
-# ── TestDownloadPaperPdfs — unit, patch PaperDownloader ───────────────────────
+# ── TestDownloadPaperPdf — unit, patch PaperDownloader ────────────────────────
 
-class TestDownloadPaperPdfs:
+class TestDownloadPaperPdf:
     def test_calls_downloader_for_each_paper(self, vit_paper, paper_no_arxiv, tmp_path):
         with patch("agent_workflows.paper_scraping.PaperDownloader") as MockDownloader:
             mock_inst = MockDownloader.return_value
             mock_inst.download.return_value = tmp_path / "dummy.pdf"
-            download_paper_pdfs([vit_paper, paper_no_arxiv], tmp_path)
+            for paper in [vit_paper, paper_no_arxiv]:
+                download_paper_pdf(paper, tmp_path)
         assert mock_inst.download.call_count == 2
 
     def test_creates_dest_dir(self, vit_paper, tmp_path):
         dest = tmp_path / "new_subdir"
         with patch("agent_workflows.paper_scraping.PaperDownloader") as MockDownloader:
             MockDownloader.return_value.download.return_value = None
-            download_paper_pdfs([vit_paper], dest)
+            download_paper_pdf(vit_paper, dest)
         assert dest.exists()
 
 

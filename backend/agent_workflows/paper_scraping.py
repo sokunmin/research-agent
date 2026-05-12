@@ -382,17 +382,11 @@ class PaperDownloader:
         _fetch_and_write(oa_url, dest)
 
 
-def download_paper_pdfs(papers: List[Paper], dest_dir: Path) -> Path:
-    """Download PDFs for *papers* into *dest_dir* using the four-strategy fallback chain.
-
-    Each paper is attempted with PaperDownloader; failures are logged and skipped.
-    Filenames use ArXiv ID when available, OpenAlex ID as fallback (see _paper_filename).
-    """
+def download_paper_pdf(paper: Paper, dest_dir: Path) -> bool:
+    """Download a single paper PDF. Returns True on success, False if no accessible PDF."""
     dest_dir.mkdir(parents=True, exist_ok=True)
-    downloader = PaperDownloader()
-    for paper in papers:
-        downloader.download(paper, dest_dir, _paper_filename(paper))
-    return dest_dir
+    result = PaperDownloader().download(paper, dest_dir, _paper_filename(paper))
+    return result is not None
 
 
 # ── marker PDF → markdown (updated to new API) ───────────────────────────────
@@ -477,7 +471,9 @@ def main(research_topic: str):
     papers = fetch_candidate_papers(research_topic)
     logging.info(f"Found {len(papers)} candidate papers")
     if papers:
-        download_paper_pdfs(papers, Path(__file__).parent / "data" / "papers")
+        dest = Path(__file__).parent / "data" / "papers"
+        for paper in papers:
+            download_paper_pdf(paper, dest)
 
 
 if __name__ == "__main__":
