@@ -18,7 +18,7 @@ from utils.file_processing import pdf2images
 from agent_workflows.events import *
 from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow, LOCAL_LLM_RETRY_POLICY
 from agent_workflows.paper_scraping import (
-    download_paper_pdfs,
+    download_paper_pdf,
     PaperRelevanceFilter,
     PaperRelevanceResult,
 )
@@ -140,12 +140,13 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
 
         self._emit_message(
             ctx, "download_papers",
-            message=f"Downloading {len(top_papers)} relevant papers: "
-            f"{' | '.join(e.paper.title for e in top_papers)}",
+            message=f"Downloading {len(top_papers)} relevant papers...",
         )
-        download_paper_pdfs(
-            [e.paper for e in top_papers], self.papers_download_path
-        )
+        for ev_paper in top_papers:
+            paper = ev_paper.paper
+            success = download_paper_pdf(paper, self.papers_download_path)
+            msg = f"✓ Downloaded: {paper.title}" if success else f"⚠ Skipped (no open access PDF): {paper.title}"
+            self._emit_message(ctx, "download_papers", message=msg)
         return Paper2SummaryDispatcherEvent(
             papers_path=self.papers_download_path.as_posix()
         )
