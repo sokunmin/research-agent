@@ -9,7 +9,7 @@ This repository is a fork of
 [lz-chen/research-agent](https://github.com/lz-chen/research-agent) (last updated May 2025). Original author's articles: [Part 1](https://medium.com/data-science/how-i-streamline-my-research-and-presentation-with-llamaindex-workflows-3d75a9a10564) · [Part 2](https://medium.com/data-science/building-an-interactive-ui-for-llamaindex-workflows-842dd7abedde).
 
 ## 📺 Demo Video
-[![Research Agent Demo](https://img.youtube.com/vi/9haxpPmvc_o/0.jpg)](https://www.youtube.com/watch?v=9haxpPmvc_o)
+[![Research Agent Demo](https://img.youtube.com/vi/ZnDdceQaVOg/maxresdefault.jpg)](https://youtu.be/ZnDdceQaVOg)
 > *Watch the Research Agent in action: from topic input to final slide generation.*
 
 ## 🔍 Table of Contents
@@ -107,7 +107,11 @@ This repository is a fork of
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Stack:** Python · FastAPI · LlamaIndex 0.14 · LiteLLM · Ollama · MLflow · Streamlit
+**Stack:** Python · FastAPI · LlamaIndex 0.14 · LiteLLM · Ollama · MLflow · Next.js · Vercel AI SDK
+
+**Frontend:** Replaced Streamlit with Next.js + Vercel AI SDK — SSE streaming with typed custom data parts delivers real-time workflow progress without polling, and a canvas layout (chat thread + artifact preview) supports inline HITL review.
+
+**Backend:** Reformatted `/run-slide-gen` SSE endpoint to AI SDK UIMessageStream v5 wire format — typed `data-*` events with `transient` flag enable direct browser consumption without a proxy layer.
 
 ---
 

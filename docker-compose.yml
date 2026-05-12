@@ -46,8 +46,11 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        # Must be a build arg (not environment:) — NEXT_PUBLIC_* is baked at build time
+        NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
     ports:
-      - "8501:8501"
+      - "3001:3000"
     networks:
       - app-network
     restart: on-failure
