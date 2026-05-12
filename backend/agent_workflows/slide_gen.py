@@ -200,13 +200,13 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                 summary=ev.summary,
             )
         # async for response in generator:
-        #     # Allow the workflow to stream this piece of response
+        # Allow the workflow to stream this piece of response
         json_resp = {"original_summary": ev.summary}
         json_resp.update(json.loads(response.json()))
 
         return OutlineEvent(summary=ev.summary, paper_outline=response)
 
-    @step
+    @step(num_workers=1)  # serial: shared user_input_future supports only one concurrent awaiter
     async def gather_feedback_outline(
         self, ctx: Context, ev: OutlineEvent
     ) -> OutlineFeedbackEvent | OutlineOkEvent:
