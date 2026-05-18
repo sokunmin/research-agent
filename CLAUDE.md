@@ -38,9 +38,9 @@ This is a **research-to-presentation pipeline** that:
 1. Discovers academic papers via OpenAlex API
 2. Summarizes papers using VLMs
 3. Auto-generates PowerPoint presentations with Human-in-the-Loop (HITL) feedback
-4. Streams progress via SSE to a Streamlit frontend
+4. Streams progress via SSE to a Next.js frontend
 
-**Tech stack**: FastAPI + LlamaIndex Workflows + LiteLLM + python-pptx + Streamlit + MLflow + Docker
+**Tech stack**: FastAPI + LlamaIndex Workflows + LiteLLM + python-pptx + Next.js + Vercel AI SDK + MLflow + Docker
 
 ### Workflow Architecture
 
@@ -82,8 +82,10 @@ backend/
   tests/unit|integration|e2e/
 
 frontend/
-  Home.py              # Streamlit entry point
-  pages/               # slide_generation_page.py handles SSE consumption + HITL UI
+  app/                 # Next.js App Router entry point
+  components/          # ResearchAgentApp, canvas phases (Processing/Outline/Result), chat thread
+  hooks/useWorkflow.ts # Vercel AI SDK useChat() — maps SSE events to canvasPhase state
+  lib/                 # api.ts (HITL submission), types.ts, utils.ts
 ```
 
 ### API Endpoints
@@ -121,7 +123,17 @@ All LLM calls are auto-logged (tokens, cost, latency) to MLflow at `http://mlflo
 
 ### SSE Format
 
-SSE events must follow W3C spec (`data: <payload>\n\n`). Do not add extra prefixes per token delta in streaming responses. See `feedback_sse_format_streamlit_display.md` in memory for history.
+SSE events must follow W3C spec (`data: <payload>\n\n`). Do not add extra prefixes per token delta in streaming responses. Backend uses Vercel AI SDK v5 wire format (`x-vercel-ai-ui-message-stream` header, typed `data-*` events).
+
+### Frontend Code Reading
+
+When reading or exploring `frontend/`, skip these generated artifact directories — they are built inside Docker and not source code:
+
+- `frontend/.next/` — Next.js build output
+- `frontend/node_modules/` — npm dependencies
+- `frontend/tsconfig.tsbuildinfo` — TypeScript incremental build cache
+
+Only read source directories: `app/`, `components/`, `hooks/`, `lib/`, `public/`, and root config files (`package.json`, `next.config.ts`, `tsconfig.json`, etc.).
 
 ### Sandbox
 
@@ -131,6 +143,7 @@ SSE events must follow W3C spec (`data: <payload>\n\n`). Do not add extra prefix
 * Create git message that matches FAANG git message standard
 * Do NOT add co-author on git message
 * Do NOT create isolation worktree without user's confirmation
+* **ALWAYS ask user for confirmation before executing any git write operation** (`git add`, `git commit`, `git reset`, `git push`, `git rebase`, `git merge`). Show the proposed commit message and file list first, wait for explicit approval.
 
 #### Commit Separation Rule (dev → main cherry-pick strategy)
 `poc/`, `REPORTING_GUIDE.md`, and `dev-tracker/` are dev-only files that must never reach main.
@@ -155,6 +168,30 @@ Examples:
 ❌ VIOLATION — mixed in one commit
   feat(backend) + chore(poc): add filter logic and test it
 ```
+
+#### Feature branch merge strategy (squash merge)
+
+Feature branches use squash merge to keep `dev` history clean:
+
+```bash
+# On dev branch after feature is complete:
+git merge --squash feat/<feature-name>   # all changes → staging, no commit yet
+
+git add backend/ frontend/               # stage code changes only
+git commit -m "feat: <description>"      # one commit for all code changes
+
+git add dev-tracker/                     # stage dev-only changes separately
+git commit -m "chore(dev): archive feature-spec + update backlog"
+
+git worktree remove ../<project>-<feature-name>
+git branch -d feat/<feature-name>        # delete with all wip commits
+```
+
+Rules:
+- `backend/` and `frontend/` changes may be combined in one `feat:` commit
+- `dev-tracker/` changes must always be a separate `chore(dev):` commit
+- wip commits stay on feature branch only — never reach `dev`
+- Never use `git merge --ff-only` for feature branches (brings wip commits to dev)
 
 #### Triggering clean-merge-to-main workflow
 
