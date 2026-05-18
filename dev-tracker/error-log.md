@@ -1,4 +1,72 @@
 ---
+## [2026-05-18] Session restore after refresh shows EmptyCanvas even when workflow alive; "interrupted" banner shown on normal cancel `[版本: feat/supervisor-hitl]`
+原因：Session restore 只將 `workflowId` 存入 `sessionStorage`，refresh 後其他狀態（`workflowPhase`、`paperCandidates`、`hitlRequest`、SSE stream）全部遺失；`workflowPhase` 維持 `'idle'` 導致 `canvasPhase='empty'`，partial restore 顯示錯誤畫面；cancelled workflow 的 `workflowId` 仍殘留在 storage 造成誤判。
+修正：移除 session restore 機制，refresh = full reset；刪除 `frontend/lib/session.ts`，移除 `checkWorkflowStatusApi`、兩個 session `useEffect`，及 `backend/main.py` 的 `/workflow_status` endpoint；backend 已在 SSE disconnect 時透過 `is_disconnected() → wf.cancel()` 清理 workflow。
+---
+## [2026-05-18] After HITL submit, right panel shows "Loading outline..." instead of ProcessingCanvas `[版本: feat/supervisor-hitl]`
+原因：`submitHitlFeedback` 呼叫 `setHitlRequest(null)` 但未更新 `workflowPhase`，phase 維持 `'awaiting-hitl'` → `canvasPhase='hitl'` → `OutlineCanvas(outline=undefined)` 觸發 `if (!outline)` fallback 顯示 "Loading outline..."。
+修正：在 `submitHitlFeedback` 的 `setHitlRequest(null)` 之後加入 `setWorkflowPhase('running')`，讓 canvas 立即切換回 ProcessingCanvas；影響檔案：`frontend/hooks/useWorkflow.ts`。
+---
+## [2026-05-18] Clicking "Generate slides" crashes page with "This page couldn't load" `[版本: feat/supervisor-hitl]`
+原因：`submitPaperSelection('select')` 呼叫 `setPaperCandidates(null)` 但未更新 `workflowPhase`，phase 停在 `'awaiting-paper-selection'` → `canvasPhase='paper-selection'` → `PaperDetailCanvas` 收到 `candidates={null}` → `null.map()` TypeError crash；舊版 ternary chain 在清空 `paperCandidates` 後自動 fallthrough 到 `'processing'`，refactor 後此隱含行為消失。
+修正：在 `submitPaperSelection` select 分支的 `setPaperCandidates(null)` 旁加入 `setWorkflowPhase('running')`，React 18 batch 同一 render，`canvasPhase` 直接跳至 `'processing'`；影響檔案：`frontend/hooks/useWorkflow.ts`。
+---
+## [2026-05-18] User message bubble disappears after supervisor responds to non-research query `[版本: feat/supervisor-hitl]`
+原因：`canvasPhase` 隱式由 `workflowId` 衍生；`data-supervisor-response` handler 呼叫 `setWorkflowId(null)` 重啟輸入框，導致 `canvasPhase='empty'`，ChatThread 的 `canvasPhase !== 'empty'` 條件失敗，user bubble 被隱藏；`data-no-results` 同樣觸發此問題。
+修正：引入顯式 `WorkflowPhase` 狀態機（`idle | running | awaiting-paper-selection | awaiting-hitl | complete`）；新增獨立 `hasConversation: boolean` 控制 bubble 顯示；ChatThread 條件改為 `hasConversation`；`canvasPhase` 與 `isInputDisabled` 改由 `workflowPhase` lookup map 衍生；影響檔案：`frontend/hooks/useWorkflow.ts`、`frontend/lib/types.ts`、`frontend/components/chat/ChatThread.tsx`、`frontend/components/ResearchAgentApp.tsx`。
+---
+## [2026-05-17] Paper Q&A user bubble 不顯示，但 LLM 回應正常顯示 `[frontend: useWorkflow / ChatThread]`
+原因：`handleSubmit` 在 `paper-selection` phase 呼叫 `submitPaperQuestion` 而非 `sendMessage`，AI SDK `messages` array 從未更新，沒有 user bubble 的資料來源。
+修正：新增 `paperQAHistory: {question, answer}[]` state，直接 render user bubble 與 answer；不依賴 AI SDK messages array。`ChatThread.tsx` 從該 array render user bubble。
+---
+## [2026-05-17] LLM 回答 paper question 含 markdown 語法（**bold**、*italic*） `[backend: prompts.py]`
+原因：`PAPER_QUESTION_PMT` 沒有 plain text 指令，LLM 預設使用 markdown 格式回答。
+修正：prompt 加入 `"Be concise (2-4 sentences). Plain text only — no markdown, no bold, no asterisks."`。
+---
+## [2026-05-17] User bubble 在 New Search 後殘留，canvasPhase 已回到 empty 但仍顯示 `[frontend: ChatThread]`
+原因：`reset()` 清除自訂 state，但 AI SDK `messages` array 由 SDK 管理無法清除，舊 user bubble 資料仍存在。
+修正：`ChatThread.tsx` 加 `canvasPhase !== 'empty'` guard，phase 為 empty 時隱藏 user bubble。
+---
+## [2026-05-17] User bubble 要等 LLM 回應後才一起顯示，無即時反饋 `[frontend: useWorkflow]`
+原因：`submitPaperQuestion` 單次 setState 在 `await` 之後，question 和 answer 同時出現。
+修正：分兩次 setState：先 `{question, answer: ''}` 顯示 user bubble + "Thinking..."，await 回應後再填入 answer。
+---
+## [2026-05-17] LLM 錯誤「修正」模型名稱拼寫（如 Memba → MemNN 而非 Mamba） `[backend: prompts.py]`
+原因：`SEARCH_PARAMS_EXTRACTION_PMT` 無 proper noun 保留指令，LLM 試圖修正使用者拼錯的模型名稱，但猜錯方向（Memba → MemNN 而非 Mamba）。
+修正：prompt 加入 `"Do not attempt to correct or expand proper nouns, model names, or acronyms (e.g. BERT, GPT, Mamba, LoRA, RoFormer) — preserve them exactly as given."`。
+---
+## [2026-05-17] Workflow timeout 800s 後 UI 卡死，paper selection 回傳 404 無法操作 `[backend: main.py / frontend: useWorkflow]`
+原因：`SummaryGenerationWorkflow(timeout=800)` 包含 HITL 等待時間。Timeout 後 `workflows.pop()` 移除 wf，前端送選擇回傳 404，frontend 無清除機制，PaperSelectCard 卡住無法操作。
+修正：(1) `timeout=800` → `timeout=3600`；(2) `main.py` 捕獲 `asyncio.TimeoutError` → yield `data-no-results` 通知 frontend 清除狀態；(3) `useWorkflow.ts` `submitPaperSelection` 加 try/catch，404 時呼叫 `reset()`。
+---
+## [2026-05-17] Browser refresh 導致 workflow 資源洩漏，user_input_future 永遠 pending `[backend: main.py / summarize_and_generate_slides.py]`
+原因：Refresh 導致 SSE 斷線，backend 不知道，workflow 繼續佔用 memory 和 asyncio task；若在 HITL 等待階段，`user_input_future` 永遠不會被 resolve。
+修正：(1) `summarize_and_generate_slides.py` 新增 `cancel()` method，resolve pending future；(2) `main.py` 加 `request: Request` 參數，迴圈內 `await request.is_disconnected()` 偵測斷線 → 呼叫 `wf.cancel()` 並 break；(3) `finally` block 永遠呼叫 `wf.cancel()` + `workflows.pop()`；(4) 新增 `/workflow_status/{id}` endpoint；(5) frontend 新增 `session.ts` 封裝 sessionStorage，mount useEffect 查詢 backend 確認 session 狀態。
+---
+## [2026-05-17] Next.js Docker build 失敗：`ReferenceError: sessionStorage is not defined` `[frontend: session.ts / useWorkflow.ts]`
+原因：Next.js build 時 server 預渲染頁面，`useState` lazy initializer 在 Node.js 執行，`sessionStorage` 是瀏覽器專屬 API，Node.js 不存在。`useState(() => workflowSession.get())` 觸發 ReferenceError。
+修正：(1) `session.ts` 加 `isBrowser = typeof window !== 'undefined'` SSR guard，server 環境所有操作為 no-op；(2) `useWorkflow.ts` 將 `useState(lazy init)` 改回 `useState(null)`；(3) mount `useEffect`（只在 browser 執行）加 `setWorkflowId(savedId)` 還原 alive session。
+---
+## [2026-05-17] Paper Q&A 使用 40-word re-summary 作為 LLM context，細節問題無法回答 `[backend: summary_gen.py]`
+原因：`_paper_candidates_cache` 儲存的是 LLM 生成的 40-word `abstract_summary`（UI 顯示用），`handle_paper_question` 錯誤使用這份截斷資料回答問題，細節（dataset、metrics 等）已丟失。
+修正：新增 `_paper_qa_context: [{title, abstract}]`，存 OpenAlex 原始完整 abstract；`handle_paper_question` 改用此 cache，職責與 `_paper_candidates_cache` 分離。
+---
+## [2026-05-17] `paper_titles` 截斷 title 至 50 字元導致 intent classifier 無法正確識別 paper `[backend: summary_gen.py]`
+原因：`handle_paper_question` 傳給 intent classifier 的 `phase_context` 中，paper title 用 `c['title'][:50]` 截斷，LLM 可能無法辨識 user 在問哪篇 paper，導致 intent 分類錯誤。
+修正：移除 `[:50]` 截斷，傳完整 title。token 增加幅度可忽略。
+---
+## [2026-05-17] `cited_by_count` 在 `_work_to_paper()` 未 map，citation 資料全程丟失 `[backend: paper_scraping.py]`
+原因：OpenAlex 有回傳 `cited_by_count`（用於 filter/sort），但 `_work_to_paper()` 轉換時未 map 進 `Paper` model，後續 `PaperCandidate`、frontend 均無此欄位。
+修正：`Paper` model 加 `cited_by_count: Optional[int]`；`_work_to_paper()` 加 `cited_by_count=result.get("cited_by_count")`；`PaperCandidate` 加欄位；`summary_gen.py` 建構 candidate 時帶入；`types.ts` + `PaperDetailCanvas.tsx` 顯示。
+---
+## [2026-05-17] Paper 顯示順序以 similarity 排序，非 citation（原意是經典論文優先） `[backend: summary_gen.py]`
+原因：`fetch_candidate_papers` OpenAlex 以 `cited_by_count` 排序，但 `filter_papers` 並行執行後順序打亂，`present_paper_candidates` 以 `similarity_score` 重排，citation 排序丟失。
+修正：`present_paper_candidates` 改用 `key=lambda e: (e.paper.cited_by_count or 0, e.relevance.similarity_score)`，citations 為主、similarity 為次。
+---
+## [2026-05-17] `frontend/components/chat/PaperSelectCard.tsx` 被 `.gitignore` 的 `chat` pattern 忽略，未被 git 追蹤 `[git: .gitignore]`
+原因：`.gitignore` 有 `chat` pattern（原意是忽略 Aider chat log），同時也 match `frontend/components/chat/` 目錄，導致該目錄下所有未追蹤的新檔案被忽略。已 commit 的檔案（如 `ChatThread.tsx`）不受影響。
+修正：`.gitignore` 將 `chat` 改為 `.aider.chat*`，只忽略 Aider chat log 檔。再用 `git add` 將 `PaperSelectCard.tsx` 加入追蹤。
+---
 ## [2026-05-12] Next.js standalone server fails to start in Docker: `getaddrinfo EAI_AGAIN <container-id>` `[版本: Next.js 15 / Node.js 20-alpine / Docker standalone mode]`
 原因：Next.js `output: 'standalone'` 的 `server.js` 呼叫 `http.server.listen(port, hostname)`，hostname 來自 `os.hostname()`，在 Docker 內部回傳 container ID（如 `ada83d192ec1`）；Node.js 呼叫 `getaddrinfo()` 解析此 hostname，但 Docker 內部 DNS 無法解析自身 container ID，拋出 `EAI_AGAIN`。
 修正：在 Dockerfile runner stage 加入 `ENV HOSTNAME=0.0.0.0`，覆蓋 `os.hostname()` 回傳值，使 server 直接 bind 到 wildcard address，不觸發 DNS 查詢。影響檔案：`frontend/Dockerfile`。

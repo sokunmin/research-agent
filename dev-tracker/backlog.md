@@ -1,5 +1,5 @@
 # Project Backlog
-> 最後更新：2026-05-12 (nextjs-frontend #10 完成)
+> 最後更新：2026-05-17 (supervisor-hitl-paper-selection #11 完成)
 
 ## 開發進度
 
@@ -15,6 +15,7 @@
 | 08 | mlflow-v3-upgrade | - | feat/mlflow-v3-upgrade | ✅ done | - | ✅ passed | 2026-03-12 |
 | 09 | dependency-cleanup | - | feat/dependency-cleanup | ✅ done | - | - | 2026-03-15 |
 | 10 | nextjs-frontend | - | feature/nextjs-frontend | ✅ done | - | - | 2026-05-12 |
+| 11 | supervisor-hitl-paper-selection | agent-workflow-plan.md | feat/supervisor-hitl | ✅ done | ✅ approved | - | 2026-05-17 |
 
 ## 狀態說明
 - ⬜ `todo`：尚未開始
