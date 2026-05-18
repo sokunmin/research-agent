@@ -12,6 +12,14 @@ import { CanvasPanel } from '@/components/canvas/CanvasPanel'
 export function ResearchAgentApp() {
   const wf = useWorkflow()
 
+  const handleSubmit = async (msg: { text: string }) => {
+    if (wf.canvasPhase === 'paper-selection') {
+      await wf.submitPaperQuestion(msg.text)
+      return
+    }
+    await wf.sendMessage(msg)
+  }
+
   return (
     <div className="flex flex-col h-screen">
       <AppHeader chatStatus={wf.chatStatus} canvasPhase={wf.canvasPhase} />
@@ -24,14 +32,24 @@ export function ResearchAgentApp() {
               reasoningChunks={wf.reasoningChunks}
               hitlRequest={wf.hitlRequest}
               onHitlSubmit={wf.submitHitlFeedback}
+              paperCandidates={wf.paperCandidates}
+              paperSearchParams={wf.paperSearchParams}
+              paperQAHistory={wf.paperQAHistory}
+              noResultsInfo={wf.noResultsInfo}
+              supervisorMessage={wf.supervisorMessage}
+              hasConversation={wf.hasConversation}
+              onGenerate={(ids) => wf.submitPaperSelection('select', ids)}
+              onNewSearch={() => wf.submitPaperSelection('abort')}
             />
             <ChatInput
-              onSend={wf.sendMessage}
+              onSend={handleSubmit}
               disabled={wf.isInputDisabled}
               placeholder={
-                wf.canvasPhase === 'complete'
-                  ? 'Ask about the papers...'
-                  : 'Enter your research topic...'
+                wf.canvasPhase === 'paper-selection'
+                  ? 'Ask about any paper...'
+                  : wf.canvasPhase === 'complete'
+                    ? 'Ask about the papers...'
+                    : 'Enter your research topic...'
               }
             />
           </>
@@ -44,6 +62,7 @@ export function ResearchAgentApp() {
             hitlCount={wf.hitlCount}
             paperTotal={wf.paperTotal}
             finalResult={wf.finalResult}
+            paperCandidates={wf.paperCandidates}
           />
         }
       />

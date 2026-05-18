@@ -37,7 +37,6 @@ class Settings(BaseSettings):
 
     # ── Paper discovery tuning ────────────────────────────────────────────────
     NUM_MAX_FINAL_PAPERS: int = 5        # top-N papers to download after filtering
-    ENABLE_QUERY_REFORMULATION: bool = False  # set true to reformulate user query via LLM before OpenAlex search
     # Maximum consecutive run_code failures before the sandbox appends "LIMIT REACHED" to the
     # observation, triggering the Critical Stop Rule in REACT_PROMPT_SUFFIX.
     SLIDE_GEN_MAX_RETRY_ATTEMPTS: int = 3

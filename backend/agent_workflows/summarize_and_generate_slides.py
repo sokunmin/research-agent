@@ -40,6 +40,14 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
     async def reset_user_input_future(self):
         self.user_input_future = self.loop.create_future()
 
+    def cancel(self) -> None:
+        """Resolve any pending user_input_future to unblock HITL-waiting steps."""
+        if self.user_input_future and not self.user_input_future.done():
+            self.loop.call_soon_threadsafe(
+                self.user_input_future.set_exception,
+                asyncio.CancelledError("Workflow cancelled"),
+            )
+
     async def run_subworkflow(self, sub_wf, ctx, **kwargs):
         logger.debug(f"Starting sub-workflow: {sub_wf.__class__.__name__}")
         sub_wf.user_input_future = self.user_input_future
@@ -73,10 +81,10 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
             raise
 
     @step
-    async def summary_gen(
-        self, ctx: Context, ev: StartEvent
-    ) -> SummaryWfReadyEvent:
+    async def summary_gen(self, ctx: Context, ev: StartEvent) -> SummaryWfReadyEvent | StopEvent:
         res = await self.run_subworkflow(self.summary_gen_wf, ctx, user_query=ev.user_query)
+        if res is None:
+            return StopEvent(result=None)   # user aborted paper selection or zero results
         return SummaryWfReadyEvent(summary_dir=res)
 
     @step

@@ -172,7 +172,7 @@ outputs/*
 
 
 **.aider**
-chat
+.aider.chat*
 
 /workflow_artifacts/
 
