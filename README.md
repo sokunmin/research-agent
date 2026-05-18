@@ -32,24 +32,24 @@ This repository is a fork of
   Original (lz-chen)                        My Implementation
   ────────────────────────────────          ──────────────────────────────────
 
-┌─────────────────────────── PAPER DISCOVERY ───────────────────────────-─────┐
+┌─────────────────────────── PAPER DISCOVERY ─────────────────────────────────┐
 │                                                                             │
-│  ┌── 0. QUERY UNDERSTANDING ───────────────────────────────────────────────┐   │
+│  ┌── 0. QUERY UNDERSTANDING ────────────────────────────────────────────┐   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
-│  │ (Not implemented in original)        │ Supervisor                        │   │
-│  │                                      │ intent check → route / reject     │   │
+│  │ (Not implemented in original)    │ Supervisor                        │   │
+│  │                                  │ intent check → route / reject     │   │
 │  └──────────────────────────────────┴───────────────────────────────────┘   │
 │                                     │                                       │
 │                                     ▼                                       │
-│  ┌── 1. PAPER RETRIEVAL ────────────────────────────────────────────────────┐   │
+│  ┌── 1. PAPER RETRIEVAL ────────────────────────────────────────────────┐   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
-│  │ Tavily Search                        │ ① Query Transformation            │   │
-│  │ → Semantic Scholar Discovery         │   clean_topic + year/citation     │   │
-│  │   (Two-stage Discovery)              │   constraints extracted           │   │
-│  │   Non-deterministic                  │───────────────────────────────────│   │
-│  │                                      │ ② OpenAlex Retrieval (BM25)       │   │
-│  │                                      │   + Metadata Quality Filters      │   │
-│  │                                      │   Deterministic                   │   │
+│  │ Tavily Search                    │ ① Query Transformation           │   │
+│  │ → Semantic Scholar Discovery     │   clean_topic + year/citation     │   │
+│  │   (Two-stage Discovery)          │   constraints extracted           │   │
+│  │   Non-deterministic              │───────────────────────────────────│   │
+│  │                                  │ ② OpenAlex Retrieval (BM25)      │   │
+│  │                                  │   + Metadata Quality Filters      │   │
+│  │                                  │   Deterministic                   │   │
 │  └──────────────────────────────────┴───────────────────────────────────┘   │
 │                                     │                                       │
 │                                     ▼                                       │
@@ -63,7 +63,7 @@ This repository is a fork of
 │  └──────────────────────────────────┴───────────────────────────────────┘   │
 │                                     │                                       │
 │                                     ▼                                       │
-│  ┌── 3. PDF ACQUISITION & PARSING ───────────────────────────────────-──┐   │
+│  ┌── 3. PDF ACQUISITION & PARSING ──────────────────────────────────────┐   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
 │  │ arxiv library (ArXiv ID          │ Download: 4-strategy fallback     │   │
 │  │ required; no fallback)           │ (ArXiv → URL → pyalex → OA)       │   │
@@ -71,7 +71,7 @@ This repository is a fork of
 │  └──────────────────────────────────┴───────────────────────────────────┘   │
 │                                     │                                       │
 │                                     ▼                                       │
-│  ┌── 4. SUMMARIZATION ───────────────────────────────────────────────-──┐   │
+│  ┌── 4. SUMMARIZATION ──────────────────────────────────────────────────┐   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
 │  │ GPT-4o (Azure OpenAI)            │ Any LLM via LiteLLM               │   │
 │  │                                  │ Extracts: content · authors · year│   │
@@ -81,7 +81,7 @@ This repository is a fork of
                                       ▼
 ┌─────────────────────────── SLIDE GENERATION ─────────────────────────────-──┐
 │                                                                             │
-│  ┌── 5. SLIDE OUTLINE + HUMAN-IN-THE-LOOP ───────────────────────────-──┐   │
+│  ┌── 5. SLIDE OUTLINE + HUMAN-IN-THE-LOOP ──────────────────────────────┐   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
 │  │ GPT-4o: 1 outline per paper      │ Local LLM: 1 title slide          │   │
 │  │ FunctionCallingProgram           │           + 4 content slides      │   │
