@@ -1,4 +1,4 @@
-# Experiment 9 — ReAct Agent: How a Prompt Example Key Breaks Tool Dispatch in 4B Models
+# Experiment 10 — ReAct Agent: How a Prompt Example Key Breaks Tool Dispatch in 4B Models
 
 ## Task Context
 
