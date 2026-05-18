@@ -606,6 +606,16 @@ Each experiment entry must follow this fixed format:
 > → Full report: [experiments/path/to/report.md](experiments/path/to/report.md)
 ```
 
+Each entry heading must include the experiment date:
+
+```
+#### Experiment N — <Title>   (YYYY-MM-DD)
+```
+
+- **Date source:** use the date the experiment was run or completed — from the PoC record header or the experiment file's metadata. Do not use the git commit date of a later restructure.
+- **Format:** `YYYY-MM-DD` in parentheses, separated from the title by three spaces.
+- **One date per entry:** if an experiment ran over multiple days, use the completion date.
+
 **Rules:**
 - No `**Goal:**` field — the title and **System Architecture** line already convey this.
 - No `**Key Finding:**` field — the *Result:* line replaces it. Do not use any alternative label.
