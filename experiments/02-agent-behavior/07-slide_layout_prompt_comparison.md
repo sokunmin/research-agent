@@ -1,4 +1,4 @@
-# Experiment 6 — Slide Layout Selection: Prompt Engineering for Accurate Layout Assignment
+# Experiment 7 — Slide Layout Selection: Prompt Engineering for Accurate Layout Assignment
 
 ## Task Context
 

@@ -1,4 +1,4 @@
-# Experiment 7 — ReAct Agent: Model & Prompt Evaluation for PPTX Rendering
+# Experiment 8 — ReAct Agent: Model & Prompt Evaluation for PPTX Rendering
 
 ## Task Context
 

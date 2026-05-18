@@ -1,4 +1,4 @@
-# Experiment 5 — Constrained Decoding vs. Text Completion: Structured Output Method Selection for Local LLMs
+# Experiment 6 — Constrained Decoding vs. Text Completion: Structured Output Method Selection for Local LLMs
 
 ## Task Context
 
