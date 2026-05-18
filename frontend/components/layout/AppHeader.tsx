@@ -7,10 +7,11 @@ interface AppHeaderProps {
 }
 
 const PHASE_BADGE: Record<CanvasPhase, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
-  empty:      { label: 'Ready',       variant: 'outline' },
-  processing: { label: 'Processing',  variant: 'default' },
-  hitl:       { label: 'Review',      variant: 'secondary' },
-  complete:   { label: 'Complete',    variant: 'outline' },
+  empty:             { label: 'Ready',       variant: 'outline' },
+  processing:        { label: 'Processing',  variant: 'default' },
+  'paper-selection': { label: 'Selecting',   variant: 'secondary' },
+  hitl:              { label: 'Review',      variant: 'secondary' },
+  complete:          { label: 'Complete',    variant: 'outline' },
 }
 
 export function AppHeader({ chatStatus, canvasPhase }: AppHeaderProps) {

@@ -76,10 +76,53 @@ class SlideNeedModifyResult(BaseModel):
 
 
 class WorkflowStreamingEvent(BaseModel):
-    event_type: Literal["server_message", "request_user_input", "paper_total"] = Field(
+    event_type: Literal[
+        "server_message", "request_user_input", "paper_total",
+        "paper_candidates", "no_results", "supervisor_response"
+    ] = Field(
         ..., description="Type of the event"
     )
     event_sender: str = Field(
         ..., description="Sender (workflow step name) of the event"
     )
     event_content: Dict[str, Any] = Field(..., description="Content of the event")
+
+
+class SearchParams(BaseModel):
+    """Structured search parameters extracted from natural language query by LLM."""
+    clean_topic: str = Field(
+        ...,
+        description=(
+            "Clean topic string for BM25 search. "
+            "Plain keywords only — no boolean operators, no quotes, no date syntax. "
+            "Preserves domain-specific terminology. Omits time/filter language."
+        )
+    )
+    year_window: int = Field(
+        default=3,
+        description="Publication recency window in years. Extracted from 'last N years', 'recent', etc."
+    )
+    min_citations: int = Field(
+        default=50,
+        description="Minimum citation count. Extracted from 'highly cited', 'at least N citations', etc."
+    )
+
+
+class PaperCandidate(BaseModel):
+    """A relevant paper candidate presented to the user for selection."""
+    entry_id: str
+    title: str
+    authors: str             # "First Author et al." format
+    year: int
+    abstract_summary: str    # 1-2 sentence LLM summary, max 40 words
+    similarity_score: float  # Stage-1 cosine similarity from filter step
+    cited_by_count: Optional[int] = None
+
+
+class IntentResult(BaseModel):
+    """Output schema for classify_intent LLM call."""
+    intent: Literal[
+        "research_query", "greeting_or_help", "ambiguous", "out_of_scope",
+        "paper_question", "off_topic", "question", "new_research"
+    ]
+    confidence: Literal["high", "low"]

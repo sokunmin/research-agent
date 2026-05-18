@@ -1,6 +1,13 @@
 import type { UIMessage } from 'ai'
 
-export type CanvasPhase = 'empty' | 'processing' | 'hitl' | 'complete'
+export type CanvasPhase = 'empty' | 'processing' | 'paper-selection' | 'hitl' | 'complete'
+
+export type WorkflowPhase =
+  | 'idle'
+  | 'running'
+  | 'awaiting-paper-selection'
+  | 'awaiting-hitl'
+  | 'complete'
 
 // Keys must match the "data-{key}" type strings emitted by FastAPI _sse()
 export type ResearchUIMessage = UIMessage<
@@ -16,6 +23,10 @@ export type ResearchUIMessage = UIMessage<
       message: string
     }
     'paper-total': { total: number }
+    'paper-candidates':   { candidates: PaperCandidate[]; search_params: SearchParams }
+    'no-results':         { message: string; suggestions: string[] }
+    'paper-answer':       { answer: string }
+    'supervisor-response': { message: string }
     'final-result': {
       download_pptx_url: string
       download_pdf_url: string
@@ -41,6 +52,27 @@ export interface HitlRequest {
 export interface FinalResult {
   download_pptx_url: string
   download_pdf_url: string
+}
+
+export interface PaperCandidate {
+  entry_id: string
+  title: string
+  authors: string
+  year: number
+  abstract_summary: string
+  similarity_score: number
+  cited_by_count: number | null
+}
+
+export interface SearchParams {
+  clean_topic: string
+  year_window: number
+  min_citations: number
+}
+
+export interface NoResultsInfo {
+  message: string
+  suggestions: string[]
 }
 
 export interface PaperSlideOutline {

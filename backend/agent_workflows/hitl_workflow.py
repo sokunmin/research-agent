@@ -45,7 +45,9 @@ class HumanInTheLoopWorkflow(Workflow):
         self,
         ctx: Context,
         sender: str,
-        event_type: Literal["server_message", "request_user_input"] = "server_message",
+        event_type: Literal[
+            "server_message", "request_user_input", "paper_candidates", "no_results", "supervisor_response"
+        ] = "server_message",
         **event_content,
     ) -> None:
         """Write a streaming event to the workflow stream."""

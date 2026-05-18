@@ -93,3 +93,9 @@ class VisualFixEvent(Event):
 
 class DummyEvent(Event):
     result: str
+
+
+class SelectedPapersEvent(Event):
+    """Carries user-selected papers from present_paper_candidates to download_papers."""
+    selected_entry_ids: List[str]
+    papers: List[dict]       # Full Paper objects serialized via model_dump()
