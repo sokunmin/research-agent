@@ -9,7 +9,7 @@ This repository is a fork of
 [lz-chen/research-agent](https://github.com/lz-chen/research-agent) (last updated May 2025). Original author's articles: [Part 1](https://medium.com/data-science/how-i-streamline-my-research-and-presentation-with-llamaindex-workflows-3d75a9a10564) · [Part 2](https://medium.com/data-science/building-an-interactive-ui-for-llamaindex-workflows-842dd7abedde).
 
 ## 📺 Demo Video
-[![Research Agent Demo](https://img.youtube.com/vi/ZnDdceQaVOg/maxresdefault.jpg)](https://youtu.be/ZnDdceQaVOg)
+[![Research Agent Demo](https://img.youtube.com/vi/FSkvngrjDIQ/maxresdefault.jpg)](https://youtu.be/FSkvngrjDIQ)
 > *Watch the Research Agent in action: from topic input to final slide generation.*
 
 ## 🔍 Table of Contents
@@ -34,12 +34,22 @@ This repository is a fork of
 
 ┌─────────────────────────── PAPER DISCOVERY ───────────────────────────-─────┐
 │                                                                             │
-│  ┌── 1. PAPER RETRIEVAL ────────────────────────────────────────────────┐   │
+│  ┌── 0. QUERY UNDERSTANDING ───────────────────────────────────────────────┐   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
-│  │ Tavily Search                    │ OpenAlex Retrieval (BM25)         │   │
-│  │ → Semantic Scholar Discovery     │ + Metadata Quality Filters        │   │
-│  │   (Two-stage Discovery)           │ (One-stage Discovery)             │   │
-│  │                                  │ Deterministic                     │   │
+│  │ (Not implemented in original)        │ Supervisor                        │   │
+│  │                                      │ intent check → route / reject     │   │
+│  └──────────────────────────────────┴───────────────────────────────────┘   │
+│                                     │                                       │
+│                                     ▼                                       │
+│  ┌── 1. PAPER RETRIEVAL ────────────────────────────────────────────────────┐   │
+│  ├──────────────────────────────────┬───────────────────────────────────┤   │
+│  │ Tavily Search                        │ ① Query Transformation            │   │
+│  │ → Semantic Scholar Discovery         │   clean_topic + year/citation     │   │
+│  │   (Two-stage Discovery)              │   constraints extracted           │   │
+│  │   Non-deterministic                  │───────────────────────────────────│   │
+│  │                                      │ ② OpenAlex Retrieval (BM25)       │   │
+│  │                                      │   + Metadata Quality Filters      │   │
+│  │                                      │   Deterministic                   │   │
 │  └──────────────────────────────────┴───────────────────────────────────┘   │
 │                                     │                                       │
 │                                     ▼                                       │
@@ -130,6 +140,10 @@ paper discovery pipeline:
 Research Topic
       │
       ▼
+ [Exp 5] How to clean the query for BM25?
+ LLM extracts topic + year/citation constraints
+      │  clean_topic, year_window, min_citations
+      ▼
  [Exp 1] Which OpenAlex search method?
  Can it fully replace Tavily?
       │  ~100 candidate papers
@@ -150,7 +164,7 @@ Research Topic
 
 ---
 
-#### Experiment 1 — Retrieval Method Comparison & Tavily Replacement
+#### Experiment 1 — Retrieval Method Comparison & Tavily Replacement   (2026-03-16)
 
 **System Architecture:** Step 1 — Paper Retrieval
 
@@ -171,7 +185,7 @@ Research Topic
 
 ---
 
-#### Experiment 2 — Re-ranking & Verification Pipeline
+#### Experiment 2 — Re-ranking & Verification Pipeline   (2026-03-17)
 
 **System Architecture:** Step 2 — Re-ranking & Verification
 
@@ -191,7 +205,7 @@ Research Topic
 
 ---
 
-#### Experiment 3 — Threshold Analysis for System Routing
+#### Experiment 3 — Threshold Analysis for System Routing   (2026-03-17)
 
 **System Architecture:** Step 2 — Re-ranking & Verification (routing threshold)
 
@@ -210,7 +224,7 @@ Research Topic
 
 ---
 
-#### Experiment 4 — PDF Download Reliability
+#### Experiment 4 — PDF Download Reliability   (2026-03-18)
 
 **System Architecture:** Step 3 — PDF Acquisition & Parsing
 
@@ -223,13 +237,34 @@ Research Topic
 
 ---
 
+#### Experiment 5 — Query Transformation for BM25 Retrieval   (2026-05-14)
+
+**System Architecture:** Step 1 — Paper Retrieval (query transformation sub-step)
+
+| | Strategy A: Raw query | Strategy C: Clean topic + dynamic filters ✅ |
+|---|---|---|
+| BM25 input | Original user query | LLM-extracted clean_topic |
+| Filters | Fixed defaults | LLM-extracted year_window + min_citations |
+| mean_sim@20 (median, N=25) | 0.5321 | 0.5557 |
+| precision@5 (mean, N=20) | 0.120 | 0.185 |
+| A vs C significance | — | p=0.0043 ✓ |
+
+- *Problem:* Raw queries with time or citation constraint phrases cause BM25 to match constraint words as topic terms — median mean_sim@20 = 0.5321 on the 25-query test set.
+- *Change:* A single LLM call extracts clean_topic, year_window, and min_citations from the user query; clean_topic replaces the raw query for BM25 search; extracted filter values are applied to OpenAlex quality filters.
+- *Result:* median mean_sim@20 +4.4% (p=0.0043); topic cleaning delivers the full retrieval gain; dynamic filters added at zero extra LLM cost to preserve user-expressed constraints.
+
+> ✅ INTEGRATED
+> → Full report: [experiments/01-openalex-paper-discovery/05-query_transformation_strategies.md](experiments/01-openalex-paper-discovery/05-query_transformation_strategies.md)
+
+---
+
 ### Experiments — Slide Generation Pipeline
 
 The experiments below are the systematic evaluation that led to replacing LLM code generation with deterministic rendering.
 
 ---
 
-#### Experiment 5 — Structured Output Method Comparison
+#### Experiment 6 — Structured Output Method Comparison   (2026-03-28)
 
 **System Architecture:** Step 5 — Slide Outline + HITL (layout selection sub-step)
 
@@ -246,11 +281,11 @@ The experiments below are the systematic evaluation that led to replacing LLM co
 - *Result:* 0% → 100% structured output reliability.
 
 > ✅ **In current pipeline**
-> → Full report: [experiments/02-agent-behavior/05-structured_output_method_comparison.md](experiments/02-agent-behavior/05-structured_output_method_comparison.md)
+> → Full report: [experiments/02-agent-behavior/06-structured_output_method_comparison.md](experiments/02-agent-behavior/06-structured_output_method_comparison.md)
 
 ---
 
-#### Experiment 6 — Slide Layout Selection
+#### Experiment 7 — Slide Layout Selection   (2026-04-02)
 
 **System Architecture:** Step 5 — Slide Outline + HITL (layout selection sub-step)
 
@@ -267,20 +302,20 @@ The experiments below are the systematic evaluation that led to replacing LLM co
 - *Result:* 61% → 96% combined accuracy; P3 ties P1 but costs +1.9s per call on small models.
 
 > ✅ **In current pipeline**
-> → Full report: [experiments/02-agent-behavior/06-slide_layout_prompt_comparison.md](experiments/02-agent-behavior/06-slide_layout_prompt_comparison.md)
+> → Full report: [experiments/02-agent-behavior/07-slide_layout_prompt_comparison.md](experiments/02-agent-behavior/07-slide_layout_prompt_comparison.md)
 
 ---
 
-⚠️ **Experiments 7–9 form a sequential diagnostic chain** — each experiment fixed one failure layer of the ReActAgent approach, and together they produced the evidence for replacing it with deterministic rendering.
+⚠️ **Experiments 8–10 form a sequential diagnostic chain** — each experiment fixed one failure layer of the ReActAgent approach, and together they produced the evidence for replacing it with deterministic rendering.
 
 ```
-Exp 7 — Which local model works for the ReActAgent?
+Exp 8 — Which local model works for the ReActAgent?
       │  gemma3:4b selected — but agent writes invalid python-pptx code (8.3%)
       ▼
-Exp 8 — Does fixing the task prompt fix code quality?
+Exp 9 — Does fixing the task prompt fix code quality?
       │  P2 achieves 100% — but tool dispatch is still broken
       ▼
-Exp 9 — Does fixing the tool dispatch suffix fix agent reliability?
+Exp 10 — Does fixing the tool dispatch suffix fix agent reliability?
       │  P4 achieves 100% — but error path still hallucinates failures
       ▼
 Architectural finding (2026-04-15): python-pptx has no markdown parser —
@@ -295,7 +330,7 @@ Decision: LLM → List[ParagraphItem] JSON → PptxRenderer (deterministic)
 
 ---
 
-#### Experiment 7 — ReAct Agent: Model & Prompt Evaluation
+#### Experiment 8 — ReAct Agent: Model & Prompt Evaluation   (2026-03-27)
 
 **System Architecture:** Step 6 — PPTX Rendering (original ReAct approach, superseded)
 
@@ -311,11 +346,11 @@ Decision: LLM → List[ParagraphItem] JSON → PptxRenderer (deterministic)
 - *Result:* Task completes but generated code fails 8.3% of the time — motivating Exp 8.
 
 > 🚫 **Superseded** — replaced with deterministic rendering.
-> → Full report: [experiments/02-agent-behavior/07-react_agent_model_prompt_eval.md](experiments/02-agent-behavior/07-react_agent_model_prompt_eval.md)
+> → Full report: [experiments/02-agent-behavior/08-react_agent_model_prompt_eval.md](experiments/02-agent-behavior/08-react_agent_model_prompt_eval.md)
 
 ---
 
-#### Experiment 8 — ReAct Agent: Task Prompt Engineering for PPTX Code Generation
+#### Experiment 9 — ReAct Agent: Task Prompt Engineering for PPTX Code Generation   (2026-04-05)
 
 **System Architecture:** Step 6 — PPTX Rendering (original ReAct approach, superseded)
 
@@ -331,11 +366,11 @@ Decision: LLM → List[ParagraphItem] JSON → PptxRenderer (deterministic)
 - *Result:* 100% code correctness — but tool dispatch still broken, leading to Exp 9.
 
 > 🚫 **Superseded** — replaced with deterministic rendering.
-> → Full report: [experiments/02-agent-behavior/08-react_agent_task_prompt_eval.md](experiments/02-agent-behavior/08-react_agent_task_prompt_eval.md)
+> → Full report: [experiments/02-agent-behavior/09-react_agent_task_prompt_eval.md](experiments/02-agent-behavior/09-react_agent_task_prompt_eval.md)
 
 ---
 
-#### Experiment 9 — ReAct Agent: How a Prompt Example Key Breaks Tool Dispatch in 4B Models
+#### Experiment 10 — ReAct Agent: How a Prompt Example Key Breaks Tool Dispatch in 4B Models   (2026-04-07)
 
 **System Architecture:** Step 6 — PPTX Rendering (original ReAct approach, superseded)
 
@@ -350,7 +385,7 @@ Decision: LLM → List[ParagraphItem] JSON → PptxRenderer (deterministic)
 - *Result:* 0% → 100% task completion, avg turns 9.0 → 3.0; python-pptx's lack of markdown parsing then drove the decision to replace ReActAgent with deterministic rendering.
 
 > 🚫 **Superseded** — replaced with deterministic rendering.
-> → Full report: [experiments/02-agent-behavior/09-react_agent_tool_dispatch_eval.md](experiments/02-agent-behavior/09-react_agent_tool_dispatch_eval.md)
+> → Full report: [experiments/02-agent-behavior/10-react_agent_tool_dispatch_eval.md](experiments/02-agent-behavior/10-react_agent_tool_dispatch_eval.md)
 
 ---
 
@@ -397,11 +432,6 @@ with memory thrashing. Docling uses Apple's MLX
 framework natively, bypassing PyTorch MPS entirely. It also provides
 full bounding-box coordinates per image block, required for passing
 specific figures to a VLM.
-
-**Frontend: Streamlit → Vercel AI SDK**  
-Streamlit has no native SSE streaming interface and shows visible
-per-token rendering lag. Planned migration to React + Vercel AI SDK
-for a proper streaming chat UX.
 
 **RAG pipeline**  
 Current summarization uses full-context LLM calls per paper — expensive
