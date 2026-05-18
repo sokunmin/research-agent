@@ -45,6 +45,7 @@ class Paper(BaseModel):
     keywords: Optional[List[str]] = None    # keyword display names from OpenAlex
     topics: Optional[List[str]] = None      # topic display names from OpenAlex
     concepts: Optional[List[str]] = None    # concept display names from OpenAlex
+    cited_by_count: Optional[int] = None
 
 
 # ── OpenAlex module-level config ─────────────────────────────────────────────
@@ -149,6 +150,7 @@ def _work_to_paper(result: dict) -> Paper:
         keywords=_extract_display_names(result.get("keywords", [])),
         topics=_extract_display_names(result.get("topics", [])),
         concepts=_extract_display_names(result.get("concepts", [])),
+        cited_by_count=result.get("cited_by_count"),
     )
 
 
@@ -160,6 +162,8 @@ _CANDIDATE_OA_STATUS_FILTER = "diamond|gold|green"
 def fetch_candidate_papers(
     topic: str,
     limit: int = settings.PAPER_CANDIDATE_LIMIT,
+    year_window: int = settings.PAPER_CANDIDATE_YEAR_WINDOW,
+    min_citations: int = settings.PAPER_CANDIDATE_MIN_CITATIONS,
 ) -> List[Paper]:
     """Search OpenAlex for open-access academic papers matching *topic*.
 
@@ -172,14 +176,14 @@ def fetch_candidate_papers(
     Results are sorted by citation count descending to surface high-impact
     papers first. Suitable as a FunctionTool in LLM agent scenarios.
     """
-    year_floor = date.today().year - settings.PAPER_CANDIDATE_YEAR_WINDOW
+    year_floor = date.today().year - year_window
     works = (
         Works()
         .search(topic)
         .filter(
             is_oa=True,
             oa_status=_CANDIDATE_OA_STATUS_FILTER,
-            cited_by_count=f">{settings.PAPER_CANDIDATE_MIN_CITATIONS}",
+            cited_by_count=f">{min_citations}",
             publication_year=f">{year_floor}",
             type="!retraction",
         )
