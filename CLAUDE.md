@@ -144,6 +144,43 @@ Only read source directories: `app/`, `components/`, `hooks/`, `lib/`, `public/`
 * Do NOT add co-author on git message
 * Do NOT create isolation worktree without user's confirmation
 * **ALWAYS ask user for confirmation before executing any git write operation** (`git add`, `git commit`, `git reset`, `git push`, `git rebase`, `git merge`). Show the proposed commit message and file list first, wait for explicit approval.
+* **NEVER commit `.env`** — it contains API keys and is gitignored. Only `.env.example` (no real keys) may be committed.
+
+#### Commit Message & PR Standard (FAANG)
+
+All commit messages and PR title/body must follow Conventional Commits
+and be understandable to a developer with zero project context.
+
+**Commit message format:**
+
+```
+<type>(<scope>): <subject>   ← ≤72 chars, imperative mood, no period
+
+<body>                       ← explains WHY, not what; optional but
+                               required when the change is non-obvious
+```
+
+**Subject line rules:**
+- Imperative mood: "add", "fix", "replace" — not "added" or "adds"
+- No internal codes or abbreviations: write "query transformation experiment"
+  not "Exp 5"; write "slide generation" not "slide gen"
+- A developer who has never seen this repo must understand the subject
+
+**Body rules:**
+- Explains WHY the change was made, not what the diff shows
+- If a decision had trade-offs, state the reason explicitly
+- No "Co-authored-by" trailer — never
+
+**PR title:** ≤70 chars, same subject-line rules as commit
+
+**PR body mandatory sections:**
+```
+## Summary
+- bullet per logical change
+
+## Test plan
+- [ ] checkbox per verifiable behaviour
+```
 
 #### Commit Separation Rule (dev → main cherry-pick strategy)
 `poc/`, `REPORTING_GUIDE.md`, and `dev-tracker/` are dev-only files that must never reach main.
