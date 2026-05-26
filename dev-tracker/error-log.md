@@ -1,4 +1,12 @@
 ---
+## [2026-05-26] nomic-embed-text cosine scores low without asymmetric prefix `[版本: nomic-embed-text + Qdrant + LlamaIndex LiteLLMEmbedding + ollama]`
+原因：nomic-embed-text 設計為 asymmetric retrieval；未加前綴時以 symmetric 模式運行，query/document alignment 偏弱；entity-heavy 查詢（BLEU scores、資料集名稱）純 dense 更差，需 BM25 或 hybrid。
+修正：query 加 `"search_query: "` 前綴，document/chunk 加 `"search_document: "` 前綴；symmetric fallback 可將 threshold 從 0.70 降至 0.65；POC 後 Q1=0.726、Q2=0.779、Q3=0.684，全數通過。
+---
+## [2026-05-26] Docling `generate_picture_images=True` does not auto-write images to disk `[版本: Docling + Python]`
+原因：`PdfPipelineOptions(generate_picture_images=True)` 只將圖片以 base64 URI 存入 `PictureItem.image`（`ImageRef` 物件），不會自動寫入磁碟。
+修正：需顯式呼叫 `el.get_image(result.document)` 取得 PIL image，再呼叫 `.save(path, "PNG")` 寫檔；正確迴圈：`for el, _ in result.document.iterate_items(): if isinstance(el, PictureItem): pil_img = el.get_image(result.document); pil_img.save(path, "PNG")`。
+---
 ## [2026-05-18] Session restore after refresh shows EmptyCanvas even when workflow alive; "interrupted" banner shown on normal cancel `[版本: feat/supervisor-hitl]`
 原因：Session restore 只將 `workflowId` 存入 `sessionStorage`，refresh 後其他狀態（`workflowPhase`、`paperCandidates`、`hitlRequest`、SSE stream）全部遺失；`workflowPhase` 維持 `'idle'` 導致 `canvasPhase='empty'`，partial restore 顯示錯誤畫面；cancelled workflow 的 `workflowId` 仍殘留在 storage 造成誤判。
 修正：移除 session restore 機制，refresh = full reset；刪除 `frontend/lib/session.ts`，移除 `checkWorkflowStatusApi`、兩個 session `useEffect`，及 `backend/main.py` 的 `/workflow_status` endpoint；backend 已在 SSE disconnect 時透過 `is_disconnected() → wf.cancel()` 清理 workflow。
