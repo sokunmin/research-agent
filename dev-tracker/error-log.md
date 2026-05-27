@@ -1,4 +1,12 @@
 ---
+## [2026-05-27] poc/rag-filtering: paper_frequency 超過 1.0，heading 頻率統計失準 `[版本: poc/rag-filtering/run_analysis.py]`
+原因：`compute_stats()` 以 chunk 計數除以論文篇數（`len(records) / n_papers`）。一篇論文的 References 章節被 HybridChunker 切成多個 chunk（每個 reference 一組），每個 chunk 都帶相同的 heading，導致同一篇論文對同一個 heading 貢獻多次。結果：`references` 的 paper_frequency = 11.46（遠超 1.0）；只出現在 1 篇論文的 `input`/`target` heading 因 chunk 數多，誤判為 paper_frequency = 0.46（看似 46% 論文都有）。
+修正：在每筆 record 加入 `paper_idx` 欄位（該論文的 index），`compute_stats()` 改為先 group by `(heading, paper_idx)` 做 per-paper dedup，再數有幾篇 paper 含此 heading，最後除以總篇數。`paper_frequency` 恢復為正確的 0.0~1.0 比例。
+---
+## [2026-05-27] poc/rag-filtering: always_filter exact match 命中率低，多數 heading 變體無法匹配 `[版本: poc/rag-filtering/filter_config.json]`
+原因：`always_filter` 設計為 exact string match，但同一個語意的章節在不同論文有不同寫法（`"funding"` vs `"acknowledgments and disclosure of funding"`；`"reproducibility statement"` vs `"e.1 reproducibility statement"`）。28 篇論文統計後，原本 8 個 always_filter heading 只有 2 個以完全相同字串出現（`author contributions`、`checklist`），其餘 6 個因前綴數字、拼法變體、巢狀章節編號等原因未命中。
+修正：`filter_config.json` 新增 `keyword_filter` 欄位，存放關鍵字片段（如 `"acknowledgment"`、`"broader impact"`、`"ethic"`），runtime 做 `any(k in normalized for k in keyword_filter)` contains matching。一個關鍵字可同時覆蓋多種變體，不需逐一列舉每個寫法。
+---
 ## [2026-05-26] nomic-embed-text cosine scores low without asymmetric prefix `[版本: nomic-embed-text + Qdrant + LlamaIndex LiteLLMEmbedding + ollama]`
 原因：nomic-embed-text 設計為 asymmetric retrieval；未加前綴時以 symmetric 模式運行，query/document alignment 偏弱；entity-heavy 查詢（BLEU scores、資料集名稱）純 dense 更差，需 BM25 或 hybrid。
 修正：query 加 `"search_query: "` 前綴，document/chunk 加 `"search_document: "` 前綴；symmetric fallback 可將 threshold 從 0.70 降至 0.65；POC 後 Q1=0.726、Q2=0.779、Q3=0.684，全數通過。
