@@ -81,6 +81,20 @@ class DoclingPoc:
         )
 
     @staticmethod
+    def build_analysis_converter() -> DocumentConverter:
+        """Minimal converter for heading analysis — no formula/table/code enrichment."""
+        opts = PdfPipelineOptions()
+        opts.do_ocr = False
+        opts.do_table_structure = False
+        opts.do_formula_enrichment = False
+        opts.do_code_enrichment = False
+        opts.do_picture_classification = False
+        opts.do_picture_description = False
+        return DocumentConverter(
+            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}
+        )
+
+    @staticmethod
     def load_doc() -> DoclingDocument:
         """Load DoclingDocument from JSON cache written by A1.
 

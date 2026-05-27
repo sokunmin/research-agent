@@ -3,7 +3,7 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from poc_base import DoclingPoc, PocReporter
 
 from docling_core.types.doc import PictureItem

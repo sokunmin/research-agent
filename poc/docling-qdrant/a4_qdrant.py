@@ -6,7 +6,7 @@ from pathlib import Path
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, FieldCondition, Filter, MatchValue, PointStruct, VectorParams
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from poc_base import DoclingPoc, PocReporter
 
 COLLECTION = "papers_test"

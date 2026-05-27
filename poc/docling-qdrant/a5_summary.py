@@ -7,7 +7,7 @@ from llama_index.core import VectorStoreIndex
 from llama_index.core.schema import TextNode
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from poc_base import DoclingPoc, PocReporter
 
 from prompts.prompts import SUMMARIZE_PAPER_PMT
