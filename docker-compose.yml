@@ -36,12 +36,16 @@ services:
       SLIDE_TEMPLATE_PATH: /app/assets/template.pptx
       MLFLOW_TRACKING_URI: http://mlflow:8080
       OLLAMA_API_BASE: http://host.docker.internal:11434
+      QDRANT_PATH: /app/qdrant_storage
+      SHARED_CACHE_ROOT: /app/shared_cache
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./assets:/app/assets:ro
       - ./workflow_artifacts:/app/workflow_artifacts
       - ./mlruns:/app/mlruns:rw
       - ./mlartifacts:/app/mlartifacts:rw
+      - qdrant-storage:/app/qdrant_storage
+      - shared-cache:/app/shared_cache
 
   frontend:
     build:
@@ -86,3 +90,7 @@ services:
 
 networks:
   app-network:
+
+volumes:
+  qdrant-storage:
+  shared-cache:

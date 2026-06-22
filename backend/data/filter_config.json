@@ -1,0 +1,32 @@
+{
+  "exact_filter": [
+    "references",
+    "acknowledgements",
+    "acknowledgments",
+    "author contributions"
+  ],
+  "keyword_filter": [
+    "acknowledgment",
+    "broader impact",
+    "ethic",
+    "societal impact",
+    "reproducibility",
+    "conflict of interest",
+    "disclosure of funding"
+  ],
+  "always_filter": [
+    "author contributions",
+    "bibliography",
+    "checklist",
+    "conflict of interest",
+    "data availability",
+    "funding",
+    "neurips paper checklist",
+    "reproducibility statement"
+  ],
+  "thresholds": {
+    "paper_frequency": 0.4,
+    "mean_position": 0.75
+  },
+  "n_papers": 28
+}

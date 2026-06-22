@@ -32,6 +32,7 @@ from llama_index.core.base.llms.types import (
     ChatResponseGen,
 )
 from llama_index.core.llms import ImageBlock, TextBlock
+from services.smart_llm import _strip
 
 
 def _image_doc_to_content_block(doc: ImageDocument) -> dict:
@@ -123,17 +124,22 @@ class LiteLLMMultiModal(MultiModalLLM):
     # ── Sync methods ──────────────────────────────────────────────────────────
 
     @staticmethod
-    def _clean_response_text(text: str, response_format: Optional[Type[BaseModel]]) -> str:
-        """Strip markdown code fences when a structured JSON response is expected.
+    def _clean_response_text(
+        text: str,
+        response_format: Optional[Type[BaseModel]] = None,
+        strip_fences: Optional[str] = None,
+    ) -> str:
+        """Strip markdown code fences from LLM output.
 
-        Ollama and some open-source fallback models wrap JSON in ```json...```
-        fences even when response_format is set. Cloud models (Gemini, OpenAI)
-        return pure JSON, so stripping is a no-op for them.
-        Only applied when response_format is a Pydantic model class (JSON expected).
+        response_format set → always strip json fences (structured output).
+        strip_fences set    → strip the specified fence type (e.g. "markdown").
+        Both None           → return text unchanged.
         """
-        if response_format is None:
-            return text
-        return text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        if response_format is not None:
+            return _strip(text, "json")
+        if strip_fences is not None:
+            return _strip(text, strip_fences)
+        return text
 
     def _litellm_kwargs(self) -> dict:
         """Common kwargs for every litellm call, including retry and fallback config."""
@@ -152,6 +158,7 @@ class LiteLLMMultiModal(MultiModalLLM):
         prompt: str,
         image_documents: Sequence[Union[ImageNode, ImageBlock]],
         response_format: Optional[Type[BaseModel]] = None,
+        strip_fences: Optional[str] = None,
         **kwargs,
     ) -> CompletionResponse:
         messages = self._prompt_to_messages(prompt, image_documents)
@@ -159,7 +166,7 @@ class LiteLLMMultiModal(MultiModalLLM):
         if response_format is not None:
             kw["response_format"] = response_format
         resp = litellm.completion(model=self.model, messages=messages, **kw, **kwargs)
-        text = self._clean_response_text(resp.choices[0].message.content, response_format)
+        text = self._clean_response_text(resp.choices[0].message.content, response_format, strip_fences)
         return CompletionResponse(text=text, raw=resp)
 
     def chat(
@@ -184,6 +191,7 @@ class LiteLLMMultiModal(MultiModalLLM):
         prompt: str,
         image_documents: Sequence[Union[ImageNode, ImageBlock]],
         response_format: Optional[Type[BaseModel]] = None,
+        strip_fences: Optional[str] = None,
         **kwargs,
     ) -> CompletionResponse:
         messages = self._prompt_to_messages(prompt, image_documents)
@@ -191,7 +199,7 @@ class LiteLLMMultiModal(MultiModalLLM):
         if response_format is not None:
             kw["response_format"] = response_format
         resp = await litellm.acompletion(model=self.model, messages=messages, **kw, **kwargs)
-        text = self._clean_response_text(resp.choices[0].message.content, response_format)
+        text = self._clean_response_text(resp.choices[0].message.content, response_format, strip_fences)
         return CompletionResponse(text=text, raw=resp)
 
     async def achat(
