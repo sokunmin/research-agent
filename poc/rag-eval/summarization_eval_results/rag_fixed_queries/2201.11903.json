@@ -1,0 +1,83 @@
+{
+  "config": "rag_fixed_queries",
+  "paper_id": "2201.11903",
+  "supported": 12,
+  "contradicted": 1,
+  "unverifiable": 1,
+  "claim_count": 14,
+  "factuality": 0.86,
+  "hallucination_rate": 0.07,
+  "unverifiable_rate": 0.07,
+  "claims": [
+    {
+      "text": "The researchers evaluated several models via greedy decoding, including PaLM (8B, 62B, 540B), LaMDA (422M to 137B), GPT-3 (350M to 175B), and UL2 (20B).",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.1 explicitly lists these model families and sizes; greedy decoding is stated in the same paragraph: 'We sample from the models via greedy decoding.'"
+    },
+    {
+      "text": "For LaMDA, results were averaged over five random seeds with shuffled exemplar orders to ensure reliability.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.1 states: 'For LaMDA, we report averaged results over five random seeds, where each seed had a different randomly shuffled order of exemplars.'"
+    },
+    {
+      "text": "The study utilized arithmetic benchmarks: GSM8K, SVAMP, ASDiv, AQuA, and MAWPS (SingleOp, SingleEq, AddSub, MultiArith).",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.1 lists these five arithmetic benchmarks and Table 3 in Appendix B breaks MAWPS into the four named subsets."
+    },
+    {
+      "text": "Commonsense benchmarks included CSQA, StrategyQA, BIG-bench Date Understanding, BIG-bench Sports Understanding, and SayCan robot planning.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4 explicitly lists all five commonsense benchmarks by these exact names."
+    },
+    {
+      "text": "Symbolic tasks included 'Last letter concatenation' and 'Coin flip', created by the authors.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 5 introduces both tasks by name and Section E.3 confirms they 'were created synthetically.'"
+    },
+    {
+      "text": "CoT reasoning is an emergent property of model scale, typically providing significant gains only in models with ~100B parameters.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.2 states: 'chain-of-thought prompting does not positively impact performance for small models, and only yields performance gains when used with models of ~100B parameters.'"
+    },
+    {
+      "text": "The method can reach state-of-the-art performance on GSM8K.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract states PaLM 540B with chain-of-thought exemplars 'achieves state-of-the-art accuracy on the GSM8K benchmark,' confirmed again in Section 3.2."
+    },
+    {
+      "text": "No training or finetuning was performed for the core CoT method; it is a prompting-only approach using off-the-shelf models.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 6 explicitly states: 'No language models were finetuned in the process of writing this paper,' and the method relies on few-shot prompting only."
+    },
+    {
+      "text": "The authors also tested integrating an external Python calculator to resolve arithmetic errors within the generated chains.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix B states: 'we can further add a Python program as an external calculator (using the Python eval function),' and Table 1 shows results with 'Ext. calc.'"
+    },
+    {
+      "text": "Error analysis was performed by manually categorizing incorrect outputs into 'semantic understanding,' 'one step missing,' and 'other' (e.g., hallucinations).",
+      "verdict": "CONTRADICTED",
+      "reason": "Appendix D.2 shows the actual error categories are 'calculator error only,' 'symbol mapping error,' 'one step missing error,' and a residual group; 'semantic understanding' is a sub-label of the residual category, not a top-level error category — and hallucinations appear in the 'other' sub-bucket of Appendix A.1's separate analysis, not in the main error taxonomy."
+    },
+    {
+      "text": "PaLM 540B with chain-of-thought prompting outperforms prior state-of-the-art on StrategyQA (75.6% vs 69.4%).",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4 explicitly states these numbers: 'outperforming the prior state of the art on StrategyQA (75.6% vs 69.4%)'."
+    },
+    {
+      "text": "PaLM 540B with chain-of-thought prompting outperforms an unaided sports enthusiast on sports understanding (95.4% vs 84%).",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4 explicitly states: 'outperforming an unaided sports enthusiast on sports understanding (95.4% vs 84%),' confirmed by Table 4 showing 95.4% for PaLM 540B CoT."
+    },
+    {
+      "text": "Robustness analyses varied the annotators who wrote the chains of thought, changing the number of exemplars, and altering the order of prompts.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.4 and Appendix A.2 explicitly describe robustness experiments across different annotators, varying exemplar counts, and different exemplar orders."
+    },
+    {
+      "text": "Limitations include the lack of a guarantee for factual correctness and the high cost of serving very large models.",
+      "verdict": "UNVERIFIABLE",
+      "reason": "The paper (Section 6) explicitly names 'no guarantee of correct reasoning paths' as a limitation and mentions serving cost as a concern, but the summary conflates 'factual correctness' with 'correct reasoning paths' — the paper warns about reasoning path correctness, not factual correctness of model knowledge; the latter framing is not stated in the paper."
+    }
+  ]
+}

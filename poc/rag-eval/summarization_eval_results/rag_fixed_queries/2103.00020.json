@@ -1,0 +1,78 @@
+{
+  "config": "rag_fixed_queries",
+  "paper_id": "2103.00020",
+  "supported": 11,
+  "contradicted": 1,
+  "unverifiable": 1,
+  "claim_count": 13,
+  "factuality": 0.85,
+  "hallucination_rate": 0.08,
+  "unverifiable_rate": 0.08,
+  "claims": [
+    {
+      "text": "CLIP consists of an image encoder (either a ResNet or a Vision Transformer) and a text encoder (a Transformer).",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 2.4 states 'We consider two different architectures for the image encoder... ResNet-50... [and] the recently introduced Vision Transformer' and Section 2.4 states 'The text encoder is a Transformer'."
+    },
+    {
+      "text": "During training, CLIP maximizes cosine similarity between real (image, text) pair embeddings and minimizes it for all incorrect pairings using a contrastive objective.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.3 states CLIP 'jointly training an image encoder and text encoder to maximize the cosine similarity of the image and text embeddings of the N real pairs... while minimizing the cosine similarity of the embeddings of the N^2-N incorrect pairings'."
+    },
+    {
+      "text": "CLIP was trained from scratch for 32 epochs using the Adam optimizer with decoupled weight decay and a cosine learning rate schedule.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.5 states 'We train all models for 32 epochs. We use the Adam optimizer... with decoupled weight decay regularization... and decay the learning rate using a cosine schedule'."
+    },
+    {
+      "text": "The authors used a very large minibatch size of 32,768.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.5 explicitly states 'We use a very large minibatch size of 32,768'."
+    },
+    {
+      "text": "CLIP employs a symmetric cross-entropy loss during training.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.3 states 'We optimize a symmetric cross entropy loss over these similarity scores'."
+    },
+    {
+      "text": "For the ViT-L/14 model, an additional epoch at a higher resolution (336px) was used to boost performance.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.5 states 'For the ViT-L/14 we also pre-train at a higher 336 pixel resolution for one additional epoch to boost performance'."
+    },
+    {
+      "text": "The WIT (WebImageText) dataset consists of 400 million (image, text) pairs collected from the internet.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.2 states 'we constructed a new dataset of 400 million (image, text) pairs collected form a variety of publicly available sources on the Internet. We refer to this dataset as WIT for WebImageText'."
+    },
+    {
+      "text": "WIT pairs were selected based on 500,000 queries derived from Wikipedia.",
+      "verdict": "CONTRADICTED",
+      "reason": "Section 2.2 and footnote 1 clarify that the 500,000 queries come from multiple sources: words occurring at least 100 times in English Wikipedia PLUS bi-grams with high pointwise mutual information PLUS names of all Wikipedia articles PLUS WordNet synsets — not solely 'derived from Wikipedia'."
+    },
+    {
+      "text": "The model was benchmarked on over 30 datasets, including ImageNet, CIFAR-10/100, and specialized sets for OCR (Rendered SST2) and geolocation (Country211).",
+      "verdict": "SUPPORTED",
+      "reason": "Abstract states 'benchmarking on over 30 different existing computer vision datasets' and Section 3 references ImageNet, CIFAR-10/100, Rendered SST2, and Country211 as evaluation datasets."
+    },
+    {
+      "text": "Zero-shot CLIP outperforms a fully supervised linear classifier on ResNet-50 features on 16 out of 27 datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.1.5 and Figure 5 caption state 'a zero-shot CLIP classifier outperforms a fully supervised linear classifier fitted on ResNet-50 features on 16 datasets, including ImageNet' across a 27-dataset eval suite."
+    },
+    {
+      "text": "CLIP exhibits poor generalization to truly out-of-distribution data such as MNIST.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 6 states 'CLIP only achieves 88% accuracy on the handwritten digits of MNIST. An embarrassingly simple baseline of logistic regression on raw pixels outperforms zero-shot CLIP' and identifies MNIST as out-of-distribution."
+    },
+    {
+      "text": "CLIP has difficulty with abstract tasks like counting.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 6 explicitly states 'CLIP also struggles with more abstract and systematic tasks such as counting the number of objects in an image'."
+    },
+    {
+      "text": "CLIP inherits social biases from internet data.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 6 states 'CLIP is trained on text paired with images on the internet. These image-text pairs are unfiltered and uncurated and result in CLIP models learning many social biases'."
+    }
+  ]
+}

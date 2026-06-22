@@ -1,0 +1,176 @@
+[
+  {
+    "query_id": "groupE_001",
+    "query": "How do DDPM and Consistency Models differ in the number of inference steps required to generate an image?",
+    "query_type": "Comparison",
+    "paper_ids": ["2006.11239", "2303.01469"],
+    "gt_answer": "DDPM requires T=1000 sequential neural network evaluations during sampling (iterating from x_T down to x_0), making inference very slow. Consistency Models, by contrast, are designed to generate high-quality samples with only a single network evaluation by directly mapping noise to data, while optionally allowing multi-step sampling for improved quality. On CIFAR-10, Consistency Distillation achieves an FID of 3.55 with one step, compared to DDPM's FID of 3.17 with 1000 steps.",
+    "gt_passages": [
+      {
+        "paper_id": "2006.11239",
+        "passage": "We set T = 1000 for all experiments so that the number of neural network evaluations needed during sampling matches previous work [53, 55]."
+      },
+      {
+        "paper_id": "2303.01469",
+        "passage": "They support fast one-step generation by design, while still allowing multistep sampling to trade compute for sample quality."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_002",
+    "query": "Why did Latent Diffusion Models (LDM) move diffusion into latent space instead of pixel space, and what computational benefit did this provide compared to standard DDPM?",
+    "query_type": "Comparison",
+    "paper_ids": ["2006.11239", "2112.10752"],
+    "gt_answer": "DDPM operates directly in high-dimensional pixel space, requiring hundreds of GPU days to train and approximately 5 days to generate 50k samples on a single A100 GPU. LDM instead applies diffusion in the latent space of a pretrained autoencoder, compressing away imperceptible high-frequency details so the diffusion model can focus on semantically meaningful content. This significantly reduces compute and inference costs while retaining synthesis quality.",
+    "gt_passages": [
+      {
+        "paper_id": "2006.11239",
+        "passage": "Our CelebA-HQ/LSUN (256 2 ) models train at 2.2 steps per second at batch size 64, and sampling a batch of 128 images takes 300 seconds."
+      },
+      {
+        "paper_id": "2112.10752",
+        "passage": "training the most powerful DMs often takes hundreds of GPU days ( e.g . 150 1000 V100 days in [15]) and repeated evaluations on a noisy version of the input space render also inference expensive, so that producing 50k samples takes approximately 5 days [15] on a single A100 GPU."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_003",
+    "query": "How does Mamba's selective state space model handle long sequences differently from Transformer self-attention, and how does this affect inference throughput?",
+    "query_type": "Comparison",
+    "paper_ids": ["2312.00752", "2006.11239"],
+    "gt_answer": "Transformer self-attention stores the full KV cache during autoregressive inference, causing quadratic-time training and linear-time inference, making it expensive for long contexts. Mamba's selective SSM compresses context into a finite recurrent state, enabling constant-time per-step inference and linear scaling with sequence length, delivering 5x higher generation throughput than Transformers of similar size. By contrast, DDPM-style models (which also use attention at 16x16 feature maps) require 1000 sequential denoising evaluations, illustrating how iterative sequential computation — whether in diffusion sampling or attention-based sequence models — is a shared bottleneck that Mamba's architecture directly addresses.",
+    "gt_passages": [
+      {
+        "paper_id": "2312.00752",
+        "passage": "attention is both effective and inefficient because it explicitly does not compress context at all. This can be seen from the fact that autoregressive inference requires explicitly storing the entire context (i.e. the KV cache), which directly causes the slow linear-time inference and quadratic-time training of Transformers."
+      },
+      {
+        "paper_id": "2006.11239",
+        "passage": "We use self-attention at the 16 × 16 feature map resolution [63, 60]."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_004",
+    "query": "Both MAML and Neural ODEs introduce a form of meta-level optimization or adaptive computation at training time. How do their respective approaches manifest in the training algorithm?",
+    "query_type": "Timeline",
+    "paper_ids": ["1703.03400", "1806.07366"],
+    "gt_answer": "MAML introduces a bi-level optimization where the outer loop updates model parameters to maximize performance after inner-loop gradient adaptation on new tasks, requiring a gradient-through-gradient computation (Hessian-vector products). Neural ODEs introduce an adjoint sensitivity method for backpropagation: instead of storing intermediate activations, they solve a second ODE backwards in time to compute gradients, which scales linearly in problem size and has low memory cost. Both methods thus replace the standard single-pass gradient computation with a more sophisticated two-phase procedure to achieve their respective goals of fast task adaptation and memory-efficient depth.",
+    "gt_passages": [
+      {
+        "paper_id": "1703.03400",
+        "passage": "The MAML meta-gradient update involves a gradient through a gradient. Computationally, this requires an additional backward pass through f to compute Hessian-vector products, which is supported by standard deep learning libraries such as TensorFlow (Abadi et al., 2016)."
+      },
+      {
+        "paper_id": "1806.07366",
+        "passage": "We treat the ODE solver as a black box, and compute gradients using the adjoint sensitivity method (Pontryagin et al., 1962). This approach computes gradients by solving a second, augmented ODE backwards in time, and is applicable to all ODE solvers. This approach scales linearly with problem size, has low memory cost, and explicitly controls numerical error."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_005",
+    "query": "Trace the evolution of diffusion-based generative models from DDPM to LDM to Consistency Models, highlighting the primary limitation each successive approach addressed.",
+    "query_type": "Timeline",
+    "paper_ids": ["2006.11239", "2112.10752", "2303.01469"],
+    "gt_answer": "DDPM (2020) established high-quality image synthesis via iterative denoising in pixel space, achieving FID 3.17 on CIFAR-10 but requiring 1000 sampling steps. LDM (2021) addressed DDPM's computational cost by moving diffusion into the compressed latent space of a pretrained autoencoder, significantly reducing training and inference costs while maintaining quality. Consistency Models (2023) then addressed the remaining bottleneck of iterative sampling itself, introducing a framework that enables single-step generation by learning to map any point on a diffusion ODE trajectory directly to its origin, achieving FID 3.55 on CIFAR-10 with a single network evaluation.",
+    "gt_passages": [
+      {
+        "paper_id": "2006.11239",
+        "passage": "On the unconditional CIFAR10 dataset, we obtain an Inception score of 9.46 and a state-of-the-art FID score of 3.17."
+      },
+      {
+        "paper_id": "2112.10752",
+        "passage": "To enable DM training on limited computational resources while retaining their quality and flexibility, we apply them in the latent space of powerful pretrained autoencoders."
+      },
+      {
+        "paper_id": "2303.01469",
+        "passage": "Through extensive experiments, we demonstrate that they outperform existing distillation techniques for diffusion models in one- and few-step sampling, achieving the new state-ofthe-art FID of 3.55 on CIFAR-10 and 6.20 on ImageNet 64 ˆ 64 for one-step generation."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_006",
+    "query": "How did Neural ODEs and MAML each challenge the assumption of fixed discrete computation in deep networks, one through continuous depth and the other through task-adaptive initialization?",
+    "query_type": "Synthesis",
+    "paper_ids": ["1806.07366", "1703.03400"],
+    "gt_answer": "Neural ODEs replaced the standard discrete stack of residual layers with a continuous ODE parameterized by a neural network, so that 'depth' is determined dynamically by an ODE solver rather than fixed at architecture design time. MAML challenged the fixed-initialization assumption by training parameters specifically to be rapidly adaptable: rather than using a static pretrained initialization, MAML optimizes for an initialization that, after just one or a few gradient steps, achieves strong performance on new tasks. Both works thus replace rigid, fixed computational structures with adaptive, dynamic ones.",
+    "gt_passages": [
+      {
+        "paper_id": "1806.07366",
+        "passage": "Instead of specifying a discrete sequence of hidden layers, we parameterize the derivative of the hidden state using a neural network. The output of the network is computed using a blackbox differential equation solver."
+      },
+      {
+        "paper_id": "1703.03400",
+        "passage": "our proposed method aims to optimize the model parameters such that one or a small number of gradient steps on a new task will produce maximally effective behavior on that task."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_007",
+    "query": "What common insight do Mamba's selective state space mechanism and MAML's meta-learning share about the importance of input-dependent or task-dependent computation?",
+    "query_type": "Synthesis",
+    "paper_ids": ["2312.00752", "1703.03400"],
+    "gt_answer": "Both works identify that static, input-invariant or task-invariant computation is fundamentally limited. Mamba shows that prior SSMs with fixed (time-invariant) parameters cannot perform content-based reasoning, and introduces a selection mechanism that makes SSM parameters functions of the input so the model can selectively remember or ignore tokens. MAML similarly shows that a fixed pretrained initialization cannot quickly adapt to new tasks, and instead trains an initialization that is sensitive to task-specific loss gradients, enabling rapid adaptation with just one or a few gradient steps.",
+    "gt_passages": [
+      {
+        "paper_id": "2312.00752",
+        "passage": "simply letting the SSM parameters be functions of the input addresses their weakness with discrete modalities, allowing the model to selectively propagate or forget information along the sequence length dimension depending on the current token."
+      },
+      {
+        "paper_id": "1703.03400",
+        "passage": "we will aim to find model parameters that are sensitive to changes in the task, such that small changes in the parameters will produce large improvements on the loss function of any task drawn from p ( T ) , when altered in the direction of the gradient of that loss"
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_008",
+    "query": "TruthfulQA shows that scaling language models makes them less truthful, yet Mamba shows that scaling selective SSMs improves performance. What does this reveal about which failure mode scaling actually fixes?",
+    "query_type": "Contradiction",
+    "paper_ids": ["2109.07958", "2312.00752"],
+    "gt_answer": "TruthfulQA demonstrates that scaling GPT-style language models worsens truthfulness because larger models better fit the training distribution, learning 'imitative falsehoods' more strongly. In contrast, Mamba shows that its Mamba-3B model outperforms Transformers of the same size and matches Transformers twice its size, suggesting that scaling works when the model's inductive bias (selective state spaces) correctly handles the task structure. Together, these results indicate that scaling amplifies whatever the architecture learns — including errors — so architectural design governs whether scaling is beneficial.",
+    "gt_passages": [
+      {
+        "paper_id": "2109.07958",
+        "passage": "The largest models were generally the least truthful. This contrasts with other NLP tasks, where performance improves with model size."
+      },
+      {
+        "paper_id": "2312.00752",
+        "passage": "our Mamba-3B model outperforms Transformers of the same size and matches Transformers twice its size, both in pretraining and downstream evaluation."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_009",
+    "query": "Neural ODEs achieve constant memory cost during training, which contradicts the O(L) memory scaling of standard discrete ResNets. How does this memory advantage compare to the memory requirements introduced by DDPM's iterative sampling?",
+    "query_type": "Contradiction",
+    "paper_ids": ["1806.07366", "2006.11239"],
+    "gt_answer": "Standard discrete ResNets require O(L) memory because all intermediate activations must be stored for backpropagation. Neural ODEs contradict this by computing gradients via the adjoint sensitivity method — solving a second ODE backwards without storing any intermediate forward-pass quantities — yielding O(1) memory cost regardless of solver depth. DDPM, in contrast, has a different memory burden: during sampling it must run 1000 sequential neural network evaluations, which are memory-light per step but extremely time-consuming. Thus ODE-based approaches expose a tension between memory efficiency (Neural ODE) and inference latency (DDPM), both arising from how depth or denoising steps are handled.",
+    "gt_passages": [
+      {
+        "paper_id": "1806.07366",
+        "passage": "Not storing any intermediate quantities of the forward pass allows us to train our models with constant memory cost as a function of depth, a major bottleneck of training deep models."
+      },
+      {
+        "paper_id": "2006.11239",
+        "passage": "We set T = 1000 for all experiments so that the number of neural network evaluations needed during sampling matches previous work [53, 55]."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_010",
+    "query": "How do TruthfulQA's findings about imitative falsehoods and Mamba's findings about the limitations of linear time-invariant models both point to fundamental failures of models that too faithfully replicate their training distribution or fixed patterns?",
+    "query_type": "Synthesis",
+    "paper_ids": ["2109.07958", "2312.00752"],
+    "gt_answer": "TruthfulQA identifies that language models produce false answers not from ignorance but because those false answers are frequent in the training distribution — larger models that better fit this distribution learn these 'imitative falsehoods' more strongly. Mamba similarly identifies that linear time-invariant SSMs fail because their constant dynamics faithfully replicate the fixed convolutional pattern of the training setup but cannot adapt to varying input content (e.g. selective copying). Both papers argue that a model that too rigidly follows a static learned pattern — whether a training data distribution or a fixed parameter — cannot reason or select appropriately at inference time.",
+    "gt_passages": [
+      {
+        "paper_id": "2109.07958",
+        "passage": "We call such false answers imitative falsehoods . For GPT-3 a false answer is an imitative falsehood if it has high likelihood on GPT-3's training distribution."
+      },
+      {
+        "paper_id": "2312.00752",
+        "passage": "From the recurrent view, their constant dynamics (e.g. the ( 𝑨 , 𝑩 ) transitions in (2)) cannot let them select the correct information from their context, or affect the hidden state passed along the sequence in an input-dependent way."
+      }
+    ]
+  }
+]

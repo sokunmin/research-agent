@@ -1,0 +1,73 @@
+{
+  "config": "vlm",
+  "paper_id": "2201.11903",
+  "supported": 10,
+  "contradicted": 1,
+  "unverifiable": 1,
+  "claim_count": 12,
+  "factuality": 0.83,
+  "hallucination_rate": 0.08,
+  "unverifiable_rate": 0.08,
+  "claims": [
+    {
+      "text": "CoT prompting utilizes few-shot exemplars that include intermediate reasoning steps leading to the final answer",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2 defines CoT prompting as augmenting each few-shot exemplar with 'a series of intermediate natural language reasoning steps that lead to the final output'."
+    },
+    {
+      "text": "The researchers evaluated the method using specifically LaMDA (137B) and PaLM (540B) as the primary large-scale pre-trained models",
+      "verdict": "CONTRADICTED",
+      "reason": "Section 3.1 lists five model families evaluated — GPT-3, LaMDA, PaLM, UL2 20B, and Codex — not just LaMDA and PaLM; the summary omits GPT-3, UL2, and Codex."
+    },
+    {
+      "text": "LaMDA experiments used TPU v3 (8x8 configuration) and PaLM used TPU v4",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix E.2 states: 'For inference on LaMDA 137B we use TPU v3 (8x8 configuration, 64 chips / 128 cores), and for inference on PaLM 540B we use TPU v4 (4x4x12 configuration, 192 chips / 384 cores)'."
+    },
+    {
+      "text": "CoT is an emergent property of scale that provides minimal benefit for small models but becomes highly effective as models reach a sufficient scale",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.2 states: 'chain-of-thought prompting does not positively impact performance for small models, and only yields performance gains when used with models of ~100B parameters'."
+    },
+    {
+      "text": "Arithmetic reasoning benchmarks include GSM8K, SVAMP, ASDiv, AQuA, and MAWPS",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.1 explicitly lists these five math word problem benchmarks used for arithmetic reasoning evaluation."
+    },
+    {
+      "text": "Commonsense reasoning benchmarks include CSQA, StrategyQA, Date Understanding, Sports Understanding, and SayCan",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4 lists exactly these five commonsense reasoning datasets covering diverse reasoning types."
+    },
+    {
+      "text": "Symbolic reasoning tasks include Last Letter Concatenation and Coin Flip",
+      "verdict": "SUPPORTED",
+      "reason": "Section 5 explicitly describes these two toy tasks as the symbolic reasoning evaluation benchmarks."
+    },
+    {
+      "text": "Robustness testing varied the number of few-shot exemplars from 1 to 8",
+      "verdict": "UNVERIFIABLE",
+      "reason": "The paper mentions testing 'varying numbers of exemplars' (Appendix A.2, Figure 11) but does not state the specific lower bound of 1; the main experiments use a fixed 8 exemplars and the exact range tested is not stated in text."
+    },
+    {
+      "text": "Error analysis categories include calculator errors, symbol mapping errors, one-step missing errors, and fundamental semantic understanding errors",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix D.2 explicitly describes these four error categories when analyzing 50 incorrect chains of thought from LaMDA 137B on GSM8K."
+    },
+    {
+      "text": "PaLM 540B with CoT outperforms the prior state of the art on StrategyQA (75.6% vs 69.4%)",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4 results explicitly state: 'outperforming the prior state of the art on StrategyQA (75.6% vs 69.4%)' for PaLM 540B with chain-of-thought prompting."
+    },
+    {
+      "text": "PaLM 540B with CoT outperforms an unaided sports enthusiast on sports understanding (95.4% vs 84%)",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4 results explicitly state: 'outperforming an unaided sports enthusiast on sports understanding (95.4% vs 84%)' for PaLM 540B with chain-of-thought prompting."
+    },
+    {
+      "text": "46% of incorrect chains of thought were almost correct, barring minor mistakes such as calculator error, symbol mapping error, or one reasoning step missing",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.2 explicitly states: '46% of the chains of thought were almost correct, barring minor mistakes (calculator error, symbol mapping error, or one reasoning step missing)'."
+    }
+  ]
+}

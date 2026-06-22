@@ -20,7 +20,7 @@ def _heading_of(chunk) -> str:
 
 
 def main() -> None:
-    pdf_dir = Path("poc/rag-filtering/pdfs")
+    pdf_dir = Path("poc/pdfs")
     config_path = Path("poc/rag-filtering/filter_config.json")
 
     chunk_filter = ChunkFilter(config_path)

@@ -1,0 +1,88 @@
+{
+  "config": "rag_with_expansion",
+  "paper_id": "2201.11903",
+  "supported": 13,
+  "contradicted": 1,
+  "unverifiable": 1,
+  "claim_count": 15,
+  "factuality": 0.87,
+  "hallucination_rate": 0.07,
+  "unverifiable_rate": 0.07,
+  "claims": [
+    {
+      "text": "Chain-of-thought prompting provides prompts consisting of triples: input, chain of thought, output.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 1 states exactly: 'a prompt that consists of triples: ⟨input, chain of thought, output⟩'."
+    },
+    {
+      "text": "The authors utilized a prompting-only approach using existing large-scale models (PaLM 540B, PaLM 62B, LaMDA 137B, and GPT-3).",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 3.1 confirms PaLM (8B, 62B, 540B), LaMDA (multiple sizes including 137B), and GPT-3 were all evaluated with prompting only; the listed models are a subset of the full set evaluated."
+    },
+    {
+      "text": "Arithmetic datasets include GSM8K (1,319 examples), SVAMP (1,000), ASDiv (2,096), and AQuA (254).",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Table 12 lists exactly these dataset sizes: GSM8K N=1,319, SVAMP N=1,000, ASDiv N=2,096, AQuA N=254."
+    },
+    {
+      "text": "Symbolic reasoning used synthetically created datasets, including coinflip and last letter concatenation.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 5 describes both 'Last letter concatenation' and 'Coin flip' as the two toy symbolic reasoning tasks, constructed synthetically."
+    },
+    {
+      "text": "Commonsense benchmarks include the SayCan evaluation.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 4 lists SayCan (Ahn et al., 2022) as one of the five commonsense reasoning datasets evaluated."
+    },
+    {
+      "text": "Chain-of-thought reasoning is 'emergent,' appearing only in models with a large number of parameters (typically >10B).",
+      "verdict": "CONTRADICTED",
+      "reason": "Paper Section 3.2 states chain-of-thought 'only yields performance gains when used with models of ~100B parameters,' not >10B; Section A.1 confirms it 'hurts performance for most models smaller than 10B' but positive gains require ~100B scale."
+    },
+    {
+      "text": "No training or finetuning was performed for this work.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 6 explicitly states: 'No language models were finetuned in the process of writing this paper.'"
+    },
+    {
+      "text": "The authors integrated a Python-based external calculator that evaluates equations and propagates results forward.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix B states: 'we can further add a Python program as an external calculator (using the Python eval function)...we propagate the external calculator results from one equation to the following equations via string matching.'"
+    },
+    {
+      "text": "PaLM 540B with just eight chain-of-thought exemplars achieves state-of-the-art accuracy on the GSM8K benchmark.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Abstract states: 'prompting a PaLM 540B with just eight chain-of-thought exemplars achieves state-of-the-art accuracy on the GSM8K benchmark of math word problems.'"
+    },
+    {
+      "text": "PaLM 540B with chain-of-thought prompting outperformed the prior state of the art on StrategyQA (75.6% vs 69.4%).",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 4 states: 'outperforming the prior state of the art on StrategyQA (75.6% vs 69.4%)'; Table 4 shows PaLM 540B CoT = 77.8%, so the 75.6% refers to the reported figure in the text for a specific comparison."
+    },
+    {
+      "text": "PaLM 540B outperformed an unaided sports enthusiast on sports understanding (95.4% vs 84%).",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 4 states exactly: 'outperforming an unaided sports enthusiast on sports understanding (95.4% vs 84%)'."
+    },
+    {
+      "text": "In smaller models, chain-of-thought prompting can actually degrade performance.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 3.2 states chain-of-thought 'does not positively impact performance for small models'; Table 2 shows negative deltas (e.g., LaMDA 420M GSM8K: 2.6 standard vs 0.4 CoT)."
+    },
+    {
+      "text": "The primary metric used across all benchmarks is accuracy (%).",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Table 1 header states: 'All metrics are accuracy (%)', and this applies consistently across arithmetic, commonsense, and symbolic benchmarks."
+    },
+    {
+      "text": "The authors conducted a robustness analysis by varying the order of exemplars.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section A.2 and Table 6/7 report standard deviation over five random seeds with different exemplar orders as part of the robustness analysis."
+    },
+    {
+      "text": "MAWPS benchmark includes subsets: SingleOp, SingleEq, AddSub, and MultiArith.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Table 3 explicitly shows results for all four MAWPS subsets: SingleOp, SingleEq, AddSub, and MultiArith."
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "config": "rag_winner_no_filter",
+  "paper_id": "1801.06146",
+  "supported": 11,
+  "contradicted": 1,
+  "unverifiable": 0,
+  "claim_count": 12,
+  "factuality": 0.92,
+  "hallucination_rate": 0.08,
+  "unverifiable_rate": 0.00,
+  "claims": [
+    {
+      "text": "An AWD-LSTM is trained on a large, general corpus to capture universal language features.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper explicitly states 'we use the state-of-the-art language model AWD-LSTM' pretrained on Wikitext-103 for general-domain LM pretraining."
+    },
+    {
+      "text": "Training involves Adam optimization with β1 = 0.7.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states 'We use Adam with β1 = 0.7 instead of the default β1 = 0.9' in the hyperparameters section."
+    },
+    {
+      "text": "Discriminative fine-tuning assigns different learning rates to different layers with η_{l-1} = η_l / 2.",
+      "verdict": "CONTRADICTED",
+      "reason": "Paper specifies the divisor as 2.6, not 2: 'η^{l-1} = η^l / 2.6 as the learning rate for lower layers'."
+    },
+    {
+      "text": "General-domain pretraining was conducted on Wikitext-103, consisting of 103 million words from 28,595 Wikipedia articles.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states exactly 'Wikitext-103 (Merity et al., 2017b) consisting of 28,595 preprocessed Wikipedia articles and 103 million words'."
+    },
+    {
+      "text": "The method was evaluated on six representative text classification datasets across three tasks: sentiment analysis (IMDb, Yelp binary and five-class), question classification (TREC-6), and topic classification (AG News and DBpedia).",
+      "verdict": "SUPPORTED",
+      "reason": "Paper confirms all six datasets across three tasks in Table 1 and Section 4.1."
+    },
+    {
+      "text": "IMDb has 25k examples and is a binary classification dataset.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 in the paper lists IMDb as Sentiment type with 2 classes and 25k examples."
+    },
+    {
+      "text": "TREC-6 has 5.5k examples and six classes.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 confirms TREC-6 has 6 classes and 5.5k training examples."
+    },
+    {
+      "text": "AG News has 120k examples and four classes.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 confirms AG has 4 classes and 120k training examples."
+    },
+    {
+      "text": "DBpedia has 560k examples and 14 classes.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 confirms DBpedia has 14 classes and 560k training examples."
+    },
+    {
+      "text": "ULMFiT significantly outperforms state-of-the-art baselines, reducing error by 18-24% on most datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper abstract and contributions section state 'reducing the error by 18-24% on the majority of datasets'."
+    },
+    {
+      "text": "With only 100 labels, ULMFiT can match the performance of models trained from scratch with 10 to 100 times more data.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states with 100 labeled examples ULMFiT matches training from scratch with 10x more data (supervised on IMDb) and up to 100x more data (semi-supervised on AG), per Section 5 and the abstract."
+    },
+    {
+      "text": "ULMFiT was compared against DPCNN and oh-LSTM as state-of-the-art models.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 2 explicitly names 'IMDb oh-LSTM (Johnson and Zhang, 2016)' and Table 3 includes 'DPCNN (Johnson and Zhang, 2017)' as comparison baselines."
+    }
+  ]
+}

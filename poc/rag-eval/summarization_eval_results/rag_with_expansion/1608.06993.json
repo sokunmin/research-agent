@@ -1,0 +1,83 @@
+{
+  "config": "rag_with_expansion",
+  "paper_id": "1608.06993",
+  "supported": 12,
+  "contradicted": 1,
+  "unverifiable": 1,
+  "claim_count": 14,
+  "factuality": 0.86,
+  "hallucination_rate": 0.07,
+  "unverifiable_rate": 0.07,
+  "claims": [
+    {
+      "text": "Authors listed as 'Zhuang Liu et al.'",
+      "verdict": "CONTRADICTED",
+      "reason": "The paper lists Gao Huang as the first author (gh349@cornell.edu, with asterisk indicating equal contribution), not Zhuang Liu; while both contributed equally, citing 'Zhuang Liu et al.' misrepresents the author order."
+    },
+    {
+      "text": "The paper was published in 2017.",
+      "verdict": "UNVERIFIABLE",
+      "reason": "The paper body does not state a publication year; the arXiv ID 1608.06993 indicates a 2016 submission, and the paper text does not confirm a 2017 venue date."
+    },
+    {
+      "text": "DenseNet connects every layer to every other subsequent layer via concatenation rather than summation (as used in ResNets).",
+      "verdict": "SUPPORTED",
+      "reason": "The paper explicitly states 'in contrast to ResNets, we never combine features through summation before they are passed into a layer; instead, we combine features by concatenating them' (Section 1)."
+    },
+    {
+      "text": "The 'growth rate' (k) determines how many new filters each layer contributes to the global state.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3 states 'if each function H_l produces k feature-maps' and 'The growth rate regulates how much new information each layer contributes to the global state.'"
+    },
+    {
+      "text": "Networks were trained using SGD with Nesterov momentum of 0.9 and weight decay of 10^-4.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.2 explicitly states 'we use a weight decay of 10^-4 and a Nesterov momentum of 0.9 without dampening.'"
+    },
+    {
+      "text": "The initial learning rate was 0.1, reduced by a factor of 10 at 50% and 75% of training epochs for CIFAR/SVHN.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.2 states 'The initial learning rate is set to 0.1, and is divided by 10 at 50% and 75% of the total number of training epochs.'"
+    },
+    {
+      "text": "A dropout layer with a rate of 0.2 was added after each convolutional layer (except the first) for datasets without data augmentation.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.2 states 'we add a dropout layer after each convolutional layer (except the first one) and set the dropout rate to 0.2' for C10, C100, and SVHN without augmentation."
+    },
+    {
+      "text": "Batch sizes were 64 for CIFAR/SVHN and 256 for ImageNet.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.2 states 'On CIFAR and SVHN we train using batch size 64' and 'On ImageNet, we train models for 90 epochs with a batch size of 256.'"
+    },
+    {
+      "text": "CIFAR-10 and CIFAR-100 consist of 32x32 pixel images with 10 and 100 classes, 50k training and 10k test images.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.1 states 'colored natural images with 32x32 pixels', 'CIFAR-10 (C10) consists of images drawn from 10 and CIFAR-100 (C100) from 100 classes', and 'The training and test sets contain 50,000 and 10,000 images respectively.'"
+    },
+    {
+      "text": "SVHN consists of 32x32 colored digit images with over 73k training images.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.1 states 'The Street View House Numbers (SVHN) dataset contains 32x32 colored digit images' with 'There are 73,257 images in the training set.'"
+    },
+    {
+      "text": "ImageNet (ILSVRC 2012) has 1.2 million training images across 1,000 classes.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.1 states 'The ILSVRC 2012 classification dataset consists 1.2 million images for training... from 1,000 classes.'"
+    },
+    {
+      "text": "Models were evaluated using top-1 and top-5 error rates.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 3 caption and Section 4.4 explicitly report 'top-1 and top-5 error rates on the ImageNet validation set.'"
+    },
+    {
+      "text": "DenseNets are more parameter-efficient than ResNets.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.3 states 'DenseNets utilize parameters more efficiently than alternative architectures (in particular, ResNets)' and Figure 4 shows DenseNet-BC requires ~1/3 the parameters of ResNets for comparable accuracy."
+    },
+    {
+      "text": "The dense connectivity provides an implicit deep supervision effect and a regularizing benefit that reduces overfitting.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 5 explicitly discusses 'Implicit Deep Supervision' and Section 1 states 'dense connections have a regularizing effect, which reduces overfitting on tasks with smaller training set sizes.'"
+    }
+  ]
+}

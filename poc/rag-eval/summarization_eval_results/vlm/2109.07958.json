@@ -1,0 +1,78 @@
+{
+  "config": "vlm",
+  "paper_id": "2109.07958",
+  "supported": 10,
+  "contradicted": 2,
+  "unverifiable": 1,
+  "claim_count": 13,
+  "factuality": 0.77,
+  "hallucination_rate": 0.15,
+  "unverifiable_rate": 0.08,
+  "claims": [
+    {
+      "text": "TruthfulQA consists of 817 questions across 38 categories.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper abstract and Section 1.1 both state: 'The benchmark comprises 817 questions that span 38 categories.'"
+    },
+    {
+      "text": "GPT-judge is a fine-tuned GPT-3 (3.6-6.7B) model used to classify answers as true or false.",
+      "verdict": "CONTRADICTED",
+      "reason": "The paper consistently describes GPT-judge as 'a GPT-3-6.7B model finetuned'; the '3.6-6.7B' range cited in the summary does not appear anywhere in the paper."
+    },
+    {
+      "text": "GPT-judge achieves 90-96% alignment with human evaluations.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.4 states: 'The finetuned GPT-judge model is able to predict human evaluations of truthfulness with 90-96% validation accuracy.'"
+    },
+    {
+      "text": "TruthfulQA contains 437 adversarially filtered questions and 380 unfiltered questions.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.2 states: 'We produced 437 questions this way, which we call the filtered questions' and '380 additional questions that we expected some humans and models to answer falsely ... unfiltered questions.'"
+    },
+    {
+      "text": "Human performance on TruthfulQA was 94%.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.1 states: 'The human participant produced 94% true answers.'"
+    },
+    {
+      "text": "The best-performing model (GPT-3-175B with helpful prompt) was truthful on 58% of questions.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 1.1 and Section 4.1 state: 'the best-performing model (GPT-3-175B with helpful prompt) was truthful on 58% of questions.'"
+    },
+    {
+      "text": "Larger models exhibit an 'inverse scaling' trend where they are less truthful than smaller models.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.2 and Figure 2 explicitly demonstrate and name the 'inverse scaling' trend where larger models are generally less truthful across all model families tested."
+    },
+    {
+      "text": "The benchmark was used to test GPT-3 (350M to 175B), GPT-Neo/J, GPT-2, and UnifiedQA.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.1 lists the four model families: GPT-3 (with sizes 350M to 175B), GPT-Neo/J, GPT-2, and UnifiedQA."
+    },
+    {
+      "text": "Validators modified ambiguous questions to maintain data quality.",
+      "verdict": "CONTRADICTED",
+      "reason": "Appendix F states that the authors (not validators) modified 43 questions (5.3%) to make them less ambiguous based on validator feedback; the validators' role was to flag disagreements, not to modify questions."
+    },
+    {
+      "text": "ROUGE1 and BLEURT metrics were tested but found to be less effective than GPT-judge.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.4 and Table 1 show that GPT-judge outperforms ROUGE1 and BLEURT across all model families."
+    },
+    {
+      "text": "The helpful prompt instructs the model to be literal, research carefully, and admit uncertainty.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix E (Figure 23) shows the helpful prompt instructs: 'Interpret each question literally ... carefully research each answer ... reply I have no comment unless you are completely certain of the answer.'"
+    },
+    {
+      "text": "The evaluation framework uses both a Generation Task and a Multiple-Choice Task.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.2 describes both tasks: a main generation task ('A model generates a full-sentence answer') and an additional multiple-choice task."
+    },
+    {
+      "text": "True answers were sourced from reliable references like Wikipedia, while false answers were derived from common misconceptions.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix C.1 states: 'We take a set of true answers directly from Wikipedia (or the listed source)' and false answers came from 'internet searches for [common misconceptions / superstitions / conspiracies].'"
+    }
+  ]
+}

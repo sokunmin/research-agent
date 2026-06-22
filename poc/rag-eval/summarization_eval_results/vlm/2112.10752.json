@@ -1,0 +1,78 @@
+{
+  "config": "vlm",
+  "paper_id": "2112.10752",
+  "supported": 9,
+  "contradicted": 2,
+  "unverifiable": 2,
+  "claim_count": 13,
+  "factuality": 0.69,
+  "hallucination_rate": 0.15,
+  "unverifiable_rate": 0.15,
+  "claims": [
+    {
+      "text": "Text-to-Image was trained on LAION-400M and evaluated on MS-COCO.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'we train a 1.45B parameter KL-regularized LDM conditioned on language prompts on LAION-400M' and 'we follow prior work and evaluate text-to-image generation on the MS-COCO validation set' (Sec. 4.3.1)."
+    },
+    {
+      "text": "Unconditional synthesis experiments use CelebA-HQ, FFHQ, and LSUN (Churches, Bedrooms, Cows).",
+      "verdict": "CONTRADICTED",
+      "reason": "Paper lists CelebA-HQ, FFHQ, LSUN-Churches, and LSUN-Bedrooms for unconditional synthesis (Tab. 1, Fig. 4); LSUN-Cows appears only in an appendix figure (Fig. 19) for a super-resolution demo, not as an unconditional synthesis dataset."
+    },
+    {
+      "text": "Autoencoder validation used the DV2K dataset.",
+      "verdict": "CONTRADICTED",
+      "reason": "The paper refers to 'DIV2K' (from reference [1]: 'NTIRE 2017 challenge on single image super-resolution'), not 'DV2K'; additionally, the autoencoder zoo (Tab. 8) is trained and evaluated on OpenImages and ImageNet-Val, not DIV2K."
+    },
+    {
+      "text": "LDMs were compared against baselines including DALL-E, VQGAN, and SR3.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper compares against DALL-E [66] in Tab. 8 (autoencoder reconstruction), VQGAN [23] throughout, and SR3 [72] explicitly in the super-resolution experiments (Tab. 5)."
+    },
+    {
+      "text": "A Nearest Neighbor analysis using VGG-16 features was performed to ensure models were not memorizing training data.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'we additionally show nearest neighbors in VGG [79] feature space for samples from our models' (Appendix H, Figs. 32-34), and VGG-16 is explicitly cited as reference [79]."
+    },
+    {
+      "text": "LDMs offer a speed-up of approximately 2.7x in training/inference.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states in Sec. 4.5: 'we observe a speed-up of at least 2.7x between pixel- and latent-based diffusion models' in the inpainting efficiency analysis (Tab. 6), though this is specifically for the inpainting task, not a general training/inference claim."
+    },
+    {
+      "text": "For text-to-image tasks, the authors use an unmasked transformer as the conditioner (BERT-tokenizer) with cross-attention mechanism.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'we employ the BERT-tokenizer and implement τ_θ as a transformer to infer a latent code which is mapped into the UNet via (multi-head) cross-attention' (Sec. 4.3.1); Sec. E.2.1 confirms 'unmasked transformer'."
+    },
+    {
+      "text": "Layout/Semantic Synthesis experiments used OpenImages and Flickr-Landscapes datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper mentions 'train models for semantic synthesis... we use images of landscapes paired with semantic maps' and 'train a model on the COCO and one on the OpenImages dataset' (Sec. 4.3.1, D.3); Flickr-Landscapes is cited in Fig. 25 caption."
+    },
+    {
+      "text": "The autoencoder's latent space is regularized using either a Kullback-Leibler (KL) term or Vector Quantization (VQ).",
+      "verdict": "SUPPORTED",
+      "reason": "Paper explicitly states: 'we experiment with two different kinds of regularizations... KL-reg. imposes a slight KL-penalty... whereas VQ-reg. uses a vector quantization layer' (Sec. 3.1)."
+    },
+    {
+      "text": "LDM-BSR uses a 'bsr-degradation process' consisting of random color jitter and noise during training.",
+      "verdict": "UNVERIFIABLE",
+      "reason": "Paper describes the BSR-degradation as applying 'JPEG compressions noise, camera sensor noise, different image interpolations, Gaussian blur kernels and Gaussian noise' (Sec. D.6.1), with no mention of 'random color jitter'; the summary's description is partially inaccurate but the term 'bsr-degradation' is confirmed."
+    },
+    {
+      "text": "The text-to-image model has 1.45B parameters.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'we train a 1.45B parameter KL-regularized LDM' (Sec. 4.3.1), confirmed in Tab. 15 (Model Size: 1.45B for the text-to-image task)."
+    },
+    {
+      "text": "Models were evaluated using FID, Inception Score (IS), PSNR, and SSIM metrics.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper uses FID throughout (Tab. 1, 2, 3, 5), IS in Tab. 2 and 3, and PSNR and SSIM in Tab. 5 for super-resolution evaluation."
+    },
+    {
+      "text": "LDMs achieve competitive or superior FID scores compared to pixel-based models while offering a speed-up of approximately 2.7x.",
+      "verdict": "UNVERIFIABLE",
+      "reason": "The 2.7x speed-up is confirmed for the inpainting task only; the broader claim that LDMs achieve both competitive FID and 2.7x speed-up across all tasks simultaneously is not explicitly stated and cannot be uniformly verified across all experimental settings."
+    }
+  ]
+}

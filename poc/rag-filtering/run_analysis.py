@@ -117,7 +117,7 @@ class HeadingAnalyzer:
 
 if __name__ == "__main__":
     analyzer = HeadingAnalyzer()
-    analyzer.analyze_directory(Path("poc/rag-filtering/pdfs"), limit=28)
+    analyzer.analyze_directory(Path("poc/pdfs"), limit=28)
     analyzer.print_stats()
     analyzer.save_stats()
     config = analyzer.save_config()

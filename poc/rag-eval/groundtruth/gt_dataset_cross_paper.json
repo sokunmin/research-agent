@@ -1,0 +1,1054 @@
+[
+  {
+    "query_id": "groupA_001",
+    "query": "How does standard attention's memory complexity compare to FlashAttention's approach, and what is the core technique FlashAttention uses to achieve memory efficiency?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "1706.03762",
+      "2205.14135"
+    ],
+    "gt_answer": "Standard attention materializes the full N×N attention matrix in HBM, requiring O(N²) memory. FlashAttention avoids this by using tiling: it splits Q, K, V into blocks, loads them to fast on-chip SRAM, and computes attention incrementally without ever writing the full N×N matrix to HBM. This achieves exact attention with memory that grows linearly in sequence length, while also running faster due to reduced HBM accesses.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "As noted in Table 1, a self-attention layer connects all positions with a constant number of sequentially executed operations, whereas a recurrent layer requires O ( n ) sequential operations. In terms of computational complexity, self-attention layers are faster than recurrent layers when the sequence length n is smaller than the representation dimensionality d , which is most often the case with sentence representations used by state-of-the-art models in machine translations, such as word-piece [38] and byte-pair [31] representations."
+      },
+      {
+        "paper_id": "2205.14135",
+        "passage": "Standard attention implementations materialize the matrices S and P to HBM, which takes 𝑂 ' 𝑁 2 ' memory. Often 𝑁 𝑑 (e.g., for GPT2, 𝑁 = 1024 and 𝑑 = 64 ). We describe the standard attention implementation in Algorithm 0. As some or most of the operations are memory-bound (e.g., softmax), the large number of memory accesses translates to slow wall-clock time."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_002",
+    "query": "How does ViT's approach to positional encoding differ from the original Transformer's sinusoidal positional encoding?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "1706.03762",
+      "2010.11929"
+    ],
+    "gt_answer": "The original Transformer uses fixed sinusoidal positional encodings based on sine and cosine functions of different frequencies, which can potentially extrapolate to longer sequences than seen during training. ViT instead uses standard learnable 1D position embeddings added to patch embeddings, finding no significant performance gains from more advanced 2D-aware position embeddings, as the spatial dimensions at patch level are much smaller and easier to learn from.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "In this work, we use sine and cosine functions of different frequencies:\n\n$$P E _ { ( p o s , 2 i ) } & = s i n ( p o s / 1 0 0 0 0 ^ { 2 i / d _ { m o d e } } ) \\\\ P E _ { ( p o s , 2 i + 1 ) } & = \\cos ( p o s / 1 0 0 0 0 ^ { 2 i / d _ { m o d e } } )$$\n\nwhere pos is the position and i is the dimension. That is, each dimension of the positional encoding corresponds to a sinusoid. The wavelengths form a geometric progression from 2 π to 10000 · 2 π . We chose this function because we hypothesized it would allow the model to easily learn to attend by relative positions, since for any fixed offset k , PE pos + k can be represented as a linear function of PE pos ."
+      },
+      {
+        "paper_id": "2010.11929",
+        "passage": "Position embeddings are added to the patch embeddings to retain positional information. We use standard learnable 1D position embeddings, since we have not observed significant performance gains from using more advanced 2D-aware position embeddings (Appendix D.4). The resulting sequence of embedding vectors serves as input to the encoder."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_003",
+    "query": "How does Swin Transformer V2's approach to attention differ from the original scaled dot-product attention in the Transformer, and why was the change necessary?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "1706.03762",
+      "2111.09883"
+    ],
+    "gt_answer": "The original Transformer uses scaled dot-product attention where similarity is computed as QKᵀ/√d. Swin Transformer V2 replaces this with scaled cosine attention, computing similarity via a cosine function divided by a learnable scalar τ. This change was needed because at large model scales the dot-product attention caused attention maps to be dominated by a few pixel pairs, leading to training instability, whereas cosine attention is naturally normalized and produces milder attention values.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "We call our particular attention \"Scaled Dot-Product Attention\" (Figure 2). The input consists of queries and keys of dimension d k , and values of dimension d v . We compute the dot products of the query with all keys, divide each by √ d k , and apply a softmax function to obtain the weights on the values."
+      },
+      {
+        "paper_id": "2111.09883",
+        "passage": "We find that when this approach is used in large visual models, the learnt attention maps of some blocks and heads are frequently dominated by a few pixel pairs, especially in the res-post-norm configuration. To ease this issue, we propose a scaled cosine attention approach that computes the attention logit of a pixel pair i and j by a scaled cosine function:\n\n$$\\text {Sim} ( q _ { i } , k _ { j } ) = \\cos ( q _ { i } , k _ { j } ) / \\tau + B _ { i j } ,$$\n\nwhere B ij is the relative position bias between pixel i and j ; τ is a learnable scalar, non-shared across heads and layers. τ is set larger than 0.01. The cosine function is naturally normalized, and thus can have milder attention values."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_004",
+    "query": "How did vision Transformer architectures evolve in their strategies for adapting the Transformer to images, from ViT through Swin Transformer V2 and MAE?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "2010.11929",
+      "2111.06377",
+      "2111.09883"
+    ],
+    "gt_answer": "ViT established the foundational approach of splitting images into fixed-size patches and treating them as token sequences, using learnable 1D position embeddings, but required large-scale supervised pretraining to overcome the lack of CNN inductive biases. Swin Transformer V2 introduced hierarchical windowed attention with relative position biases and addressed scaling instability via residual post-normalization and cosine attention, enabling 3-billion-parameter models. MAE extended the vision Transformer paradigm to self-supervised learning by masking 75% of patches and reconstructing pixels with an asymmetric encoder-decoder, achieving efficient pretraining without large labeled datasets.",
+    "gt_passages": [
+      {
+        "paper_id": "2010.11929",
+        "passage": "We note that Vision Transformer has much less image-specific inductive bias than CNNs. In CNNs, locality, two-dimensional neighborhood structure, and translation equivariance are baked into each layer throughout the whole model. In ViT, only MLP layers are local and translationally equivariant, while the self-attention layers are global."
+      },
+      {
+        "paper_id": "2111.09883",
+        "passage": "Three main techniques are proposed: 1) a residual-post-norm method combined with cosine attention to improve training stability; 2) A log-spaced continuous position bias method to effectively transfer models pre-trained using low-resolution images to downstream tasks with high-resolution inputs; 3) A self-supervised pretraining method, SimMIM, to reduce the needs of vast labeled images. Through these techniques, this paper successfully trained a 3 billion-parameter Swin Transformer V2 model, which is the largest dense vision model to date, and makes it capable of training with images of up to 1,536 × 1,536 resolution."
+      },
+      {
+        "paper_id": "2111.06377",
+        "passage": "Our MAE approach is simple: we mask random patches of the input image and reconstruct the missing pixels. It is based on two core designs. First, we develop an asymmetric encoder-decoder architecture, with an encoder that operates only on the visible subset of patches (without mask tokens), along with a lightweight decoder that reconstructs the original image from the latent representation and mask tokens. Second, we find that masking a high proportion of the input image, e.g ., 75%, yields a nontrivial and meaningful self-supervisory task."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_005",
+    "query": "What shared design principles and what divergent choices appear across the Transformer, ViT, and MAE when handling positional information and input tokenization?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "1706.03762",
+      "2010.11929",
+      "2111.06377"
+    ],
+    "gt_answer": "All three works inject positional information into token embeddings before feeding them to Transformer blocks, but the implementations differ. The original Transformer uses fixed sinusoidal encodings for word tokens. ViT adopts learnable 1D position embeddings added to flattened 2D image patches, treating patches as NLP tokens. MAE follows ViT's patch-based tokenization and adds sinusoidal positional embeddings to both encoder and decoder inputs, but crucially omits mask tokens from the encoder entirely to ensure it always sees real patches, reducing computation by 3× or more.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "Since our model contains no recurrence and no convolution, in order for the model to make use of the order of the sequence, we must inject some information about the relative or absolute position of the tokens in the sequence. To this end, we add \"positional encodings\" to the input embeddings at the bottoms of the encoder and decoder stacks. The positional encodings have the same dimension d model as the embeddings, so that the two can be summed."
+      },
+      {
+        "paper_id": "2010.11929",
+        "passage": "To handle 2D images, we reshape the image x ∈ R H × W × C into a sequence of flattened 2D patches x p ∈ R N × ( P 2 · C ) , where ( H,W ) is the resolution of the original image, C is the number of channels, ( P, P ) is the resolution of each image patch, and N = HW/P 2 is the resulting number of patches, which also serves as the effective input sequence length for the Transformer."
+      },
+      {
+        "paper_id": "2111.06377",
+        "passage": "Our encoder is a ViT [16] but applied only on visible, unmasked patches . Just as in a standard ViT, our encoder embeds patches by a linear projection with added positional embeddings, and then processes the resulting set via a series of Transformer blocks. However, our encoder only operates on a small subset ( e.g ., 25%) of the full set. Masked patches are removed; no mask tokens are used."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_006",
+    "query": "How did the understanding of attention's computational bottleneck evolve from the original Transformer to FlashAttention and Swin Transformer V2, and what solutions did each propose?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "1706.03762",
+      "2205.14135",
+      "2111.09883"
+    ],
+    "gt_answer": "The original Transformer identified self-attention's O(N²·d) per-layer computational complexity as a bottleneck compared to recurrent layers, but viewed it as acceptable because it enables full parallelism and constant-length dependency paths. FlashAttention later reframed the bottleneck as memory IO rather than FLOPs, showing that materializing the N×N matrix to HBM caused slow wall-clock time, and proposed tiling to reduce HBM accesses. Swin Transformer V2 addressed a different scaling challenge: at 3-billion-parameter scale, standard self-attention caused training instability from large activation amplitudes, solved by residual post-normalization and sequential self-attention computation to reduce GPU memory.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "One is the total computational complexity per layer. Another is the amount of computation that can be parallelized, as measured by the minimum number of sequential operations required."
+      },
+      {
+        "paper_id": "2205.14135",
+        "passage": "In this paper, we argue that a missing principle is making attention algorithms IO-aware [1]-that is, carefully accounting for reads and writes to different levels of fast and slow memory (e.g., between fast GPU on-chip SRAM and relatively slow GPU high bandwidth memory, or HBM [45], Figure 1 left)."
+      },
+      {
+        "paper_id": "2111.09883",
+        "passage": "As shown in Figure 2, when we scale up the original Swin Transformer model from small size to large size, the activation values at deeper layers increase dramatically. The discrepancy between layers with the highest and the lowest amplitudes has reached an extreme value of 10 4 . When we scale it up further to a huge size (658 million parameters), it cannot complete the training, as shown in Figure 3."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_007",
+    "query": "How did the role of masking evolve as a technique in Transformer-based vision models, from the original Transformer's use in decoding to MAE's self-supervised pretraining strategy?",
+    "query_type": "Timeline",
+    "paper_ids": [
+      "1706.03762",
+      "2111.06377"
+    ],
+    "gt_answer": "In the original Transformer (2017), masking served a narrow autoregressive purpose in the decoder: illegal future positions were masked out (set to -∞) in the softmax to prevent leftward information flow and preserve the autoregressive property. By 2021, MAE repurposed masking into the primary pretraining objective for vision: randomly removing 75% of image patches created a challenging self-supervisory task that forces the model to learn holistic representations, driving improvements without any labeled data.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "We also modify the self-attention sub-layer in the decoder stack to prevent positions from attending to subsequent positions. This masking, combined with fact that the output embeddings are offset by one position, ensures that the predictions for position i can depend only on the known outputs at positions less than i ."
+      },
+      {
+        "paper_id": "2111.06377",
+        "passage": "Random sampling with a high masking ratio ( i.e ., the ratio of removed patches) largely eliminates redundancy, thus creating a task that cannot be easily solved by extrapolation from visible neighboring patches (see Figures 2 - 4). The uniform distribution prevents a potential center bias ( i.e ., more masked patches near the image center). Finally, the highly sparse input creates an opportunity for designing an efficient encoder, introduced next."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_008",
+    "query": "How did the approach to handling long sequences in Transformers progress from the original architecture through FlashAttention?",
+    "query_type": "Timeline",
+    "paper_ids": [
+      "1706.03762",
+      "2205.14135"
+    ],
+    "gt_answer": "The original Transformer (2017) acknowledged that self-attention's O(N²) complexity becomes problematic for very long sequences and proposed restricting attention to a local neighborhood of size r as a potential future mitigation. FlashAttention (2022) addressed this directly without approximation: using tiling and recomputation to avoid materializing the N×N attention matrix, it achieved exact attention with linear memory footprint and enabled new capabilities like solving Path-X (sequence length 16K) which no prior Transformer had achieved.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "To improve computational performance for tasks involving very long sequences, self-attention could be restricted to considering only a neighborhood of size r in the input sequence centered around the respective output position. This would increase the maximum path length to O ( n/r ) . We plan to investigate this approach further in future work."
+      },
+      {
+        "paper_id": "2205.14135",
+        "passage": "FlashAttention enables the first Transformer that can achieve better-than-chance performance on the Path-X [80] challenge, solely from using a longer sequence length (16K). Block-sparse FlashAttention enables a Transformer to scale to even longer sequences (64K), resulting in the first model that can achieve better-than-chance performance on Path-256."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_009",
+    "query": "Do ViT and MAE agree on the optimal masking ratio for self-supervised pretraining of vision Transformers?",
+    "query_type": "Contradiction",
+    "paper_ids": [
+      "2010.11929",
+      "2111.06377"
+    ],
+    "gt_answer": "ViT's preliminary exploration of masked patch prediction used a 50% corruption rate but found results slightly worse than alternatives and did not explore higher ratios. MAE contradicts this by showing that a much higher masking ratio of 75% is optimal, yielding the best accuracy for both fine-tuning and linear probing. MAE explicitly states that its masking ratios are much higher than those used in related works in computer vision (20% to 50%), and that this high ratio is key to eliminating spatial redundancy and creating a meaningful pretext task.",
+    "gt_passages": [
+      {
+        "paper_id": "2010.11929",
+        "passage": "We employ the masked patch prediction objective for preliminary self-supervision experiments. To do so we corrupt 50% of patch embeddings by either replacing their embeddings with a learnable [mask] embedding (80%), a random other patch embedding (10%) or just keeping them as is (10%). This setup is very similar to the one used for language by Devlin et al. (2019)."
+      },
+      {
+        "paper_id": "2111.06377",
+        "passage": "The optimal ratios are surprisingly high. The ratio of 75% is good for both linear probing and fine-tuning. This behavior is in contrast with BERT [14], whose typical masking ratio is 15%. Our masking ratios are also much higher than those in related works [6, 16, 2] in computer vision (20% to 50%)."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_010",
+    "query": "Do ViT and Swin Transformer V2 agree on whether large vision models require huge labeled datasets for pretraining?",
+    "query_type": "Contradiction",
+    "paper_ids": [
+      "2010.11929",
+      "2111.09883"
+    ],
+    "gt_answer": "ViT's results suggest that large labeled datasets are necessary: ViT-Large underperforms ResNets when trained on ImageNet alone (1.3M images) and only achieves strong performance when pretrained on ImageNet-21k (14M) or JFT-300M (303M images), leading to the conclusion that 'large scale training trumps inductive bias'. Swin Transformer V2 challenges this requirement by incorporating SimMIM self-supervised pretraining, achieving state-of-the-art results with only 70 million labeled images — 40× fewer than the JFT-3B dataset used by comparable large vision models.",
+    "gt_passages": [
+      {
+        "paper_id": "2010.11929",
+        "passage": "However, the picture changes if the models are trained on larger datasets (14M-300M images). We find that large scale training trumps inductive bias. Our Vision Transformer (ViT) attains excellent results when pre-trained at sufficient scale and transferred to tasks with fewer datapoints. When pre-trained on the public ImageNet-21k dataset or the in-house JFT-300M dataset, ViT approaches or beats state of the art on multiple image recognition benchmarks."
+      },
+      {
+        "paper_id": "2111.09883",
+        "passage": "In this work, we exploit a self-supervised pre-training method, SimMIM [72], to alleviate the demands on labelled data. By this approach, we successfully trained a powerful Swin Transformer model of 3 billion parameters which achieves state-of-the-art (SOTA) on 4 representative visual benchmarks, by using only 70 million labelled images (1/40 of that in JFT-3B)."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_001",
+    "query": "How do LoRA and Prefix-Tuning differ in where they inject trainable parameters?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "2106.09685",
+      "2101.00190"
+    ],
+    "gt_answer": "LoRA injects trainable low-rank decomposition matrices in parallel to existing weight matrices inside the Transformer (e.g., attention projection matrices), leaving the original weights frozen and adding zero extra inference latency. Prefix-Tuning prepends trainable continuous vectors to the input of every Transformer layer, leaving all model parameters frozen, so the prefix activations steer downstream token computation via the attention mechanism.",
+    "gt_passages": [
+      {
+        "paper_id": "2106.09685",
+        "passage": "For a pre-trained weight matrix W 0 ∈ R d × k , we constrain its update by representing the latter with a low-rank decomposition W 0 +∆ W = W 0 + BA , where B ∈ R d × r , A ∈ R r × k , and the rank r glyph[lessmuch] min( d, k ) . During training, W 0 is frozen and does not receive gradient updates, while A and B contain trainable parameters."
+      },
+      {
+        "paper_id": "2101.00190",
+        "passage": "Prefix-tuning prepends a prefix for an autoregressive LM to obtain z = [ PREFIX ; x ; y ] , or prepends prefixes for both encoder and encoder to obtain z = [ PREFIX ; x ; PREFIX ′ ; y ] , as shown in Figure 2. Here, Pidx denotes the sequence of prefix indices, and we use | Pidx | to denote the length of the prefix."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_002",
+    "query": "How does BERT's pre-training strategy differ from ULMFiT's language model pre-training in terms of directionality and training objectives?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "1810.04805",
+      "1801.06146"
+    ],
+    "gt_answer": "ULMFiT uses a standard unidirectional language model (AWD-LSTM) pre-trained on WikiText-103 to predict the next word left-to-right. BERT, by contrast, uses a masked language model (MLM) objective that masks 15% of tokens and predicts them from both left and right context simultaneously, enabling deep bidirectional representations. BERT also adds a next sentence prediction task which ULMFiT does not have.",
+    "gt_passages": [
+      {
+        "paper_id": "1810.04805",
+        "passage": "In order to train a deep bidirectional representation, we simply mask some percentage of the input tokens at random, and then predict those masked tokens. We refer to this procedure as a 'masked LM' (MLM), although it is often referred to as a Cloze task in the literature (Taylor, 1953). In this case, the final hidden vectors corresponding to the mask tokens are fed into an output softmax over the vocabulary, as in a standard LM. In all of our experiments, we mask 15% of all WordPiece tokens in each sequence at random."
+      },
+      {
+        "paper_id": "1801.06146",
+        "passage": "We pretrain the language model on Wikitext-103 (Merity et al., 2017b) consisting of 28,595 preprocessed Wikipedia articles and 103 million words. Pretraining is most beneficial for tasks with small datasets and enables generalization even with 100 labeled examples."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_003",
+    "query": "How do LoRA and Prefix-Tuning compare in terms of parameter storage efficiency and the tradeoffs each makes in downstream task performance?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "2106.09685",
+      "2101.00190"
+    ],
+    "gt_answer": "LoRA achieves extreme parameter efficiency on large models: applied to GPT-3 175B with rank r=4, it reduces VRAM from 1.2TB to 350GB and checkpoint size from 350GB to ~35MB — a 10,000× compression. Prefix-Tuning achieves storage efficiency of roughly 1000× compared to full fine-tuning and is task-agnostic, but operates by freezing all model weights and prepending trainable vectors to inputs. In terms of downstream performance, both methods approach full fine-tuning quality with much fewer parameters, but LoRA has zero inference latency overhead (its weights can be merged), while Prefix-Tuning reserves part of the sequence context for prefix vectors.",
+    "gt_passages": [
+      {
+        "paper_id": "2106.09685",
+        "passage": "On GPT-3 175B, we reduce the VRAM consumption during training from 1.2TB to 350GB. With r = 4 and only the query and value projection matrices being adapted, the checkpoint size is reduced by roughly 10,000 × (from 350GB to 35MB)"
+      },
+      {
+        "paper_id": "2101.00190",
+        "passage": "In terms of storage, prefix-tuning stores 1000x fewer parameters than fine-tuning. In terms of performance when trained on full datasets, prefix-tuning and fine-tuning are comparable for table-to-text (§6.1), while prefix-tuning suffers a small degradation for summarization (§6.2)."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_004",
+    "query": "How did the NLP community's approach to preventing catastrophic forgetting during fine-tuning evolve from ULMFiT through LoRA?",
+    "query_type": "Timeline",
+    "paper_ids": [
+      "1801.06146",
+      "2101.00190",
+      "2106.09685"
+    ],
+    "gt_answer": "ULMFiT (2018) addressed catastrophic forgetting through gradual unfreezing (unfreezing layers one at a time from last to first) and discriminative fine-tuning (different learning rates per layer). Prefix-Tuning (2021) avoided forgetting entirely by freezing all pretrained model parameters and only optimizing prefix vectors. LoRA (2021) also froze pretrained weights but instead injected trainable rank-decomposition matrices in parallel to weight matrices, achieving the same goal with zero inference overhead.",
+    "gt_passages": [
+      {
+        "paper_id": "1801.06146",
+        "passage": "Rather than fine-tuning all layers at once, which risks catastrophic forgetting, we propose to gradually unfreeze the model starting from the last layer as this contains the least general knowledge (Yosinski et al., 2014): We first unfreeze the last layer and fine-tune all unfrozen layers for one epoch. We then unfreeze the next lower frozen layer and repeat, until we finetune all layers until convergence at the last iteration."
+      },
+      {
+        "paper_id": "2101.00190",
+        "passage": "Fine-tuning is the prevalent paradigm for using large pretrained language models (LMs) (Radford et al., 2019; Devlin et al., 2019) to perform downstream tasks (e.g., summarization), but it requires updating and storing all the parameters of the LM. Consequently, to build and deploy NLP systems that rely on large pretrained LMs, one currently needs to store a modified copy of the LM parameters for each task."
+      },
+      {
+        "paper_id": "2106.09685",
+        "passage": "We propose Lo wR ank A daptation, or LoRA, which freezes the pretrained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture, greatly reducing the number of trainable parameters for downstream tasks."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_005",
+    "query": "How did the concept of parameter-efficient fine-tuning evolve from Prefix-Tuning to LoRA in terms of where parameters are injected and the resulting inference cost?",
+    "query_type": "Timeline",
+    "paper_ids": [
+      "2101.00190",
+      "2106.09685"
+    ],
+    "gt_answer": "Prefix-Tuning (2021) introduced parameter efficiency by prepending trainable prefix vectors to every layer's input; this adds latency at inference because the prefix occupies part of the context window and must be processed. LoRA (2021) moved trainable parameters inside the weight matrices themselves via low-rank decomposition, which can be merged into the pretrained weights at deployment time, introducing absolutely no inference latency.",
+    "gt_passages": [
+      {
+        "paper_id": "2101.00190",
+        "passage": "In terms of storage, prefix-tuning stores 1000x fewer parameters than fine-tuning. In terms of performance when trained on full datasets, prefix-tuning and fine-tuning are comparable for table-to-text (§6.1), while prefix-tuning suffers a small degradation for summarization (§6.2)."
+      },
+      {
+        "paper_id": "2106.09685",
+        "passage": "No Additional Inference Latency. When deployed in production, we can explicitly compute and store W = W 0 + BA and perform inference as usual. Note that both W 0 and BA are in R d × k . When we need to switch to another downstream task, we can recover W 0 by subtracting BA and then adding a different B ′ A ′ , a quick operation with very little memory overhead."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_006",
+    "query": "What do FLAN and BERT together reveal about the role of labeled multi-task supervision versus masked self-supervised pre-training in achieving strong generalization?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "2109.01652",
+      "1810.04805"
+    ],
+    "gt_answer": "BERT shows that self-supervised pre-training on unlabeled text with masked language modeling builds strong representations that transfer widely via task-specific fine-tuning. FLAN reveals a complementary finding: fine-tuning a large model on many tasks described with natural language instructions dramatically improves zero-shot generalization to unseen task types. Together, they suggest that both unsupervised pre-training scale and labeled multi-task instruction exposure are important, but serve different purposes: pre-training builds general representations while instruction tuning teaches the model how to follow task specifications.",
+    "gt_passages": [
+      {
+        "paper_id": "2109.01652",
+        "passage": "We show that instruction tuning -finetuning language models on a collection of datasets described via instructions-substantially improves zeroshot performance on unseen tasks."
+      },
+      {
+        "paper_id": "1810.04805",
+        "passage": "BERT is designed to pretrain deep bidirectional representations from unlabeled text by jointly conditioning on both left and right context in all layers. As a result, the pre-trained BERT model can be finetuned with just one additional output layer to create state-of-the-art models for a wide range of tasks, such as question answering and language inference, without substantial taskspecific architecture modifications."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_007",
+    "query": "How do ULMFiT, BERT, and Prefix-Tuning collectively represent three distinct philosophies for adapting a pre-trained language model to downstream tasks?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "1801.06146",
+      "1810.04805",
+      "2101.00190"
+    ],
+    "gt_answer": "ULMFiT represents full fine-tuning with careful regularization: it updates all parameters of an LSTM but uses discriminative learning rates and gradual unfreezing to preserve pre-trained knowledge. BERT also performs full fine-tuning but on a Transformer, relying on its bidirectional representations rather than special fine-tuning schedules. Prefix-Tuning represents the frozen-model paradigm: it never updates the pretrained parameters at all, instead prepending task-specific trainable vectors and achieving comparable performance while training only 0.1% of the parameters.",
+    "gt_passages": [
+      {
+        "paper_id": "1801.06146",
+        "passage": "We propose discriminative fine-tuning , slanted triangular learning rates , and gradual unfreezing , novel techniques to retain previous knowledge and avoid catastrophic forgetting during fine-tuning."
+      },
+      {
+        "paper_id": "1810.04805",
+        "passage": "For each task, we simply plug in the taskspecific inputs and outputs into BERT and finetune all the parameters end-to-end."
+      },
+      {
+        "paper_id": "2101.00190",
+        "passage": "We find that by learning only 0.1% of the parameters, prefix-tuning obtains comparable performance in the full data setting, outperforms fine-tuning in low-data settings, and extrapolates better to examples with topics unseen during training."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_008",
+    "query": "What do FLAN, LoRA, and the learning dynamics paper reveal together about how fine-tuning shapes a model's probability distribution over responses?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "2109.01652",
+      "2106.09685",
+      "2407.10490"
+    ],
+    "gt_answer": "FLAN shows that instruction fine-tuning can dramatically shift a model's output distribution toward following natural language task specifications, enabling zero-shot generalization. LoRA shows that these distribution shifts can be captured by low-rank updates to existing weight matrices, implying the fine-tuning delta is intrinsically low-dimensional. The learning dynamics paper provides the mechanistic view: during SFT, learning a preferred response 'pulls up' semantically similar responses and 'pushes down' unrelated ones; during DPO, a 'squeezing effect' from negative gradients on unlikely responses redistributes probability mass toward the model's most confident outputs, potentially causing degeneration.",
+    "gt_passages": [
+      {
+        "paper_id": "2109.01652",
+        "passage": "FLAN substantially improves the performance of its unmodified counterpart and surpasses zero-shot 175B GPT-3 on 20 of 25 datasets that we evaluate."
+      },
+      {
+        "paper_id": "2106.09685",
+        "passage": "We hypothesize that the change in weights during model adaptation also has a low 'intrinsic rank', leading to our proposed Lo wR ank A daptation (LoRA) approach."
+      },
+      {
+        "paper_id": "2407.10490",
+        "passage": "- Guarantee: the confidence of y -u , i.e., π θ t +1 ( y -u ) will decrease.\n- Guarantee: the decreased probability mass is largely 'squeezed' into the output which was most confident before the update: if y ∗ = argmax i ∈ [ V ] \\{ y -u } π θ t ( y = i ) , then π θ t +1 ( y = y ∗ ) will increase."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_009",
+    "query": "Do ULMFiT and BERT agree or disagree on the importance of fine-tuning all model layers versus freezing some layers during downstream task adaptation?",
+    "query_type": "Contradiction",
+    "paper_ids": [
+      "1801.06146",
+      "1810.04805"
+    ],
+    "gt_answer": "The two papers take somewhat different positions. ULMFiT argues strongly against fine-tuning all layers simultaneously, showing that gradual unfreezing (progressively unfreezing from last to first layer) outperforms fine-tuning the full model at once, which causes catastrophic forgetting. BERT, by contrast, fine-tunes all parameters end-to-end simultaneously for each downstream task with minimal additional overhead, and achieves state-of-the-art results without any layer freezing strategy.",
+    "gt_passages": [
+      {
+        "paper_id": "1801.06146",
+        "passage": "Fine-tuning the target classifier is the most critical part of the transfer learning method. Overly aggressive fine-tuning will cause catastrophic forgetting, eliminating the benefit of the information captured through language modeling; too cautious fine-tuning will lead to slow convergence (and resultant overfitting)."
+      },
+      {
+        "paper_id": "1810.04805",
+        "passage": "For finetuning, the BERT model is first initialized with the pre-trained parameters, and all of the parameters are fine-tuned using labeled data from the downstream tasks. Each downstream task has separate fine-tuned models, even though they are initialized with the same pre-trained parameters."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_010",
+    "query": "Do Prefix-Tuning and LoRA agree on whether preserving pretrained model parameters improves generalization to unseen domains?",
+    "query_type": "Contradiction",
+    "paper_ids": [
+      "2101.00190",
+      "2106.09685"
+    ],
+    "gt_answer": "Prefix-Tuning explicitly claims that freezing pretrained parameters helps extrapolation to unseen topics, reporting that prefix-tuning outperforms fine-tuning on unseen news categories and table domains. LoRA, while also freezing pretrained weights, does not make the same generalization claim and instead focuses on matching or exceeding full fine-tuning performance at much lower parameter count; LoRA also notes that prefix-tuning is difficult to optimize and its performance changes non-monotonically with the number of trainable parameters, implicitly questioning the robustness of the prefix-based approach.",
+    "gt_passages": [
+      {
+        "paper_id": "2101.00190",
+        "passage": "Recall that fine-tuning updates all pretrained parameters, whereas prefix-tuning and adapter-tuning preserve them. Since the language models are pretrained on general purpose corpus, preserving the LM parameters might help generalization to domains unseen during training. In concordance with this intuition, we observe that both prefix-tuning and adapter-tuning have significant performance gain in extrapolation settings (§6.4); however, the reason for such gain is an open question."
+      },
+      {
+        "paper_id": "2106.09685",
+        "passage": "We observe that prefix tuning is difficult to optimize and that its performance changes non-monotonically in trainable parameters, confirming similar observations in the original paper. More fundamentally, reserving a part of the sequence length for adaptation necessarily reduces the sequence length available to process a downstream task, which we suspect makes tuning the prompt less performant compared to other methods."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_001",
+    "query": "How do Chain-of-Thought prompting and SELF-INSTRUCT differ in how they elicit reasoning or instruction-following from LLMs?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "2201.11903",
+      "2212.10560"
+    ],
+    "gt_answer": "Chain-of-Thought prompting elicits multi-step reasoning at inference time by providing a few demonstrations that include intermediate reasoning steps, requiring no model weight updates — it is purely a prompting technique applied to an already-pretrained model. SELF-INSTRUCT, by contrast, elicits instruction-following by first using the model to generate a large synthetic dataset of instructions and input-output pairs, then fine-tuning the same model on that generated data. CoT targets in-context reasoning ability during inference; SELF-INSTRUCT targets generalized instruction-following by modifying the model weights through supervised fine-tuning.",
+    "gt_passages": [
+      {
+        "paper_id": "2201.11903",
+        "passage": "We explore how generating a chain of thought -a series of intermediate reasoning steps-significantly improves the ability of large language models to perform complex reasoning. In particular, we show how such reasoning abilities emerge naturally in sufficiently large language models via a simple method called chain-ofthought prompting , where a few chain of thought demonstrations are provided as exemplars in prompting."
+      },
+      {
+        "paper_id": "2212.10560",
+        "passage": "We introduce SELF-INSTRUCT, a framework for improving the instruction-following capabilities of pretrained language models by bootstrapping off their own generations. Our pipeline generates instructions, input, and output samples from a language model, then filters invalid or similar ones before using them to finetune the original model."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_002",
+    "query": "Both the ICL paper and the Chain-of-Thought paper study how demonstrations affect LLM performance. How do their conclusions about what demonstrations contribute differ?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "2202.12837",
+      "2201.11903"
+    ],
+    "gt_answer": "The ICL paper (Min et al., 2022) finds that the correctness of input-label mappings in demonstrations matters very little — replacing gold labels with random labels barely hurts performance. What actually drives gains are the label space, the distribution of input text, and the overall format. The Chain-of-Thought paper, in contrast, shows that the specific content of the chain-of-thought reasoning steps in demonstrations is critical: providing examples of intermediate reasoning (not just format or label space) is what enables models to solve complex multi-step problems. CoT demonstrations must include coherent, logically correct reasoning steps, while standard ICL demonstrations can function even with randomly shuffled labels.",
+    "gt_passages": [
+      {
+        "paper_id": "2202.12837",
+        "passage": "ground truth demonstrations are in fact not required-randomly replacing labels in the demonstrations barely hurts performance on a range of classification and multi-choce tasks, consistently over 12 different models including GPT-3. Instead, we find that other aspects of the demonstrations are the key drivers of end task performance, including the fact that they provide a few examples of (1) the label space, (2) the distribution of the input text, and (3) the overall format of the sequence."
+      },
+      {
+        "paper_id": "2201.11903",
+        "passage": "Chain of thought after answer. Another potential benefit of chain-of-thought prompting could simply be that such prompts allow the model to better access relevant knowledge acquired during pretraining. Therefore, we test an alternative configuration where the chain of thought prompt is only given after the answer, isolating whether the model actually depends on the produced chain of thought to give the final answer. This variant performs about the same as the baseline, which suggests that the sequential reasoning embodied in the chain of thought is useful for reasons beyond just activating knowledge."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_003",
+    "query": "How do DPO and SELF-INSTRUCT compare as approaches to aligning language models to follow human intent?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "2305.18290",
+      "2212.10560"
+    ],
+    "gt_answer": "SELF-INSTRUCT aligns models by generating synthetic instruction-following data using the model itself and then fine-tuning on that data, requiring no human preference labels — it is a supervised fine-tuning approach driven by LLM-generated data. DPO, on the other hand, aligns models using human preference data (pairs of preferred and dispreferred responses) and optimizes a policy directly via a binary cross-entropy loss, bypassing the need for an explicit reward model or reinforcement learning. SELF-INSTRUCT focuses on teaching diverse task-following behavior from synthetic data; DPO focuses on steering behavior according to human relative preferences without RL.",
+    "gt_passages": [
+      {
+        "paper_id": "2212.10560",
+        "passage": "SELF-INSTRUCT provides an almost annotation-free method for aligning pretrained language models with instructions, and we release our large synthetic dataset to facilitate future studies on instruction tuning."
+      },
+      {
+        "paper_id": "2305.18290",
+        "passage": "In this paper we introduce a new parameterization of the reward model in RLHF that enables extraction of the corresponding optimal policy in closed form, allowing us to solve the standard RLHF problem with only a simple classification loss. The resulting algorithm, which we call Direct Preference Optimization (DPO), is stable, performant, and computationally lightweight, eliminating the need for sampling from the LM during fine-tuning or performing significant hyperparameter tuning."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_004",
+    "query": "Synthesize what the Chinchilla paper, the Chain-of-Thought paper, and the ICL paper together reveal about model scale as a prerequisite for emergent LLM capabilities.",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "2203.15556",
+      "2201.11903",
+      "2202.12837"
+    ],
+    "gt_answer": "Together these three papers paint a nuanced picture of scale. Chinchilla shows that prior large models were severely undertrained relative to their parameter count, and that optimal performance requires scaling training tokens in proportion to parameters — meaning raw size is not enough without sufficient data. The Chain-of-Thought paper shows that coherent multi-step reasoning is an emergent property that only appears reliably at roughly 100B parameters, suggesting that certain capabilities require a minimum scale threshold regardless of data. The ICL paper implies that, at sufficient scale, models have already internalized task semantics from pretraining, because they can perform tasks even with randomly incorrect demonstration labels — the input-label mapping is recoverable from the pretraining prior rather than the demonstrations alone. Thus: optimal scale requires both model size and data (Chinchilla); reasoning emergence requires a scale threshold (CoT); and alignment capabilities are partially baked in from large-scale pretraining (ICL).",
+    "gt_passages": [
+      {
+        "paper_id": "2203.15556",
+        "passage": "We find that current large language models are significantly undertrained, a consequence of the recent focus on scaling language models whilst keeping the amount of training data constant. By training over 400 language models ranging from 70 million to over 16 billion parameters on 5 to 500 billion tokens, we find that for compute-optimal training, the model size and the number of training tokens should be scaled equally: for every doubling of model size the number of training tokens should also be doubled."
+      },
+      {
+        "paper_id": "2201.11903",
+        "passage": "chain-of-thought prompting is an emergent ability of model scale (Wei et al., 2022b). That is, chain-of-thought prompting does not positively impact performance for small models, and only yields performance gains when used with models of ∼ 100B parameters. We qualitatively found that models of smaller scale produced fluent but illogical chains of thought, leading to lower performance than standard prompting."
+      },
+      {
+        "paper_id": "2202.12837",
+        "passage": "The model performs a downstream task without relying on the input-label correspondence from the demonstrations. This suggests that the model has learned the (implicit notion of) input-label correspondence from the language modeling objective alone, e.g., associating a positive review with the word 'positive'."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_005",
+    "query": "How do DPO and SELF-INSTRUCT each relate to the PPO-based RLHF pipeline used to train InstructGPT, and what does each approach offer that the original RLHF pipeline does not?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "2305.18290",
+      "2212.10560"
+    ],
+    "gt_answer": "PPO-based RLHF (used in InstructGPT) requires first fitting a reward model from human preference data, then running RL optimization — a complex, unstable pipeline. DPO bypasses this entirely by reparameterizing the reward function in terms of the policy itself, yielding a simple binary classification loss that implicitly optimizes the same KL-constrained objective as RLHF, eliminating both reward model training and RL sampling. SELF-INSTRUCT takes a different angle: rather than replacing RL, it eliminates the need for expensive human-annotated instruction data by bootstrapping synthetic instruction data from the model itself, achieving performance on par with InstructGPT (trained with private data and human annotations) using almost no human labeling. Together, DPO simplifies the optimization loop while SELF-INSTRUCT simplifies the data collection process.",
+    "gt_passages": [
+      {
+        "paper_id": "2305.18290",
+        "passage": "We propose Direct Preference Optimization (DPO) , an algorithm that implicitly optimizes the same objective as existing RLHF algorithms (reward maximization with a KL-divergence constraint) but is simple to implement and straightforward to train. Intuitively, the DPO update increases the relative log probability of preferred to dispreferred responses, but it incorporates a dynamic, per-example importance weight that prevents the model degeneration that we find occurs with a naive probability ratio objective."
+      },
+      {
+        "paper_id": "2212.10560",
+        "passage": "Applying our method to the vanilla GPT3, we demonstrate a 33% absolute improvement over the original model on SUPER-NATURALINSTRUCTIONS, on par with the performance of InstructGPT 001 , 1 which was trained with private user data and human annotations."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_006",
+    "query": "Synthesize the data generation strategies in SELF-INSTRUCT and DPO: how do they use model-generated data for alignment?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "2212.10560",
+      "2305.18290"
+    ],
+    "gt_answer": "SELF-INSTRUCT generates alignment data entirely from the LLM itself in a bootstrapping loop: starting from 175 seed tasks, the model generates new instructions, inputs, and outputs, which are filtered and used to fine-tune the same model via supervised learning. This creates ~52K instructions from an unannotated starting point. DPO, in contrast, requires human preference labels — pairs of preferred and dispreferred model responses annotated by humans. DPO then optimizes a policy directly on these human preference pairs without an RL loop. The key difference is the supervision signal: SELF-INSTRUCT relies entirely on the model's own generations as a self-supervision signal, while DPO requires human judgments of relative quality.",
+    "gt_passages": [
+      {
+        "paper_id": "2212.10560",
+        "passage": "The overall process is an iterative bootstrapping algorithm (see Figure 2), which starts off with a limited (e.g., 175 in our study) seed set of manually-written tasks that are used to guide the overall generation. In the first phase, the model is prompted to generate instructions for new tasks. This step leverages the existing collection of instructions to create more broad-coverage instructions that define (often new) tasks."
+      },
+      {
+        "paper_id": "2305.18290",
+        "passage": "The general DPO pipeline is as follows: 1) Sample completions y 1 , y 2 ∼ π ref ( · | x ) for every prompt x , label with human preferences to construct the offline dataset of preferences D = { x ( i ) , y ( i ) w , y l ) ( i ) } N i =1 and 2) optimize the language model π θ to minimize L DPO for the given π ref and D and desired β ."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_007",
+    "query": "How do the Chinchilla scaling laws and the Chain-of-Thought findings together refine the community's understanding of what 'scale' means for LLM performance?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "2203.15556",
+      "2201.11903"
+    ],
+    "gt_answer": "Chinchilla (2022) showed that prior large models were undertrained: given a fixed compute budget, model size and training tokens should scale equally, meaning that a smaller model trained on more data can outperform a larger model trained on fewer tokens. This refined 'scale' from raw parameter count to compute-optimal parameter/token balance. Chain-of-Thought (2022) added a complementary finding: certain reasoning capabilities only emerge reliably at roughly 100B parameters — they cannot be predicted from small-scale performance and cannot be unlocked merely by increasing training data. Together, these papers reveal that LLM scale has two distinct dimensions: (1) compute-optimal training allocation (Chinchilla) and (2) an absolute parameter threshold required for emergent reasoning capabilities (CoT). Neither dimension alone captures what 'scale' means.",
+    "gt_passages": [
+      {
+        "paper_id": "2203.15556",
+        "passage": "We find that current large language models are significantly undertrained, a consequence of the recent focus on scaling language models whilst keeping the amount of training data constant. By training over 400 language models ranging from 70 million to over 16 billion parameters on 5 to 500 billion tokens, we find that for compute-optimal training, the model size and the number of training tokens should be scaled equally: for every doubling of model size the number of training tokens should also be doubled."
+      },
+      {
+        "paper_id": "2201.11903",
+        "passage": "chain-of-thought prompting is an emergent ability of model scale (Wei et al., 2022b). That is, chain-of-thought prompting does not positively impact performance for small models, and only yields performance gains when used with models of ∼ 100B parameters. We qualitatively found that models of smaller scale produced fluent but illogical chains of thought, leading to lower performance than standard prompting."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_008",
+    "query": "Trace the timeline from instruction-tuning with human-written data to SELF-INSTRUCT to DPO: how did the role of human annotation evolve across these approaches?",
+    "query_type": "Timeline",
+    "paper_ids": [
+      "2212.10560",
+      "2305.18290"
+    ],
+    "gt_answer": "The first generation of instruction-tuned models (e.g., InstructGPT) relied on extensive private human-written instruction data and human feedback via RLHF with PPO — requiring both human demonstrations and human preference labels, making the process costly and opaque. SELF-INSTRUCT (Wang et al., 2022) dramatically reduced the human annotation requirement by bootstrapping instruction data from the LLM itself using only 175 seed tasks, achieving near-InstructGPT performance with almost no human labeling. DPO (Rafailov et al., 2023) then eliminated the need for RL and a separate reward model, but still requires human preference pairs — it simplifies the algorithm, not the human data collection. The trajectory shows a shift from heavy human annotation to synthetic data generation (SELF-INSTRUCT) and from complex RL pipelines to simple classification losses (DPO).",
+    "gt_passages": [
+      {
+        "paper_id": "2212.10560",
+        "passage": "Applying our method to the vanilla GPT3, we demonstrate a 33% absolute improvement over the original model on SUPER-NATURALINSTRUCTIONS, on par with the performance of InstructGPT 001 , 1 which was trained with private user data and human annotations."
+      },
+      {
+        "paper_id": "2305.18290",
+        "passage": "However, RLHF is a complex and often unstable procedure, first fitting a reward model that reflects the human preferences, and then fine-tuning the large unsupervised LM using reinforcement learning to maximize this estimated reward without drifting too far from the original model."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_009",
+    "query": "The ICL paper claims that ground-truth labels barely matter for in-context learning performance. Does this contradict the Chain-of-Thought paper's reliance on correct reasoning demonstrations?",
+    "query_type": "Contradiction",
+    "paper_ids": [
+      "2202.12837",
+      "2201.11903"
+    ],
+    "gt_answer": "There is a genuine tension between these findings. The ICL paper shows that replacing correct labels with random labels barely hurts performance on classification and multi-choice tasks, implying that the specific input-label mapping in demonstrations is largely irrelevant. The Chain-of-Thought paper, however, finds that providing logically correct, step-by-step reasoning in demonstrations is essential for solving complex reasoning tasks — random or incorrect reasoning steps would not produce the same gains. The apparent contradiction resolves when considering task type: for classification tasks with labels already known to the model from pretraining, ICL demonstrations mainly serve as format signals. But for complex arithmetic and symbolic reasoning, the sequential content of demonstrations — the actual reasoning steps — matters critically because the model needs to learn a new output structure, not just a label.",
+    "gt_passages": [
+      {
+        "paper_id": "2202.12837",
+        "passage": "replacing the labels in demonstrations with random labels barely hurts performance in a range of classification and multi-choice tasks (Figure 1). The result is consistent over 12 different models including the GPT-3 family (Radford et al., 2019; Min et al., 2021b; Wang and Komatsuzaki, 2021; Artetxe et al., 2021; Brown et al., 2020). This strongly suggests, counter-intuitively, that the model does not rely on the input-label mapping in the demonstrations to perform the task."
+      },
+      {
+        "paper_id": "2201.11903",
+        "passage": "Variable compute only. Another intuition is that chain of thought allows the model to spend more computation (i.e., intermediate tokens) on harder problems. To isolate the effect of variable computation from chain-of-thought reasoning, we test a configuration where the model is prompted to output a only sequence of dots ( . . . ) equal to the number of characters in the equation needed to solve the problem. This variant performs about the same as the baseline, which suggests that variable computation by itself is not the reason for the success of chainof-thought prompting, and that there appears to be utility from expressing intermediate steps via natural language."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_010",
+    "query": "The Chinchilla paper argues that larger models are undertrained, while the Chain-of-Thought paper argues that reasoning only emerges at very large scale. Do these findings contradict each other?",
+    "query_type": "Contradiction",
+    "paper_ids": [
+      "2203.15556",
+      "2201.11903"
+    ],
+    "gt_answer": "These findings are in surface tension but are not contradictory — they address different questions. Chinchilla argues that, for a given compute budget, you get better performance from a smaller model trained on more tokens than a larger model trained on fewer tokens. This does not deny that scale matters; it redefines the optimal scale frontier. The Chain-of-Thought paper finds that CoT reasoning only emerges at ~100B parameters and that smaller models actually perform worse with CoT prompting than without it. Chinchilla's finding is compatible: a compute-optimal 70B model trained on 1.4T tokens may cross the scale threshold needed for CoT, whereas a poorly-trained 280B model trained on only 300B tokens might have weaker emergent reasoning relative to its parameter count. The contradiction dissolves when recognizing that Chinchilla is about optimal parameter/token allocation at a fixed compute budget, while CoT emergence is about an absolute minimum parameter threshold.",
+    "gt_passages": [
+      {
+        "paper_id": "2203.15556",
+        "passage": "large language models are considerably over-sized, given their respective compute budgets, as shown in Figure 1. For example, we find that a 175 billion parameter model should be trained with a compute budget of 4 41 10 24 FLOPs and on over 4.2 trillion tokens."
+      },
+      {
+        "paper_id": "2201.11903",
+        "passage": "The finding that successful chain-of-thought reasoning predictably emerges only at certain model scales is intriguing. Scaling up language models has been shown to confer benefits such as improved performance and sample efficiency (Kaplan et al., 2020), but chain-of-thought reasoning is emergent in the sense that its success cannot be predicted only by extrapolating the performance of small scale models, as chain of thought actually hurts performance for most models smaller than 10B parameters."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_001",
+    "query": "How do SimCLR and CLIP differ in their approach to learning visual representations without labeled data?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "2002.05709",
+      "2103.00020"
+    ],
+    "gt_answer": "SimCLR learns visual representations by maximizing agreement between differently augmented views of the same image using a contrastive loss entirely within the visual domain, relying on data augmentation to define positive pairs. CLIP, by contrast, learns from natural language supervision by training an image encoder and a text encoder jointly to predict which image-text pairings co-occur in a large dataset of 400 million (image, text) pairs. While SimCLR operates in a purely self-supervised, image-only regime, CLIP connects visual representations to language, enabling zero-shot transfer to downstream classification tasks without any task-specific training examples.",
+    "gt_passages": [
+      {
+        "paper_id": "2002.05709",
+        "passage": "SimCLR learns representations by maximizing agreement between differently augmented views of the same data example via a contrastive loss in the latent space."
+      },
+      {
+        "paper_id": "2103.00020",
+        "passage": "We demonstrate that the simple pre-training task of predicting which caption goes with which image is an efficient and scalable way to learn SOTA image representations from scratch on a dataset of 400 million (image, text) pairs collected from the internet. After pre-training, natural language is used to reference learned visual concepts (or describe new ones) enabling zero-shot transfer of the model to downstream tasks."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_002",
+    "query": "How does DenseNet's feature reuse mechanism differ from ResNet's skip connections, and how did ConvNeXt later revisit these CNN design principles?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "1608.06993",
+      "2201.03545"
+    ],
+    "gt_answer": "DenseNet connects each layer to every subsequent layer through concatenation of feature maps, enabling explicit feature reuse and requiring fewer parameters because redundant feature maps need not be relearned. ResNet, by contrast, uses additive identity skip connections that combine the residual output and identity via summation, which can impede information flow. ConvNeXt later revisited CNN design choices by systematically modernizing a ResNet toward Transformer design decisions—adopting depthwise convolutions, inverted bottlenecks, larger kernel sizes, and LayerNorm—ultimately producing a pure ConvNet that competes with Swin Transformers without requiring specialized attention modules.",
+    "gt_passages": [
+      {
+        "paper_id": "1608.06993",
+        "passage": "Crucially, in contrast to ResNets, we never combine features through summation before they are passed into a layer; instead, we combine features by concatenating them."
+      },
+      {
+        "paper_id": "2201.03545",
+        "passage": "We gradually 'modernize' a standard ResNet toward the design of a vision Transformer, and discover several key components that contribute to the performance difference along the way. The outcome of this exploration is a family of pure ConvNet models dubbed ConvNeXt. Constructed entirely from standard ConvNet modules, ConvNeXts compete favorably with Transformers in terms of accuracy and scalability, achieving 87.8% ImageNet top-1 accuracy and outperforming Swin Transformers on COCO detection and ADE20K segmentation, while maintaining the simplicity and efficiency of standard ConvNets."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_003",
+    "query": "What data efficiency strategies do SimCLR and CLIP each rely on, and how do they compare in terms of the amount and type of training data required?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "2002.05709",
+      "2103.00020"
+    ],
+    "gt_answer": "SimCLR achieves strong representations using only ImageNet-scale labeled images but requires no labels during pre-training, instead relying heavily on strong data augmentation—particularly the composition of random cropping and color distortion—and large batch sizes (up to 8192). CLIP, in contrast, trains on a custom dataset of 400 million (image, text) pairs collected from the internet, trading compute for scale and leveraging natural language as a supervision signal. SimCLR's 76.5% top-1 linear evaluation accuracy matches a supervised ResNet-50 on ImageNet, while CLIP matches the original ResNet-50 on ImageNet zero-shot without using any of its 1.28 million labeled training examples.",
+    "gt_passages": [
+      {
+        "paper_id": "2002.05709",
+        "passage": "One composition of augmentations stands out: random cropping and random color distortion. We conjecture that one serious issue when using only random cropping as data augmentation is that most patches from an image share a similar color distribution. Figure 6 shows that color histograms alone suffice to distinguish images. Neural nets may exploit this shortcut to solve the predictive task. Therefore, it is critical to compose cropping with color distortion in order to learn generalizable features."
+      },
+      {
+        "paper_id": "2103.00020",
+        "passage": "For instance, we match the accuracy of the original ResNet-50 on ImageNet zero-shot without needing to use any of the 1.28 million training examples it was trained on."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_004",
+    "query": "How did CNN architectures evolve from DenseNet (2016) to ConvNeXt (2022) in terms of parameter efficiency and design philosophy?",
+    "query_type": "Timeline",
+    "paper_ids": [
+      "1608.06993",
+      "2201.03545"
+    ],
+    "gt_answer": "DenseNet (2016) introduced dense connectivity by concatenating feature maps from all preceding layers to each subsequent layer, yielding strong parameter efficiency—DenseNet-BC with L=100 and k=12 achieves comparable accuracy to a 1001-layer pre-activation ResNet using 90% fewer parameters. ConvNeXt (2022) took a different trajectory: rather than dense connectivity, it modernized a standard ResNet by adopting Transformer-inspired design decisions such as depthwise convolutions with 7×7 kernels, inverted bottlenecks, GELU activations, LayerNorm, and fewer activation functions per block. ConvNeXt achieved 87.8% ImageNet top-1 accuracy, demonstrating that pure CNNs can rival vision Transformers when trained with modern recipes.",
+    "gt_passages": [
+      {
+        "paper_id": "1608.06993",
+        "passage": "DenseNet-BC with L =100 and k =12 achieves comparable performance ( e.g. , 4.51% vs 4.62% error on C10+, 22.27% vs 22.71% error on C100+) as the 1001-layer pre-activation ResNet using 90% fewer parameters."
+      },
+      {
+        "paper_id": "2201.03545",
+        "passage": "By itself, this enhanced training recipe increased the performance of the ResNet-50 model from 76.1% [1] to 78.8% (+2.7%), implying that a significant portion of the performance difference between traditional ConvNets and vision Transformers may be due to the training techniques."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_005",
+    "query": "How did the paradigm for image generation evolve from raster-scan autoregressive models to VAR's next-scale prediction, and how does CLIP's representation learning relate to zero-shot generalization in both discriminative and generative settings?",
+    "query_type": "Timeline",
+    "paper_ids": [
+      "2103.00020",
+      "2404.02905"
+    ],
+    "gt_answer": "CLIP (2021) established zero-shot generalization for discriminative vision tasks by learning joint image-text embeddings from 400 million internet pairs, allowing a trained model to classify images into unseen categories via natural language prompts. VAR (2024) extended the concept of zero-shot generalization to image generation by redefining autoregressive modeling as next-scale prediction rather than raster-scan next-token prediction, enabling zero-shot image editing capabilities such as in-painting and out-painting. Both models demonstrate that large-scale pre-training with the right inductive structure—language supervision in CLIP and coarse-to-fine scale ordering in VAR—transfers to tasks never seen during training.",
+    "gt_passages": [
+      {
+        "paper_id": "2103.00020",
+        "passage": "After pre-training, natural language is used to reference learned visual concepts (or describe new ones) enabling zero-shot transfer of the model to downstream tasks. We study the performance of this approach by benchmarking on over 30 different existing computer vision datasets, spanning tasks such as OCR, action recognition in videos, geo-localization, and many types of fine-grained object classification."
+      },
+      {
+        "paper_id": "2404.02905",
+        "passage": "VAR further showcases zero-shot generalization ability in downstream tasks including image in-painting, out-painting, and editing. These results suggest VAR has initially emulated the two important properties of LLMs: Scaling Laws and zero-shot generalization."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_006",
+    "query": "What common themes across DenseNet, SimCLR, CLIP, ConvNeXt, and VAR explain why feature reuse, scale, and architectural inductive biases consistently improve visual learning?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "1608.06993",
+      "2002.05709",
+      "2103.00020",
+      "2201.03545",
+      "2404.02905"
+    ],
+    "gt_answer": "Across these five works, a consistent theme is that explicit structural choices about how information is organized and reused lead to large gains. DenseNet shows that concatenating all preceding feature maps enables parameter-efficient feature reuse. SimCLR demonstrates that composing multiple data augmentations—not architecture changes—defines effective self-supervised tasks. CLIP shows that the scale and diversity of natural language supervision, rather than a specialized architecture, drives zero-shot generalization. ConvNeXt reveals that many Transformer gains over CNNs can be attributed to modernized training and micro-design choices rather than attention itself. VAR demonstrates that reordering the autoregressive generation unit from single tokens to multi-scale maps fixes fundamental mathematical and structural issues in image generation. Together, these works suggest that principled organization of information flow—whether through dense connections, augmentation composition, language supervision, kernel design, or scale ordering—is a unifying driver of progress in visual learning.",
+    "gt_passages": [
+      {
+        "paper_id": "1608.06993",
+        "passage": "Instead of drawing representational power from extremely deep or wide architectures, DenseNets exploit the potential of the network through feature reuse , yielding condensed models that are easy to train and highly parameterefficient."
+      },
+      {
+        "paper_id": "2002.05709",
+        "passage": "Composition of multiple data augmentation operations is crucial in defining the contrastive prediction tasks that yield effective representations. In addition, unsupervised contrastive learning benefits from stronger data augmentation than supervised learning."
+      },
+      {
+        "paper_id": "2404.02905",
+        "passage": "This simple, intuitive methodology allows autoregressive (AR) transformers to learn visual distributions fast and can generalize well: V AR, for the fi rst time , makes GPT-style AR models surpass diffusion transformers in image generation."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_007",
+    "query": "How do CLIP and VAR each leverage scale—in data and model size—to achieve transfer and generalization capabilities, and what does each paper say about the relationship between scale and performance?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "2103.00020",
+      "2404.02905"
+    ],
+    "gt_answer": "CLIP trains on 400 million internet image-text pairs and observes that zero-shot transfer performance is a smoothly predictable function of compute, with a log-log linear scaling trend across a 44x increase in model compute. VAR also exhibits scaling laws: training models from 18M to 2B parameters on ImageNet reveals a clear power-law relationship between model size and test cross-entropy loss, with Pearson correlation coefficients near -0.998, closely mirroring the scaling behavior observed in large language models. Both results indicate that performance in vision—whether for representation or generation—scales predictably with model size and data, validating investment in larger models.",
+    "gt_passages": [
+      {
+        "paper_id": "2103.00020",
+        "passage": "We study the scalability of CLIP by training a series of eight models spanning almost 2 orders of magnitude of compute and observe that transfer performance is a smoothly predictable function of compute (Hestness et al., 2017; Kaplan et al., 2020)."
+      },
+      {
+        "paper_id": "2404.02905",
+        "passage": "Scaling up V AR models exhibits clear power-law scaling laws similar to those observed in LLMs, with linear correlation coefficients near -0 . 998 as solid evidence."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_008",
+    "query": "How do DenseNet, SimCLR, and ConvNeXt collectively challenge the assumption that deeper or wider networks alone are sufficient to improve visual recognition performance?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "1608.06993",
+      "2002.05709",
+      "2201.03545"
+    ],
+    "gt_answer": "DenseNet challenges depth-alone scaling by showing that a 100-layer DenseNet with only 0.8M parameters achieves comparable accuracy to a 1001-layer pre-activation ResNet with over 10M parameters, attributing gains to feature reuse through dense connectivity rather than simply increasing depth. SimCLR shows that self-supervised contrastive learning benefits more from bigger models than supervised learning, but more importantly demonstrates that the composition of augmentations—not model size—is the critical factor for good representations. ConvNeXt demonstrates that a substantial portion of the performance gap between ResNets and vision Transformers is due to modernized training techniques and micro-design choices, showing a ResNet-50 improves from 76.1% to 78.8% simply by updating the training recipe, before any architectural changes.",
+    "gt_passages": [
+      {
+        "paper_id": "1608.06993",
+        "passage": "A possibly counter-intuitive effect of this dense connectivity pattern is that it requires fewer parameters than traditional convolutional networks, as there is no need to relearn redundant feature-maps."
+      },
+      {
+        "paper_id": "2002.05709",
+        "passage": "we find the gap between supervised models and linear classifiers trained on unsupervised models shrinks as the model size increases, suggesting that unsupervised learning benefits more from bigger models than its supervised counterpart ."
+      },
+      {
+        "paper_id": "2201.03545",
+        "passage": "By itself, this enhanced training recipe increased the performance of the ResNet-50 model from 76.1% [1] to 78.8% (+2.7%), implying that a significant portion of the performance difference between traditional ConvNets and vision Transformers may be due to the training techniques."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_009",
+    "query": "SimCLR argues that stronger data augmentation hurts supervised learning while helping self-supervised learning, but CLIP uses minimal image augmentation during training. Does this create a contradiction about the role of augmentation in visual representation learning?",
+    "query_type": "Contradiction",
+    "paper_ids": [
+      "2002.05709",
+      "2103.00020"
+    ],
+    "gt_answer": "There is an apparent contradiction: SimCLR demonstrates that stronger color augmentation substantially improves self-supervised representation quality while hurting supervised model performance, concluding that contrastive learning benefits from augmentations that supervised learning does not need. However, CLIP uses a very minimal augmentation policy—only a random square crop from resized images during training—and yet achieves strong zero-shot transfer performance. The resolution is that CLIP's supervision signal comes from the diversity of 400 million internet image-text pairs, which provides sufficient variation to learn robust representations without relying on augmentation to create positive pairs. SimCLR, operating only on ImageNet, must manufacture view diversity through augmentation since it has no external signal. Thus the two approaches are not contradictory but reflect different sources of learning signal diversity.",
+    "gt_passages": [
+      {
+        "paper_id": "2002.05709",
+        "passage": "our experiments show that unsupervised contrastive learning benefits from stronger (color) data augmentation than supervised learning. Although previous work has reported that data augmentation is useful for self-supervised learning (Doersch et al., 2015; Bachman et al., 2019; Hénaff et al., 2019; Asano et al., 2019), we show that data augmentation that does not yield accuracy benefits for supervised learning can still help considerably with contrastive learning."
+      },
+      {
+        "paper_id": "2103.00020",
+        "passage": "A random square crop from resized images is the only data augmentation used during training."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_010",
+    "query": "ConvNeXt argues that the performance advantages of Transformers over CNNs are largely due to training techniques and design choices that can be replicated in pure ConvNets, but CLIP's ViT-L/14 visual encoder outperforms its ResNet counterparts. Does this contradict ConvNeXt's claims about CNN-Transformer parity?",
+    "query_type": "Contradiction",
+    "paper_ids": [
+      "2103.00020",
+      "2201.03545"
+    ],
+    "gt_answer": "There is a surface-level tension: ConvNeXt claims that a pure ConvNet (ConvNeXt-B) can match or outperform Swin Transformer of similar complexity on ImageNet and downstream tasks, suggesting CNN-Transformer parity when architectural design choices are equalized. However, CLIP uses ViT-L/14 as its best-performing image encoder, with the largest ResNet (RN50x64) requiring 18 days on 592 V100 GPUs while the best Vision Transformer took only 12 days on 256 V100 GPUs. The distinction is that ConvNeXt compares against hierarchical Transformers like Swin at matched FLOPs, whereas CLIP scales Vision Transformers to large capacity and pretraining data regimes where compute efficiency differences between architectures become apparent. Thus ConvNeXt's claim holds within matched-compute regimes; at extreme scale, Transformer architectures may still hold efficiency advantages.",
+    "gt_passages": [
+      {
+        "paper_id": "2201.03545",
+        "passage": "ConvNeXt also outperforms Swin Transformer of similar complexities across the board , sometimes with a substantial margin ( e.g . 0.8% for ConvNeXt-T). Without specialized modules such as shifted windows or relative position bias, ConvNeXts also enjoy improved throughput compared to Swin Transformers."
+      },
+      {
+        "paper_id": "2103.00020",
+        "passage": "The largest ResNet model, RN50x64, took 18 days to train on 592 V100 GPUs while the largest Vision Transformer took 12 days on 256 V100 GPUs."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_001",
+    "query": "How do DDPM and Consistency Models differ in the number of inference steps required to generate an image?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "2006.11239",
+      "2303.01469"
+    ],
+    "gt_answer": "DDPM requires T=1000 sequential neural network evaluations during sampling (iterating from x_T down to x_0), making inference very slow. Consistency Models, by contrast, are designed to generate high-quality samples with only a single network evaluation by directly mapping noise to data, while optionally allowing multi-step sampling for improved quality. On CIFAR-10, Consistency Distillation achieves an FID of 3.55 with one step, compared to DDPM's FID of 3.17 with 1000 steps.",
+    "gt_passages": [
+      {
+        "paper_id": "2006.11239",
+        "passage": "We set T = 1000 for all experiments so that the number of neural network evaluations needed during sampling matches previous work [53, 55]."
+      },
+      {
+        "paper_id": "2303.01469",
+        "passage": "They support fast one-step generation by design, while still allowing multistep sampling to trade compute for sample quality."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_002",
+    "query": "Why did Latent Diffusion Models (LDM) move diffusion into latent space instead of pixel space, and what computational benefit did this provide compared to standard DDPM?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "2006.11239",
+      "2112.10752"
+    ],
+    "gt_answer": "DDPM operates directly in high-dimensional pixel space, requiring hundreds of GPU days to train and approximately 5 days to generate 50k samples on a single A100 GPU. LDM instead applies diffusion in the latent space of a pretrained autoencoder, compressing away imperceptible high-frequency details so the diffusion model can focus on semantically meaningful content. This significantly reduces compute and inference costs while retaining synthesis quality.",
+    "gt_passages": [
+      {
+        "paper_id": "2006.11239",
+        "passage": "Our CelebA-HQ/LSUN (256 2 ) models train at 2.2 steps per second at batch size 64, and sampling a batch of 128 images takes 300 seconds."
+      },
+      {
+        "paper_id": "2112.10752",
+        "passage": "training the most powerful DMs often takes hundreds of GPU days ( e.g . 150 1000 V100 days in [15]) and repeated evaluations on a noisy version of the input space render also inference expensive, so that producing 50k samples takes approximately 5 days [15] on a single A100 GPU."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_003",
+    "query": "How does Mamba's selective state space model handle long sequences differently from Transformer self-attention, and how does this affect inference throughput?",
+    "query_type": "Comparison",
+    "paper_ids": [
+      "2312.00752",
+      "2006.11239"
+    ],
+    "gt_answer": "Transformer self-attention stores the full KV cache during autoregressive inference, causing quadratic-time training and linear-time inference, making it expensive for long contexts. Mamba's selective SSM compresses context into a finite recurrent state, enabling constant-time per-step inference and linear scaling with sequence length, delivering 5x higher generation throughput than Transformers of similar size. By contrast, DDPM-style models (which also use attention at 16x16 feature maps) require 1000 sequential denoising evaluations, illustrating how iterative sequential computation — whether in diffusion sampling or attention-based sequence models — is a shared bottleneck that Mamba's architecture directly addresses.",
+    "gt_passages": [
+      {
+        "paper_id": "2312.00752",
+        "passage": "attention is both effective and inefficient because it explicitly does not compress context at all. This can be seen from the fact that autoregressive inference requires explicitly storing the entire context (i.e. the KV cache), which directly causes the slow linear-time inference and quadratic-time training of Transformers."
+      },
+      {
+        "paper_id": "2006.11239",
+        "passage": "We use self-attention at the 16 × 16 feature map resolution [63, 60]."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_004",
+    "query": "Both MAML and Neural ODEs introduce a form of meta-level optimization or adaptive computation at training time. How do their respective approaches manifest in the training algorithm?",
+    "query_type": "Timeline",
+    "paper_ids": [
+      "1703.03400",
+      "1806.07366"
+    ],
+    "gt_answer": "MAML introduces a bi-level optimization where the outer loop updates model parameters to maximize performance after inner-loop gradient adaptation on new tasks, requiring a gradient-through-gradient computation (Hessian-vector products). Neural ODEs introduce an adjoint sensitivity method for backpropagation: instead of storing intermediate activations, they solve a second ODE backwards in time to compute gradients, which scales linearly in problem size and has low memory cost. Both methods thus replace the standard single-pass gradient computation with a more sophisticated two-phase procedure to achieve their respective goals of fast task adaptation and memory-efficient depth.",
+    "gt_passages": [
+      {
+        "paper_id": "1703.03400",
+        "passage": "The MAML meta-gradient update involves a gradient through a gradient. Computationally, this requires an additional backward pass through f to compute Hessian-vector products, which is supported by standard deep learning libraries such as TensorFlow (Abadi et al., 2016)."
+      },
+      {
+        "paper_id": "1806.07366",
+        "passage": "We treat the ODE solver as a black box, and compute gradients using the adjoint sensitivity method (Pontryagin et al., 1962). This approach computes gradients by solving a second, augmented ODE backwards in time, and is applicable to all ODE solvers. This approach scales linearly with problem size, has low memory cost, and explicitly controls numerical error."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_005",
+    "query": "Trace the evolution of diffusion-based generative models from DDPM to LDM to Consistency Models, highlighting the primary limitation each successive approach addressed.",
+    "query_type": "Timeline",
+    "paper_ids": [
+      "2006.11239",
+      "2112.10752",
+      "2303.01469"
+    ],
+    "gt_answer": "DDPM (2020) established high-quality image synthesis via iterative denoising in pixel space, achieving FID 3.17 on CIFAR-10 but requiring 1000 sampling steps. LDM (2021) addressed DDPM's computational cost by moving diffusion into the compressed latent space of a pretrained autoencoder, significantly reducing training and inference costs while maintaining quality. Consistency Models (2023) then addressed the remaining bottleneck of iterative sampling itself, introducing a framework that enables single-step generation by learning to map any point on a diffusion ODE trajectory directly to its origin, achieving FID 3.55 on CIFAR-10 with a single network evaluation.",
+    "gt_passages": [
+      {
+        "paper_id": "2006.11239",
+        "passage": "On the unconditional CIFAR10 dataset, we obtain an Inception score of 9.46 and a state-of-the-art FID score of 3.17."
+      },
+      {
+        "paper_id": "2112.10752",
+        "passage": "To enable DM training on limited computational resources while retaining their quality and flexibility, we apply them in the latent space of powerful pretrained autoencoders."
+      },
+      {
+        "paper_id": "2303.01469",
+        "passage": "Through extensive experiments, we demonstrate that they outperform existing distillation techniques for diffusion models in one- and few-step sampling, achieving the new state-ofthe-art FID of 3.55 on CIFAR-10 and 6.20 on ImageNet 64 ˆ 64 for one-step generation."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_006",
+    "query": "How did Neural ODEs and MAML each challenge the assumption of fixed discrete computation in deep networks, one through continuous depth and the other through task-adaptive initialization?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "1806.07366",
+      "1703.03400"
+    ],
+    "gt_answer": "Neural ODEs replaced the standard discrete stack of residual layers with a continuous ODE parameterized by a neural network, so that 'depth' is determined dynamically by an ODE solver rather than fixed at architecture design time. MAML challenged the fixed-initialization assumption by training parameters specifically to be rapidly adaptable: rather than using a static pretrained initialization, MAML optimizes for an initialization that, after just one or a few gradient steps, achieves strong performance on new tasks. Both works thus replace rigid, fixed computational structures with adaptive, dynamic ones.",
+    "gt_passages": [
+      {
+        "paper_id": "1806.07366",
+        "passage": "Instead of specifying a discrete sequence of hidden layers, we parameterize the derivative of the hidden state using a neural network. The output of the network is computed using a blackbox differential equation solver."
+      },
+      {
+        "paper_id": "1703.03400",
+        "passage": "our proposed method aims to optimize the model parameters such that one or a small number of gradient steps on a new task will produce maximally effective behavior on that task."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_007",
+    "query": "What common insight do Mamba's selective state space mechanism and MAML's meta-learning share about the importance of input-dependent or task-dependent computation?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "2312.00752",
+      "1703.03400"
+    ],
+    "gt_answer": "Both works identify that static, input-invariant or task-invariant computation is fundamentally limited. Mamba shows that prior SSMs with fixed (time-invariant) parameters cannot perform content-based reasoning, and introduces a selection mechanism that makes SSM parameters functions of the input so the model can selectively remember or ignore tokens. MAML similarly shows that a fixed pretrained initialization cannot quickly adapt to new tasks, and instead trains an initialization that is sensitive to task-specific loss gradients, enabling rapid adaptation with just one or a few gradient steps.",
+    "gt_passages": [
+      {
+        "paper_id": "2312.00752",
+        "passage": "simply letting the SSM parameters be functions of the input addresses their weakness with discrete modalities, allowing the model to selectively propagate or forget information along the sequence length dimension depending on the current token."
+      },
+      {
+        "paper_id": "1703.03400",
+        "passage": "we will aim to find model parameters that are sensitive to changes in the task, such that small changes in the parameters will produce large improvements on the loss function of any task drawn from p ( T ) , when altered in the direction of the gradient of that loss"
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_008",
+    "query": "TruthfulQA shows that scaling language models makes them less truthful, yet Mamba shows that scaling selective SSMs improves performance. What does this reveal about which failure mode scaling actually fixes?",
+    "query_type": "Contradiction",
+    "paper_ids": [
+      "2109.07958",
+      "2312.00752"
+    ],
+    "gt_answer": "TruthfulQA demonstrates that scaling GPT-style language models worsens truthfulness because larger models better fit the training distribution, learning 'imitative falsehoods' more strongly. In contrast, Mamba shows that its Mamba-3B model outperforms Transformers of the same size and matches Transformers twice its size, suggesting that scaling works when the model's inductive bias (selective state spaces) correctly handles the task structure. Together, these results indicate that scaling amplifies whatever the architecture learns — including errors — so architectural design governs whether scaling is beneficial.",
+    "gt_passages": [
+      {
+        "paper_id": "2109.07958",
+        "passage": "The largest models were generally the least truthful. This contrasts with other NLP tasks, where performance improves with model size."
+      },
+      {
+        "paper_id": "2312.00752",
+        "passage": "our Mamba-3B model outperforms Transformers of the same size and matches Transformers twice its size, both in pretraining and downstream evaluation."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_009",
+    "query": "Neural ODEs achieve constant memory cost during training, which contradicts the O(L) memory scaling of standard discrete ResNets. How does this memory advantage compare to the memory requirements introduced by DDPM's iterative sampling?",
+    "query_type": "Contradiction",
+    "paper_ids": [
+      "1806.07366",
+      "2006.11239"
+    ],
+    "gt_answer": "Standard discrete ResNets require O(L) memory because all intermediate activations must be stored for backpropagation. Neural ODEs contradict this by computing gradients via the adjoint sensitivity method — solving a second ODE backwards without storing any intermediate forward-pass quantities — yielding O(1) memory cost regardless of solver depth. DDPM, in contrast, has a different memory burden: during sampling it must run 1000 sequential neural network evaluations, which are memory-light per step but extremely time-consuming. Thus ODE-based approaches expose a tension between memory efficiency (Neural ODE) and inference latency (DDPM), both arising from how depth or denoising steps are handled.",
+    "gt_passages": [
+      {
+        "paper_id": "1806.07366",
+        "passage": "Not storing any intermediate quantities of the forward pass allows us to train our models with constant memory cost as a function of depth, a major bottleneck of training deep models."
+      },
+      {
+        "paper_id": "2006.11239",
+        "passage": "We set T = 1000 for all experiments so that the number of neural network evaluations needed during sampling matches previous work [53, 55]."
+      }
+    ]
+  },
+  {
+    "query_id": "groupE_010",
+    "query": "How do TruthfulQA's findings about imitative falsehoods and Mamba's findings about the limitations of linear time-invariant models both point to fundamental failures of models that too faithfully replicate their training distribution or fixed patterns?",
+    "query_type": "Synthesis",
+    "paper_ids": [
+      "2109.07958",
+      "2312.00752"
+    ],
+    "gt_answer": "TruthfulQA identifies that language models produce false answers not from ignorance but because those false answers are frequent in the training distribution — larger models that better fit this distribution learn these 'imitative falsehoods' more strongly. Mamba similarly identifies that linear time-invariant SSMs fail because their constant dynamics faithfully replicate the fixed convolutional pattern of the training setup but cannot adapt to varying input content (e.g. selective copying). Both papers argue that a model that too rigidly follows a static learned pattern — whether a training data distribution or a fixed parameter — cannot reason or select appropriately at inference time.",
+    "gt_passages": [
+      {
+        "paper_id": "2109.07958",
+        "passage": "We call such false answers imitative falsehoods . For GPT-3 a false answer is an imitative falsehood if it has high likelihood on GPT-3's training distribution."
+      },
+      {
+        "paper_id": "2312.00752",
+        "passage": "From the recurrent view, their constant dynamics (e.g. the ( 𝑨 , 𝑩 ) transitions in (2)) cannot let them select the correct information from their context, or affect the hidden state passed along the sequence in an input-dependent way."
+      }
+    ]
+  }
+]

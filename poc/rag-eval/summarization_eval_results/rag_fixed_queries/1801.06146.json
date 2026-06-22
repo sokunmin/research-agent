@@ -1,0 +1,88 @@
+{
+  "config": "rag_fixed_queries",
+  "paper_id": "1801.06146",
+  "supported": 15,
+  "contradicted": 0,
+  "unverifiable": 0,
+  "claim_count": 15,
+  "factuality": 1.0,
+  "hallucination_rate": 0.0,
+  "unverifiable_rate": 0.0,
+  "claims": [
+    {
+      "text": "The core language model used is AWD-LSTM.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 3 states: 'we use the state-of-the-art language model AWD-LSTM (Merity et al., 2017a)'."
+    },
+    {
+      "text": "General-domain pretraining was conducted using the Wikitext-103 dataset, which contains 103 million words from over 28,000 Wikipedia articles.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 3.1 states Wikitext-103 consists of '28,595 preprocessed Wikipedia articles and 103 million words', which is over 28,000 articles."
+    },
+    {
+      "text": "ULMFiT was evaluated on six text classification datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper abstract and Section 4.1 confirm evaluation on 'six widely-studied datasets': IMDb, Yelp-bi, Yelp-full, TREC-6, AG, and DBpedia."
+    },
+    {
+      "text": "IMDb is a binary sentiment analysis dataset.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 lists IMDb as Sentiment type with 2 classes and 25k training examples."
+    },
+    {
+      "text": "Yelp has both binary and five-class versions used for evaluation.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 lists Yelp-bi (2 classes, 560k examples) and Yelp-full (5 classes, 650k examples) as separate datasets."
+    },
+    {
+      "text": "TREC-6 is a six-class question classification dataset.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 lists TREC-6 as Question type with 6 classes; Section 4.1 describes it as 'six-class version of the small TREC dataset'."
+    },
+    {
+      "text": "AG News is a four-class topic classification dataset.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 lists AG as Topic type with 4 classes and 120k training examples."
+    },
+    {
+      "text": "DBpedia is a 14-class topic classification dataset.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 lists DBpedia as Topic type with 14 classes and 560k training examples."
+    },
+    {
+      "text": "Slanted Triangular Learning Rates (STLR) linearly increases the learning rate quickly and then decays it slowly.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.2 describes STLR as using 'a short increase and a long decay period' with cut_frac=0.1, meaning 10% of iterations are for the increase phase."
+    },
+    {
+      "text": "Gradual Unfreezing starts from the last layer (the least general) and moves backward through layers.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.3 states: 'gradually unfreeze the model starting from the last layer as this contains the least general knowledge', then unfreezing the next lower frozen layer each epoch."
+    },
+    {
+      "text": "ULMFiT reduces errors by 18-24% in most cases compared to prior state-of-the-art.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper abstract explicitly states 'reducing the error by 18–24% on the majority of datasets', matching the summary claim exactly."
+    },
+    {
+      "text": "With only 100 labeled examples, ULMFiT matches the performance of training from scratch with significantly more data.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper abstract states 'with only 100 labeled examples, it matches the performance of training from scratch on 100x more data'; Section 5 further details 10x–100x depending on supervised vs. semi-supervised setting."
+    },
+    {
+      "text": "The authors used the Adam optimizer.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.1 states: 'We use Adam with β_1=0.7 instead of the default β_1=0.9 and β_2=0.99'."
+    },
+    {
+      "text": "A specialized BPTT for Text Classification (BPT3C) is used to handle large documents.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.3 introduces BPT3C: 'In order to make fine-tuning a classifier for large documents feasible, we propose BPTT for Text Classification (BPT3C)'."
+    },
+    {
+      "text": "Concat Pooling combines the last hidden state with max-pooled and mean-pooled representations to prevent information loss in long documents.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.3 defines concat pooling as h_c = [h_T, maxpool(H), meanpool(H)], explicitly motivated by preventing loss of signal in long documents where 'information may get lost if we only consider the last hidden state'."
+    }
+  ]
+}

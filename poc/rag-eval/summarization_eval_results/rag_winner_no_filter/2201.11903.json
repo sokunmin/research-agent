@@ -1,0 +1,83 @@
+{
+  "config": "rag_winner_no_filter",
+  "paper_id": "2201.11903",
+  "supported": 11,
+  "contradicted": 1,
+  "unverifiable": 1,
+  "claim_count": 13,
+  "factuality": 0.85,
+  "hallucination_rate": 0.08,
+  "unverifiable_rate": 0.08,
+  "claims": [
+    {
+      "text": "CoT prompting augments exemplars with a series of intermediate natural language reasoning steps (a 'chain of thought') that lead to the final answer",
+      "verdict": "SUPPORTED",
+      "reason": "The paper defines chain-of-thought prompting as augmenting each exemplar with 'a chain of thought for an associated answer' consisting of 'intermediate natural language reasoning steps that lead to the final output' (Section 2)."
+    },
+    {
+      "text": "The prompt is constructed using input-thought-output triples containing the problem, a step-by-step explanation of the reasoning, and the final answer",
+      "verdict": "SUPPORTED",
+      "reason": "The paper explicitly uses the triple notation '<input, chain of thought, output>' to describe the prompt structure (Sections 1 and 2)."
+    },
+    {
+      "text": "A small set of manually composed examples (typically eight) are provided to the model to demonstrate the desired reasoning style",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states 'we manually composed a set of eight few-shot exemplars with chains of thought for prompting' and this eight-exemplar count is used across benchmarks (Section 3.1)."
+    },
+    {
+      "text": "The model generates its own chain of thought and final answer for a new test-time example via greedy decoding",
+      "verdict": "SUPPORTED",
+      "reason": "The paper explicitly states 'We sample from the models via greedy decoding' (Section 3.1)."
+    },
+    {
+      "text": "For arithmetic tasks, a Python program can be used to evaluate equations within the generated chain of thought to reduce calculation errors",
+      "verdict": "SUPPORTED",
+      "reason": "The paper describes adding 'a Python program as an external calculator (using the Python eval function) to all the equations in the generated chain of thought' (Appendix B)."
+    },
+    {
+      "text": "The authors evaluated various model families, including GPT-3, LaMDA, PaLM, UL2, and Codex",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.1 lists exactly these five language model families as the evaluation subjects."
+    },
+    {
+      "text": "Arithmetic reasoning benchmarks include GSM8K, SVAMP, ASDiv, AQuA, and MAWPS",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.1 enumerates exactly these five math word problem benchmarks for arithmetic evaluation."
+    },
+    {
+      "text": "Commonsense reasoning benchmarks include CSQA, StrategyQA, BIG-bench (Date Understanding and Sports Understanding), and SayCan",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4 lists CSQA, StrategyQA, Date Understanding, Sports Understanding (both from BIG-bench), and SayCan as the commonsense evaluation datasets."
+    },
+    {
+      "text": "Symbolic reasoning includes two synthetic toy tasks: 'Last letter concatenation' and 'Coin flip'",
+      "verdict": "SUPPORTED",
+      "reason": "Section 5 introduces exactly these two synthetic tasks under the symbolic reasoning evaluation."
+    },
+    {
+      "text": "CoT reasoning is an emergent property of model scale, typically providing significant performance gains only in models with ~100B parameters or more",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states 'chain-of-thought prompting does not positively impact performance for small models, and only yields performance gains when used with models of ~100B parameters' (Section 3.2)."
+    },
+    {
+      "text": "Prompting a PaLM 540B with just eight chain-of-thought exemplars achieves state-of-the-art accuracy on the GSM8K benchmark, surpassing even finetuned GPT-3 with a verifier",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract states verbatim: 'prompting a PaLM 540B with just eight chain-of-thought exemplars achieves state-of-the-art accuracy on the GSM8K benchmark of math word problems, surpassing even finetuned GPT-3 with a verifier'."
+    },
+    {
+      "text": "Of 50 random examples where LaMDA 137B returned the correct final answer on GSM8K, all of the generated chains of thought were logically correct except two that coincidentally arrived at the correct answer",
+      "verdict": "SUPPORTED",
+      "reason": "The main text (Section 3.2) states exactly this: 'all of the generated chains of thought were also logically and mathematically correct except two that coincidentally arrived at the correct answer' — note that Appendix D.1 says only one such case, indicating an internal inconsistency in the paper, but the summary matches the main-body claim."
+    },
+    {
+      "text": "The other 54% of the chains of thought (from wrong-answer examples) had major errors in semantic understanding or coherence",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.2 states verbatim: 'the other 54% of the chains of thought had major errors in semantic understanding or coherence'."
+    },
+    {
+      "text": "Future work is suggested to investigate how to induce reasoning capabilities in smaller models and to improve the factuality of generated chains",
+      "verdict": "UNVERIFIABLE",
+      "reason": "Section 6 mentions high serving costs at large scale and open directions for 'improving factual generations' and 'how to induce reasoning in smaller models', but these are framed as limitations rather than explicit future-work proposals, making this only an approximate match."
+    }
+  ]
+}

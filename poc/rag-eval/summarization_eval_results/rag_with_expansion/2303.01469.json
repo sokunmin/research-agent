@@ -1,0 +1,73 @@
+{
+  "config": "rag_with_expansion",
+  "paper_id": "2303.01469",
+  "supported": 11,
+  "contradicted": 1,
+  "unverifiable": 0,
+  "claim_count": 12,
+  "factuality": 0.92,
+  "hallucination_rate": 0.08,
+  "unverifiable_rate": 0.00,
+  "claims": [
+    {
+      "text": "Consistency models achieve a new state-of-the-art FID of 3.55 on CIFAR-10 for one-step generation.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract explicitly states 'achieving the new state-of-the-art FID of 3.55 on CIFAR-10 ... for one-step generation', confirmed by Table 1 (CD, NFE=1, FID=3.55)."
+    },
+    {
+      "text": "Consistency models achieve a new state-of-the-art FID of 6.20 on ImageNet 64x64 for one-step generation.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract states 'FID of 3.55 on CIFAR-10 and 6.20 on ImageNet 64x64 for one-step generation', confirmed in Table 2 (CD, NFE=1, FID=6.20)."
+    },
+    {
+      "text": "The models were evaluated on LSUN 256x256, specifically the 'Bedroom' and 'Cat' subsets.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 6 states experiments used 'LSUN Bedroom 256x256, and LSUN Cat 256x256 (Yu et al., 2015)', and Table 2 reports results for both subsets."
+    },
+    {
+      "text": "The authors used the Rectified Adam optimizer without learning rate decay, warm-up, or weight decay.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix C Training Details states 'We trained all consistency models with the Rectified Adam optimizer (Liu et al., 2019), with no learning rate decay or warm-up, and no weight decay.'"
+    },
+    {
+      "text": "Exponential Moving Average (EMA) was applied to the weights of the online networks to stabilize training.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix C states 'We also applied EMA to the weights of the online consistency models in both consistency distillation and consistency training.'"
+    },
+    {
+      "text": "Distillation models were initialized with pre-trained EDM weights, while isolation models (Consistency Training) were initialized randomly.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix C states 'we initialized the consistency model with pre-trained EDM weights. For consistency training, we initialized the model randomly', and Section 6.1 confirms 'models trained by CT are randomly initialized'."
+    },
+    {
+      "text": "LPIPS was used to measure perceptual similarity with bilinear upsampling to 224x224 for CIFAR-10 and ImageNet.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix C states 'when using the LPIPS metric on CIFAR-10 and ImageNet 64x64, we rescale images to resolution 224x224 with bilinear upsampling before feeding them to the LPIPS network.'"
+    },
+    {
+      "text": "Data augmentation included horizontal flips.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix C explicitly states 'we performed horizontal flips for data augmentation for all models and on all datasets.'"
+    },
+    {
+      "text": "The consistency function maps any point on the PF ODE trajectory back to the origin (the data point), enabling high-quality generation in a single step.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3 defines the consistency function as 'f: (x_t, t) -> x_epsilon' mapping any ODE trajectory point to its origin, enabling single-step generation by a single forward pass f_theta(x_T, T)."
+    },
+    {
+      "text": "Knowledge is transferred from a pre-trained diffusion model (specifically EDMs) into the consistency model in the Distillation Mode.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 6.2 states 'All methods distill from an EDM (Karras et al., 2022) model that we pretrained in-house', confirming EDM is the pre-trained source for distillation."
+    },
+    {
+      "text": "The models were compared against Progressive Distillation and found to compete with GANs and other fast generators in terms of FID and IS.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 6.2 and Tables 1-2 compare CD against PD and GAN baselines (BigGAN, StyleGAN2-ADA, etc.), showing competitive or better FID and IS scores."
+    },
+    {
+      "text": "The authors suggest that future work could extend the theoretical proofs beyond the Euler ODE solver to more general solvers.",
+      "verdict": "CONTRADICTED",
+      "reason": "Theorem 1 (the main distillation proof) already applies to any ODE solver of order p>=1, not just Euler; Remark 2 in Appendix B.1 suggests extending only a specific *continuous-time* theorem (Theorem 3) to more general solvers, which is a narrower and different claim than what the summary asserts."
+    }
+  ]
+}

@@ -1,0 +1,184 @@
+[
+  {
+    "query_id": "groupB_001",
+    "query": "How do LoRA and Prefix-Tuning differ in where they inject trainable parameters?",
+    "query_type": "Comparison",
+    "paper_ids": ["2106.09685", "2101.00190"],
+    "gt_answer": "LoRA injects trainable low-rank decomposition matrices in parallel to existing weight matrices inside the Transformer (e.g., attention projection matrices), leaving the original weights frozen and adding zero extra inference latency. Prefix-Tuning prepends trainable continuous vectors to the input of every Transformer layer, leaving all model parameters frozen, so the prefix activations steer downstream token computation via the attention mechanism.",
+    "gt_passages": [
+      {
+        "paper_id": "2106.09685",
+        "passage": "For a pre-trained weight matrix W 0 ∈ R d × k , we constrain its update by representing the latter with a low-rank decomposition W 0 +∆ W = W 0 + BA , where B ∈ R d × r , A ∈ R r × k , and the rank r glyph[lessmuch] min( d, k ) . During training, W 0 is frozen and does not receive gradient updates, while A and B contain trainable parameters."
+      },
+      {
+        "paper_id": "2101.00190",
+        "passage": "Prefix-tuning prepends a prefix for an autoregressive LM to obtain z = [ PREFIX ; x ; y ] , or prepends prefixes for both encoder and encoder to obtain z = [ PREFIX ; x ; PREFIX ′ ; y ] , as shown in Figure 2. Here, Pidx denotes the sequence of prefix indices, and we use | Pidx | to denote the length of the prefix."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_002",
+    "query": "How does BERT's pre-training strategy differ from ULMFiT's language model pre-training in terms of directionality and training objectives?",
+    "query_type": "Comparison",
+    "paper_ids": ["1810.04805", "1801.06146"],
+    "gt_answer": "ULMFiT uses a standard unidirectional language model (AWD-LSTM) pre-trained on WikiText-103 to predict the next word left-to-right. BERT, by contrast, uses a masked language model (MLM) objective that masks 15% of tokens and predicts them from both left and right context simultaneously, enabling deep bidirectional representations. BERT also adds a next sentence prediction task which ULMFiT does not have.",
+    "gt_passages": [
+      {
+        "paper_id": "1810.04805",
+        "passage": "In order to train a deep bidirectional representation, we simply mask some percentage of the input tokens at random, and then predict those masked tokens. We refer to this procedure as a 'masked LM' (MLM), although it is often referred to as a Cloze task in the literature (Taylor, 1953). In this case, the final hidden vectors corresponding to the mask tokens are fed into an output softmax over the vocabulary, as in a standard LM. In all of our experiments, we mask 15% of all WordPiece tokens in each sequence at random."
+      },
+      {
+        "paper_id": "1801.06146",
+        "passage": "We pretrain the language model on Wikitext-103 (Merity et al., 2017b) consisting of 28,595 preprocessed Wikipedia articles and 103 million words. Pretraining is most beneficial for tasks with small datasets and enables generalization even with 100 labeled examples."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_003",
+    "query": "How do LoRA and full fine-tuning compare in terms of trainable parameters and GPU memory when applied to GPT-3 175B?",
+    "query_type": "Comparison",
+    "paper_ids": ["2106.09685"],
+    "gt_answer": "LoRA reduces the number of trainable parameters by up to 10,000 times compared to full fine-tuning on GPT-3 175B. With rank r=4 applied only to query and value projection matrices, the checkpoint size is reduced from 350 GB to approximately 35 MB. VRAM consumption during training also drops from 1.2 TB to 350 GB.",
+    "gt_passages": [
+      {
+        "paper_id": "2106.09685",
+        "passage": "On GPT-3 175B, we reduce the VRAM consumption during training from 1.2TB to 350GB. With r = 4 and only the query and value projection matrices being adapted, the checkpoint size is reduced by roughly 10,000 × (from 350GB to 35MB)"
+      },
+      {
+        "paper_id": "2106.09685",
+        "passage": "LoRA can reduce the number of trainable parameters by 10,000 times and the GPU memory requirement by 3 times. LoRA performs on-par or better than finetuning in model quality on RoBERTa, DeBERTa, GPT-2, and GPT-3, despite having fewer trainable parameters, a higher training throughput, and, unlike adapters, no additional inference latency ."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_004",
+    "query": "How did the NLP community's approach to preventing catastrophic forgetting during fine-tuning evolve from ULMFiT through LoRA?",
+    "query_type": "Timeline",
+    "paper_ids": ["1801.06146", "2101.00190", "2106.09685"],
+    "gt_answer": "ULMFiT (2018) addressed catastrophic forgetting through gradual unfreezing (unfreezing layers one at a time from last to first) and discriminative fine-tuning (different learning rates per layer). Prefix-Tuning (2021) avoided forgetting entirely by freezing all pretrained model parameters and only optimizing prefix vectors. LoRA (2021) also froze pretrained weights but instead injected trainable rank-decomposition matrices in parallel to weight matrices, achieving the same goal with zero inference overhead.",
+    "gt_passages": [
+      {
+        "paper_id": "1801.06146",
+        "passage": "Rather than fine-tuning all layers at once, which risks catastrophic forgetting, we propose to gradually unfreeze the model starting from the last layer as this contains the least general knowledge (Yosinski et al., 2014): We first unfreeze the last layer and fine-tune all unfrozen layers for one epoch. We then unfreeze the next lower frozen layer and repeat, until we finetune all layers until convergence at the last iteration."
+      },
+      {
+        "paper_id": "2101.00190",
+        "passage": "Fine-tuning is the prevalent paradigm for using large pretrained language models (LMs) (Radford et al., 2019; Devlin et al., 2019) to perform downstream tasks (e.g., summarization), but it requires updating and storing all the parameters of the LM. Consequently, to build and deploy NLP systems that rely on large pretrained LMs, one currently needs to store a modified copy of the LM parameters for each task."
+      },
+      {
+        "paper_id": "2106.09685",
+        "passage": "We propose Lo wR ank A daptation, or LoRA, which freezes the pretrained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture, greatly reducing the number of trainable parameters for downstream tasks."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_005",
+    "query": "How did the concept of parameter-efficient fine-tuning evolve from Prefix-Tuning to LoRA in terms of where parameters are injected and the resulting inference cost?",
+    "query_type": "Timeline",
+    "paper_ids": ["2101.00190", "2106.09685"],
+    "gt_answer": "Prefix-Tuning (2021) introduced parameter efficiency by prepending trainable prefix vectors to every layer's input; this adds latency at inference because the prefix occupies part of the context window and must be processed. LoRA (2021) moved trainable parameters inside the weight matrices themselves via low-rank decomposition, which can be merged into the pretrained weights at deployment time, introducing absolutely no inference latency.",
+    "gt_passages": [
+      {
+        "paper_id": "2101.00190",
+        "passage": "In terms of storage, prefix-tuning stores 1000x fewer parameters than fine-tuning. In terms of performance when trained on full datasets, prefix-tuning and fine-tuning are comparable for table-to-text (§6.1), while prefix-tuning suffers a small degradation for summarization (§6.2)."
+      },
+      {
+        "paper_id": "2106.09685",
+        "passage": "No Additional Inference Latency. When deployed in production, we can explicitly compute and store W = W 0 + BA and perform inference as usual. Note that both W 0 and BA are in R d × k . When we need to switch to another downstream task, we can recover W 0 by subtracting BA and then adding a different B ′ A ′ , a quick operation with very little memory overhead."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_006",
+    "query": "What do FLAN and BERT together reveal about the role of labeled multi-task supervision versus masked self-supervised pre-training in achieving strong generalization?",
+    "query_type": "Synthesis",
+    "paper_ids": ["2109.01652", "1810.04805"],
+    "gt_answer": "BERT shows that self-supervised pre-training on unlabeled text with masked language modeling builds strong representations that transfer widely via task-specific fine-tuning. FLAN reveals a complementary finding: fine-tuning a large model on many tasks described with natural language instructions dramatically improves zero-shot generalization to unseen task types. Together, they suggest that both unsupervised pre-training scale and labeled multi-task instruction exposure are important, but serve different purposes: pre-training builds general representations while instruction tuning teaches the model how to follow task specifications.",
+    "gt_passages": [
+      {
+        "paper_id": "2109.01652",
+        "passage": "We show that instruction tuning -finetuning language models on a collection of datasets described via instructions-substantially improves zeroshot performance on unseen tasks."
+      },
+      {
+        "paper_id": "1810.04805",
+        "passage": "BERT is designed to pretrain deep bidirectional representations from unlabeled text by jointly conditioning on both left and right context in all layers. As a result, the pre-trained BERT model can be finetuned with just one additional output layer to create state-of-the-art models for a wide range of tasks, such as question answering and language inference, without substantial taskspecific architecture modifications."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_007",
+    "query": "How do ULMFiT, BERT, and Prefix-Tuning collectively represent three distinct philosophies for adapting a pre-trained language model to downstream tasks?",
+    "query_type": "Synthesis",
+    "paper_ids": ["1801.06146", "1810.04805", "2101.00190"],
+    "gt_answer": "ULMFiT represents full fine-tuning with careful regularization: it updates all parameters of an LSTM but uses discriminative learning rates and gradual unfreezing to preserve pre-trained knowledge. BERT also performs full fine-tuning but on a Transformer, relying on its bidirectional representations rather than special fine-tuning schedules. Prefix-Tuning represents the frozen-model paradigm: it never updates the pretrained parameters at all, instead prepending task-specific trainable vectors and achieving comparable performance while training only 0.1% of the parameters.",
+    "gt_passages": [
+      {
+        "paper_id": "1801.06146",
+        "passage": "We propose discriminative fine-tuning , slanted triangular learning rates , and gradual unfreezing , novel techniques to retain previous knowledge and avoid catastrophic forgetting during fine-tuning."
+      },
+      {
+        "paper_id": "1810.04805",
+        "passage": "For each task, we simply plug in the taskspecific inputs and outputs into BERT and finetune all the parameters end-to-end."
+      },
+      {
+        "paper_id": "2101.00190",
+        "passage": "We find that by learning only 0.1% of the parameters, prefix-tuning obtains comparable performance in the full data setting, outperforms fine-tuning in low-data settings, and extrapolates better to examples with topics unseen during training."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_008",
+    "query": "What do FLAN, LoRA, and the learning dynamics paper reveal together about how fine-tuning shapes a model's probability distribution over responses?",
+    "query_type": "Synthesis",
+    "paper_ids": ["2109.01652", "2106.09685", "2407.10490"],
+    "gt_answer": "FLAN shows that instruction fine-tuning can dramatically shift a model's output distribution toward following natural language task specifications, enabling zero-shot generalization. LoRA shows that these distribution shifts can be captured by low-rank updates to existing weight matrices, implying the fine-tuning delta is intrinsically low-dimensional. The learning dynamics paper provides the mechanistic view: during SFT, learning a preferred response 'pulls up' semantically similar responses and 'pushes down' unrelated ones; during DPO, a 'squeezing effect' from negative gradients on unlikely responses redistributes probability mass toward the model's most confident outputs, potentially causing degeneration.",
+    "gt_passages": [
+      {
+        "paper_id": "2109.01652",
+        "passage": "FLAN substantially improves the performance of its unmodified counterpart and surpasses zero-shot 175B GPT-3 on 20 of 25 datasets that we evaluate."
+      },
+      {
+        "paper_id": "2106.09685",
+        "passage": "We hypothesize that the change in weights during model adaptation also has a low 'intrinsic rank', leading to our proposed Lo wR ank A daptation (LoRA) approach."
+      },
+      {
+        "paper_id": "2407.10490",
+        "passage": "Guarantee: the confidence of y -u , i.e., π θ t +1 ( y -u ) will decrease. Guarantee: the decreased probability mass is largely 'squeezed' into the output which was most confident before the update: if y ∗ = argmax i ∈ [ V ] \\ { y -u } π θ t ( y = i ) , then π θ t +1 ( y = y ∗ ) will increase."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_009",
+    "query": "Do ULMFiT and BERT agree or disagree on the importance of fine-tuning all model layers versus freezing some layers during downstream task adaptation?",
+    "query_type": "Contradiction",
+    "paper_ids": ["1801.06146", "1810.04805"],
+    "gt_answer": "The two papers take somewhat different positions. ULMFiT argues strongly against fine-tuning all layers simultaneously, showing that gradual unfreezing (progressively unfreezing from last to first layer) outperforms fine-tuning the full model at once, which causes catastrophic forgetting. BERT, by contrast, fine-tunes all parameters end-to-end simultaneously for each downstream task with minimal additional overhead, and achieves state-of-the-art results without any layer freezing strategy.",
+    "gt_passages": [
+      {
+        "paper_id": "1801.06146",
+        "passage": "Fine-tuning the target classifier is the most critical part of the transfer learning method. Overly aggressive fine-tuning will cause catastrophic forgetting, eliminating the benefit of the information captured through language modeling; too cautious fine-tuning will lead to slow convergence (and resultant overfitting)."
+      },
+      {
+        "paper_id": "1810.04805",
+        "passage": "For fine-tuning, the BERT model is first initialized with the pre-trained parameters, and all of the parameters are fine-tuned using labeled data from the downstream tasks. Each downstream task has separate fine-tuned models, even though they are initialized with the same pre-trained parameters."
+      }
+    ]
+  },
+  {
+    "query_id": "groupB_010",
+    "query": "Do Prefix-Tuning and LoRA agree on whether preserving pretrained model parameters improves generalization to unseen domains?",
+    "query_type": "Contradiction",
+    "paper_ids": ["2101.00190", "2106.09685"],
+    "gt_answer": "Prefix-Tuning explicitly claims that freezing pretrained parameters helps extrapolation to unseen topics, reporting that prefix-tuning outperforms fine-tuning on unseen news categories and table domains. LoRA, while also freezing pretrained weights, does not make the same generalization claim and instead focuses on matching or exceeding full fine-tuning performance at much lower parameter count; LoRA also notes that prefix-tuning is difficult to optimize and its performance changes non-monotonically with the number of trainable parameters, implicitly questioning the robustness of the prefix-based approach.",
+    "gt_passages": [
+      {
+        "paper_id": "2101.00190",
+        "passage": "Recall that fine-tuning updates all pretrained parameters, whereas prefix-tuning and adapter-tuning preserve them. Since the language models are pretrained on general purpose corpus, preserving the LM parameters might help generalization to domains unseen during training. In concordance with this intuition, we observe that both prefix-tuning and adapter-tuning have significant performance gain in extrapolation settings (§6.4); however, the reason for such gain is an open question."
+      },
+      {
+        "paper_id": "2106.09685",
+        "passage": "We observe that prefix tuning is difficult to optimize and that its performance changes non-monotonically in trainable parameters, confirming similar observations in the original paper. More fundamentally, reserving a part of the sequence length for adaptation necessarily reduces the sequence length available to process a downstream task, which we suspect makes tuning the prompt less performant compared to other methods."
+      }
+    ]
+  }
+]

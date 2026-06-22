@@ -1,0 +1,83 @@
+{
+  "config": "rag_winner_no_filter",
+  "paper_id": "2103.00020",
+  "supported": 13,
+  "contradicted": 0,
+  "unverifiable": 1,
+  "claim_count": 14,
+  "factuality": 0.93,
+  "hallucination_rate": 0.00,
+  "unverifiable_rate": 0.07,
+  "claims": [
+    {
+      "text": "CLIP stands for Contrastive Language-Image Pre-training.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper explicitly defines CLIP as 'Contrastive Language-Image Pre-training' in the introduction (Section 1)."
+    },
+    {
+      "text": "CLIP uses either a ResNet or a Vision Transformer (ViT) as the image encoder.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.4 states 'We consider two different architectures for the image encoder... ResNet-50... and Vision Transformer (ViT)'."
+    },
+    {
+      "text": "CLIP uses a Transformer as the text encoder.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.4 states 'The text encoder is a Transformer (Vaswani et al., 2017)' with a 63M-parameter 12-layer 512-wide model."
+    },
+    {
+      "text": "Given a batch of N (image, text) pairs, CLIP is trained to maximize the cosine similarity of the N correct pairs while minimizing the similarity of the N² - N incorrect pairings.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.3 states exactly: 'CLIP learns... to maximize the cosine similarity of... N real pairs... while minimizing the cosine similarity of... N²-N incorrect pairings'."
+    },
+    {
+      "text": "The authors used the Adam optimizer with a cosine learning rate schedule.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.5 states 'We use the Adam optimizer... and decay the learning rate using a cosine schedule'."
+    },
+    {
+      "text": "A learnable temperature parameter τ was used to scale the logits.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.3 and 2.5 both confirm τ is a learnable log-parameterized multiplicative scalar used to scale logits."
+    },
+    {
+      "text": "For the ViT-L/14 model, an additional epoch of training at a higher resolution (336px) was performed to boost performance.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.5 states 'For the ViT-L/14 we also pre-train at a higher 336 pixel resolution for one additional epoch to boost performance'."
+    },
+    {
+      "text": "The authors curated a new dataset called WIT (WebImageText), consisting of 400 million (image, text) pairs collected from the public internet.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.2 describes 'a new dataset of 400 million (image, text) pairs... We refer to this dataset as WIT for WebImageText'."
+    },
+    {
+      "text": "The WIT dataset was built using a list of 500,000 queries based on English Wikipedia.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.2 states 'we search for (image, text) pairs... whose text includes one of a set of 500,000 queries' with the base query list derived from English Wikipedia words."
+    },
+    {
+      "text": "The model was evaluated via zero-shot transfer and linear-probe representation learning across over 30 datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract states 'benchmarking on over 30 different existing computer vision datasets' and Section 3.2 confirms linear-probe evaluation."
+    },
+    {
+      "text": "CLIP matches the performance of fully supervised ResNet-50 on ImageNet in a zero-shot setting.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract and Table 1 confirm CLIP achieves 76.2% on ImageNet zero-shot, matching the original ResNet-50, without using any of the 1.28 million training examples."
+    },
+    {
+      "text": "CLIP only achieves 88% accuracy on the handwritten digits of MNIST, and an embarrassingly simple baseline of logistic regression on raw pixels outperforms zero-shot CLIP.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 6 explicitly states 'CLIP only achieves 88% accuracy on the handwritten digits of MNIST. An embarrassingly simple baseline of logistic regression on raw pixels outperforms zero-shot CLIP'."
+    },
+    {
+      "text": "Zero-shot CLIP outperforms a fully supervised linear classifier fitted on ResNet-50 features on 16 of 27 datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "Figure 5 caption states 'a zero-shot CLIP classifier outperforms a fully supervised linear classifier fitted on ResNet-50 features on 16 datasets, including ImageNet' across a 27 dataset eval suite."
+    },
+    {
+      "text": "The authors compared CLIP against human performance on the Oxford IIIT Pets dataset.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4 describes a human evaluation study on 3669 images from the Oxford IIT Pets dataset with 37 cat or dog breeds, comparing zero-shot, one-shot, and two-shot human performance against CLIP."
+    }
+  ]
+}

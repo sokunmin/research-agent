@@ -1,0 +1,184 @@
+[
+  {
+    "query_id": "groupA_001",
+    "query": "How does standard attention's memory complexity compare to FlashAttention's approach, and what is the core technique FlashAttention uses to achieve memory efficiency?",
+    "query_type": "Comparison",
+    "paper_ids": ["1706.03762", "2205.14135"],
+    "gt_answer": "Standard attention materializes the full N×N attention matrix in HBM, requiring O(N²) memory. FlashAttention avoids this by using tiling: it splits Q, K, V into blocks, loads them to fast on-chip SRAM, and computes attention incrementally without ever writing the full N×N matrix to HBM. This achieves exact attention with memory that grows linearly in sequence length, while also running faster due to reduced HBM accesses.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "As noted in Table 1, a self-attention layer connects all positions with a constant number of sequentially executed operations, whereas a recurrent layer requires O ( n ) sequential operations. In terms of computational complexity, self-attention layers are faster than recurrent layers when the sequence length n is smaller than the representation dimensionality d , which is most often the case with sentence representations used by state-of-the-art models in machine translations, such as word-piece [38] and byte-pair [31] representations."
+      },
+      {
+        "paper_id": "2205.14135",
+        "passage": "Standard attention implementations materialize the matrices S and P to HBM, which takes 𝑂 ' 𝑁 2 ' memory. Often 𝑁 𝑑 (e.g., for GPT2, 𝑁 = 1024 and 𝑑 = 64 ). We describe the standard attention implementation in Algorithm 0. As some or most of the operations are memory-bound (e.g., softmax), the large number of memory accesses translates to slow wall-clock time."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_002",
+    "query": "How does ViT's approach to positional encoding differ from the original Transformer's sinusoidal positional encoding?",
+    "query_type": "Comparison",
+    "paper_ids": ["1706.03762", "2010.11929"],
+    "gt_answer": "The original Transformer uses fixed sinusoidal positional encodings based on sine and cosine functions of different frequencies, which can potentially extrapolate to longer sequences than seen during training. ViT instead uses standard learnable 1D position embeddings added to patch embeddings, finding no significant performance gains from more advanced 2D-aware position embeddings, as the spatial dimensions at patch level are much smaller and easier to learn from.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "In this work, we use sine and cosine functions of different frequencies:\n\nPE ( pos , 2 i ) = sin ( pos / 10000 2 i / d model ) \nPE ( pos , 2 i +1 ) = cos ( pos / 10000 2 i / d model )\n\nwhere pos is the position and i is the dimension. That is, each dimension of the positional encoding corresponds to a sinusoid. The wavelengths form a geometric progression from 2 π to 10000 · 2 π . We chose this function because we hypothesized it would allow the model to easily learn to attend by relative positions, since for any fixed offset k , PE pos + k can be represented as a linear function of PE pos ."
+      },
+      {
+        "paper_id": "2010.11929",
+        "passage": "Position embeddings are added to the patch embeddings to retain positional information. We use standard learnable 1D position embeddings, since we have not observed significant performance gains from using more advanced 2D-aware position embeddings (Appendix D.4). The resulting sequence of embedding vectors serves as input to the encoder."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_003",
+    "query": "How does Swin Transformer V2's approach to attention differ from the original scaled dot-product attention in the Transformer, and why was the change necessary?",
+    "query_type": "Comparison",
+    "paper_ids": ["1706.03762", "2111.09883"],
+    "gt_answer": "The original Transformer uses scaled dot-product attention where similarity is computed as QKᵀ/√d. Swin Transformer V2 replaces this with scaled cosine attention, computing similarity via a cosine function divided by a learnable scalar τ. This change was needed because at large model scales the dot-product attention caused attention maps to be dominated by a few pixel pairs, leading to training instability, whereas cosine attention is naturally normalized and produces milder attention values.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "We call our particular attention \"Scaled Dot-Product Attention\" (Figure 2). The input consists of queries and keys of dimension d k , and values of dimension d v . We compute the dot products of the query with all keys, divide each by √ d k , and apply a softmax function to obtain the weights on the values."
+      },
+      {
+        "paper_id": "2111.09883",
+        "passage": "We find that when this approach is used in large visual models, the learnt attention maps of some blocks and heads are frequently dominated by a few pixel pairs, especially in the res-post-norm configuration. To ease this issue, we propose a scaled cosine attention approach that computes the attention logit of a pixel pair i and j by a scaled cosine function:\n\nSim ( q i , k j ) = cos ( q i , k j ) / τ + B ij ,\n\nwhere B ij is the relative position bias between pixel i and j ; τ is a learnable scalar, non-shared across heads and layers. τ is set larger than 0.01. The cosine function is naturally normalized, and thus can have milder attention values."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_004",
+    "query": "How did vision Transformer architectures evolve in their strategies for adapting the Transformer to images, from ViT through Swin Transformer V2 and MAE?",
+    "query_type": "Synthesis",
+    "paper_ids": ["2010.11929", "2111.06377", "2111.09883"],
+    "gt_answer": "ViT established the foundational approach of splitting images into fixed-size patches and treating them as token sequences, using learnable 1D position embeddings, but required large-scale supervised pretraining to overcome the lack of CNN inductive biases. Swin Transformer V2 introduced hierarchical windowed attention with relative position biases and addressed scaling instability via residual post-normalization and cosine attention, enabling 3-billion-parameter models. MAE extended the vision Transformer paradigm to self-supervised learning by masking 75% of patches and reconstructing pixels with an asymmetric encoder-decoder, achieving efficient pretraining without large labeled datasets.",
+    "gt_passages": [
+      {
+        "paper_id": "2010.11929",
+        "passage": "We note that Vision Transformer has much less image-specific inductive bias than CNNs. In CNNs, locality, two-dimensional neighborhood structure, and translation equivariance are baked into each layer throughout the whole model. In ViT, only MLP layers are local and translationally equivariant, while the self-attention layers are global."
+      },
+      {
+        "paper_id": "2111.09883",
+        "passage": "Three main techniques are proposed: 1) a residual-post-norm method combined with cosine attention to improve training stability; 2) A log-spaced continuous position bias method to effectively transfer models pre-trained using low-resolution images to downstream tasks with high-resolution inputs; 3) A self-supervised pretraining method, SimMIM, to reduce the needs of vast labeled images. Through these techniques, this paper successfully trained a 3 billion-parameter Swin Transformer V2 model, which is the largest dense vision model to date, and makes it capable of training with images of up to 1,536 × 1,536 resolution."
+      },
+      {
+        "paper_id": "2111.06377",
+        "passage": "Our MAE approach is simple: we mask random patches of the input image and reconstruct the missing pixels. It is based on two core designs. First, we develop an asymmetric encoder-decoder architecture, with an encoder that operates only on the visible subset of patches (without mask tokens), along with a lightweight decoder that reconstructs the original image from the latent representation and mask tokens. Second, we find that masking a high proportion of the input image, e.g ., 75%, yields a nontrivial and meaningful self-supervisory task."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_005",
+    "query": "What shared design principles and what divergent choices appear across the Transformer, ViT, and MAE when handling positional information and input tokenization?",
+    "query_type": "Synthesis",
+    "paper_ids": ["1706.03762", "2010.11929", "2111.06377"],
+    "gt_answer": "All three works inject positional information into token embeddings before feeding them to Transformer blocks, but the implementations differ. The original Transformer uses fixed sinusoidal encodings for word tokens. ViT adopts learnable 1D position embeddings added to flattened 2D image patches, treating patches as NLP tokens. MAE follows ViT's patch-based tokenization and adds sinusoidal positional embeddings to both encoder and decoder inputs, but crucially omits mask tokens from the encoder entirely to ensure it always sees real patches, reducing computation by 3× or more.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "Since our model contains no recurrence and no convolution, in order for the model to make use of the order of the sequence, we must inject some information about the relative or absolute position of the tokens in the sequence. To this end, we add \"positional encodings\" to the input embeddings at the bottoms of the encoder and decoder stacks. The positional encodings have the same dimension d model as the embeddings, so that the two can be summed."
+      },
+      {
+        "paper_id": "2010.11929",
+        "passage": "To handle 2D images, we reshape the image x ∈ R H × W × C into a sequence of flattened 2D patches x p ∈ R N × ( P 2 · C ) , where ( H,W ) is the resolution of the original image, C is the number of channels, ( P, P ) is the resolution of each image patch, and N = HW/P 2 is the resulting number of patches, which also serves as the effective input sequence length for the Transformer."
+      },
+      {
+        "paper_id": "2111.06377",
+        "passage": "Our encoder is a ViT [16] but applied only on visible, unmasked patches . Just as in a standard ViT, our encoder embeds patches by a linear projection with added positional embeddings, and then processes the resulting set via a series of Transformer blocks. However, our encoder only operates on a small subset ( e.g ., 25%) of the full set. Masked patches are removed; no mask tokens are used."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_006",
+    "query": "How did the understanding of attention's computational bottleneck evolve from the original Transformer to FlashAttention and Swin Transformer V2, and what solutions did each propose?",
+    "query_type": "Synthesis",
+    "paper_ids": ["1706.03762", "2205.14135", "2111.09883"],
+    "gt_answer": "The original Transformer identified self-attention's O(N²·d) per-layer computational complexity as a bottleneck compared to recurrent layers, but viewed it as acceptable because it enables full parallelism and constant-length dependency paths. FlashAttention later reframed the bottleneck as memory IO rather than FLOPs, showing that materializing the N×N matrix to HBM caused slow wall-clock time, and proposed tiling to reduce HBM accesses. Swin Transformer V2 addressed a different scaling challenge: at 3-billion-parameter scale, standard self-attention caused training instability from large activation amplitudes, solved by residual post-normalization and sequential self-attention computation to reduce GPU memory.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "One is the total computational complexity per layer. Another is the amount of computation that can be parallelized, as measured by the minimum number of sequential operations required."
+      },
+      {
+        "paper_id": "2205.14135",
+        "passage": "We argue that a missing principle is making attention algorithms IO-aware [1]-that is, carefully accounting for reads and writes to different levels of fast and slow memory (e.g., between fast GPU on-chip SRAM and relatively slow GPU high bandwidth memory, or HBM [45], Figure 1 left). On modern GPUs, compute speed has out-paced memory speed [61, 62, 63], and most operations in Transformers are bottlenecked by memory accesses [43]."
+      },
+      {
+        "paper_id": "2111.09883",
+        "passage": "As shown in Figure 2, when we scale up the original Swin Transformer model from small size to large size, the activation values at deeper layers increase dramatically. The discrepancy between layers with the highest and the lowest amplitudes has reached an extreme value of 10 4 . When we scale it up further to a huge size (658 million parameters), it cannot complete the training, as shown in Figure 3."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_007",
+    "query": "How did the role of masking evolve as a technique in Transformer-based vision models, from the original Transformer's use in decoding to MAE's self-supervised pretraining strategy?",
+    "query_type": "Timeline",
+    "paper_ids": ["1706.03762", "2111.06377"],
+    "gt_answer": "In the original Transformer (2017), masking served a narrow autoregressive purpose in the decoder: illegal future positions were masked out (set to -∞) in the softmax to prevent leftward information flow and preserve the autoregressive property. By 2021, MAE repurposed masking into the primary pretraining objective for vision: randomly removing 75% of image patches created a challenging self-supervisory task that forces the model to learn holistic representations, driving improvements without any labeled data.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "We also modify the self-attention sub-layer in the decoder stack to prevent positions from attending to subsequent positions. This masking, combined with fact that the output embeddings are offset by one position, ensures that the predictions for position i can depend only on the known outputs at positions less than i ."
+      },
+      {
+        "paper_id": "2111.06377",
+        "passage": "Random sampling with a high masking ratio ( i.e ., the ratio of removed patches) largely eliminates redundancy, thus creating a task that cannot be easily solved by extrapolation from visible neighboring patches (see Figures 2 - 4). The uniform distribution prevents a potential center bias ( i.e ., more masked patches near the image center). Finally, the highly sparse input creates an opportunity for designing an efficient encoder, introduced next."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_008",
+    "query": "How did the approach to handling long sequences in Transformers progress from the original architecture through FlashAttention?",
+    "query_type": "Timeline",
+    "paper_ids": ["1706.03762", "2205.14135"],
+    "gt_answer": "The original Transformer (2017) acknowledged that self-attention's O(N²) complexity becomes problematic for very long sequences and proposed restricting attention to a local neighborhood of size r as a potential future mitigation. FlashAttention (2022) addressed this directly without approximation: using tiling and recomputation to avoid materializing the N×N attention matrix, it achieved exact attention with linear memory footprint and enabled new capabilities like solving Path-X (sequence length 16K) which no prior Transformer had achieved.",
+    "gt_passages": [
+      {
+        "paper_id": "1706.03762",
+        "passage": "To improve computational performance for tasks involving very long sequences, self-attention could be restricted to considering only a neighborhood of size r in the input sequence centered around the respective output position. This would increase the maximum path length to O ( n/r ) . We plan to investigate this approach further in future work."
+      },
+      {
+        "paper_id": "2205.14135",
+        "passage": "FlashAttention enables the first Transformer that can achieve better-than-chance performance on the Path-X [80] challenge, solely from using a longer sequence length (16K). Block-sparse FlashAttention enables a Transformer to scale to even longer sequences (64K), resulting in the first model that can achieve better-than-chance performance on Path-256."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_009",
+    "query": "Do ViT and MAE agree on the optimal masking ratio for self-supervised pretraining of vision Transformers?",
+    "query_type": "Contradiction",
+    "paper_ids": ["2010.11929", "2111.06377"],
+    "gt_answer": "ViT's preliminary exploration of masked patch prediction used a 50% corruption rate but found results slightly worse than alternatives and did not explore higher ratios. MAE contradicts this by showing that a much higher masking ratio of 75% is optimal, yielding the best accuracy for both fine-tuning and linear probing. MAE explicitly states that its masking ratios are much higher than those used in related works in computer vision (20% to 50%), and that this high ratio is key to eliminating spatial redundancy and creating a meaningful pretext task.",
+    "gt_passages": [
+      {
+        "paper_id": "2010.11929",
+        "passage": "We employ the masked patch prediction objective for preliminary self-supervision experiments. To do so we corrupt 50% of patch embeddings by either replacing their embeddings with a learnable [mask] embedding (80%), a random other patch embedding (10%) or just keeping them as is (10%). This setup is very similar to the one used for language by Devlin et al. (2019)."
+      },
+      {
+        "paper_id": "2111.06377",
+        "passage": "The optimal ratios are surprisingly high. The ratio of 75% is good for both linear probing and fine-tuning. This behavior is in contrast with BERT [14], whose typical masking ratio is 15%. Our masking ratios are also much higher than those in related works [6, 16, 2] in computer vision (20% to 50%)."
+      }
+    ]
+  },
+  {
+    "query_id": "groupA_010",
+    "query": "Do ViT and Swin Transformer V2 agree on whether large vision models require huge labeled datasets for pretraining?",
+    "query_type": "Contradiction",
+    "paper_ids": ["2010.11929", "2111.09883"],
+    "gt_answer": "ViT's results suggest that large labeled datasets are necessary: ViT-Large underperforms ResNets when trained on ImageNet alone (1.3M images) and only achieves strong performance when pretrained on ImageNet-21k (14M) or JFT-300M (303M images), leading to the conclusion that 'large scale training trumps inductive bias'. Swin Transformer V2 challenges this requirement by incorporating SimMIM self-supervised pretraining, achieving state-of-the-art results with only 70 million labeled images — 40× fewer than the JFT-3B dataset used by comparable large vision models.",
+    "gt_passages": [
+      {
+        "paper_id": "2010.11929",
+        "passage": "However, the picture changes if the models are trained on larger datasets (14M-300M images). We find that large scale training trumps inductive bias. Our Vision Transformer (ViT) attains excellent results when pre-trained at sufficient scale and transferred to tasks with fewer datapoints. When pre-trained on the public ImageNet-21k dataset or the in-house JFT-300M dataset, ViT approaches or beats state of the art on multiple image recognition benchmarks."
+      },
+      {
+        "paper_id": "2111.09883",
+        "passage": "In this work, we exploit a self-supervised pre-training method, SimMIM [72], to alleviate the demands on labelled data. By this approach, we successfully trained a powerful Swin Transformer model of 3 billion parameters which achieves state-of-the-art (SOTA) on 4 representative visual benchmarks, by using only 70 million labelled images (1/40 of that in JFT-3B)."
+      }
+    ]
+  }
+]

@@ -1,0 +1,83 @@
+{
+  "config": "vlm",
+  "paper_id": "1801.06146",
+  "supported": 11,
+  "contradicted": 2,
+  "unverifiable": 1,
+  "claim_count": 14,
+  "factuality": 0.79,
+  "hallucination_rate": 0.14,
+  "unverifiable_rate": 0.07,
+  "claims": [
+    {
+      "text": "An AWD-LSTM language model is trained on WikiText-103 to learn general language representations.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'we pretrain the language model on Wikitext-103 (Merity et al., 2017b)' and 'we use the state-of-the-art language model AWD-LSTM (Merity et al., 2017a)'."
+    },
+    {
+      "text": "ULMFiT consists of three primary stages: general-domain LM pretraining, target task LM fine-tuning, and target task classifier fine-tuning.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper explicitly lists three steps in Section 3: '(a) General-domain LM pretraining, (b) target task LM fine-tuning, and (c) target task classifier fine-tuning'."
+    },
+    {
+      "text": "Discriminative fine-tuning applies different learning rates to different layers, as different layers capture different types of information.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'discriminative fine-tuning allows us to tune each layer with different learning rates' and 'different layers capture different types of information'."
+    },
+    {
+      "text": "STLR is a learning rate schedule that linearly increases and then linearly decays.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper defines STLR as one that 'first linearly increases the learning rate and then linearly decays it'."
+    },
+    {
+      "text": "Gradual unfreezing starts from the last layer and progressively unfreezes lower layers to prevent catastrophic forgetting.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'we propose to gradually unfreeze the model starting from the last layer... We first unfreeze the last layer and fine-tune all unfrozen layers for one epoch. We then unfreeze the next lower frozen layer'."
+    },
+    {
+      "text": "The study evaluates the model on six widely-studied text classification benchmarks.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'We evaluate our method on six widely-studied datasets' and Table 1 lists six datasets."
+    },
+    {
+      "text": "Benchmarks include IMDb, Yelp-bi, Yelp-full (sentiment analysis), TREC-6 (question classification), AG News and DBpedia (topic classification).",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 in the paper lists all six datasets: TREC-6, IMDb, Yelp-bi, Yelp-full, AG, and DBpedia, with their respective task types."
+    },
+    {
+      "text": "TREC-6 is the six-class version of the TREC dataset.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'We use the six-class version of the small TREC dataset' and Table 1 shows TREC-6 has 6 classes."
+    },
+    {
+      "text": "Model performance is assessed using test error rates (%), where a lower value indicates better performance.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'For consistency, we report all results as error rates (lower is better)'."
+    },
+    {
+      "text": "ULMFiT is compared against CoVe and CNN baselines.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper compares against 'CoVe (McCann et al., 2017), a state-of-the-art transfer learning method' and CNN-based models like 'Char-level CNN (Zhang et al., 2015)' and 'DPCNN (Johnson and Zhang, 2017)'."
+    },
+    {
+      "text": "The paper tests 'low-shot' scenarios measuring performance when only 100 labeled examples are available.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'at 100 labeled examples, we match the performance of training from scratch with 50x and 100x more data' and Figure 3 shows experiments with 100 labeled examples."
+    },
+    {
+      "text": "ULMFiT achieves competitive performance with 100x fewer labeled examples than training from scratch.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'with only 100 labeled examples, it matches the performance of training from scratch on 100x more data' (semi-supervised setting on IMDb and AG)."
+    },
+    {
+      "text": "The BPTT technique for text classification is abbreviated as 'BPTB3C' in the summary.",
+      "verdict": "CONTRADICTED",
+      "reason": "The paper names this technique 'BPT3C' (BPTT for Text Classification), not 'BPTB3C' as written in the summary — an extra 'B' is inserted incorrectly."
+    },
+    {
+      "text": "The paper is authored by 'Jeremy Howard et al.' implying a single primary author with additional contributors.",
+      "verdict": "CONTRADICTED",
+      "reason": "The paper explicitly states 'Equal contribution' between Jeremy Howard and Sebastian Ruder, making them co-first authors, not a primary-with-others structure."
+    }
+  ]
+}

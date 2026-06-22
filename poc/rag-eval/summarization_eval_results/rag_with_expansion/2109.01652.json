@@ -1,0 +1,88 @@
+{
+  "config": "rag_with_expansion",
+  "paper_id": "2109.01652",
+  "supported": 14,
+  "contradicted": 0,
+  "unverifiable": 1,
+  "claim_count": 15,
+  "factuality": 0.93,
+  "hallucination_rate": 0.00,
+  "unverifiable_rate": 0.07,
+  "claims": [
+    {
+      "text": "FLAN is an instruction-tuned version of the LaMDA-PT model",
+      "verdict": "SUPPORTED",
+      "reason": "Paper explicitly states 'FLAN is the instruction-tuned version of LaMDA-PT' in Section 2.4."
+    },
+    {
+      "text": "The authors aggregated 62 publicly available text datasets",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states 'We aggregate 62 text datasets that are publicly available on Tensorflow Datasets' in Section 2.1."
+    },
+    {
+      "text": "The 62 datasets were categorized into 12 task clusters",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states 'each dataset is categorized into one of twelve task clusters' in Section 2.1."
+    },
+    {
+      "text": "For each dataset, ten unique templates were manually composed, including some that 'turn the task around'",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states 'we manually compose ten unique templates' and 'we also include up to three templates that turned the task around' in Section 2.1."
+    },
+    {
+      "text": "LaMDA-PT is a 137B parameter decoder-only transformer",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states 'LaMDA-PT, a dense left-to-right, decoder-only transformer language model of 137B parameters' in Section 2.4."
+    },
+    {
+      "text": "Training examples per dataset were capped at 30k",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states 'we limit the number of training examples per dataset to 30k' in Section 2.4."
+    },
+    {
+      "text": "The model was finetuned for 30k gradient steps with a batch size of 8,192 tokens using the Adafactor Optimizer with learning rate 3e-5",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states exactly this in Section 2.4: 'We finetune all models for 30k gradient steps with a batch size of 8,192 tokens using the Adafactor Optimizer with a learning rate of 3e-5'."
+    },
+    {
+      "text": "Packing was used to combine multiple examples into single sequences of 1024 input and 256 target tokens",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states 'The input and target sequence lengths used in finetuning are 1024 and 256, respectively. We use packing to combine multiple training examples into a single sequence' in Section 2.4."
+    },
+    {
+      "text": "Datasets were sourced from Tensorflow Datasets (TFDS), covering both NLU and NLG tasks",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states '62 text datasets that are publicly available on Tensorflow Datasets, including both language understanding and language generation tasks' in Section 2.1."
+    },
+    {
+      "text": "FLAN surpassed GPT-3 on the majority of evaluated tasks in zero-shot settings",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states FLAN 'surpasses zero-shot 175B GPT-3 on 20 of 25 datasets that we evaluate' in the Abstract."
+    },
+    {
+      "text": "The benefits of instruction tuning emerge primarily at sufficient model scales",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states 'performance improvements from instruction tuning emerge only with sufficient model scale' in Section 6 Discussion."
+    },
+    {
+      "text": "The SuperGLUE development set was used to measure prompt tuning improvements",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states prompt tuning experiments use SuperGLUE tasks and 'Performance shown is the average on the SuperGLUE dev set' in Section 4.5."
+    },
+    {
+      "text": "The authors performed a data contamination analysis to ensure overlap with pretraining data did not substantially inflate results",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states 'in post-hoc analysis (Appendix C) we do not find any evidence that data overlap substantially impacted the results' in Section 6."
+    },
+    {
+      "text": "FLAN even outperforms few-shot GPT-3 on ANLI, RTE, BoolQ, AI2-ARC, OpenbookQA, and StoryCloze",
+      "verdict": "SUPPORTED",
+      "reason": "Paper's Abstract explicitly states FLAN 'outperforms few-shot GPT-3 by a large margin on ANLI, RTE, BoolQ, AI2-ARC, OpenbookQA, and StoryCloze'."
+    },
+    {
+      "text": "The paper was published in 2022",
+      "verdict": "UNVERIFIABLE",
+      "reason": "The paper text does not state a publication year or conference venue; the arXiv submission date (September 2021) is implied by the paper ID, and while the paper is known to have appeared at ICLR 2022, this cannot be confirmed from the paper text alone."
+    }
+  ]
+}

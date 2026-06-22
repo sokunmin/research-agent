@@ -1,0 +1,78 @@
+{
+  "config": "vlm",
+  "paper_id": "2109.01652",
+  "supported": 12,
+  "contradicted": 1,
+  "unverifiable": 0,
+  "claim_count": 13,
+  "factuality": 0.92,
+  "hallucination_rate": 0.08,
+  "unverifiable_rate": 0.00,
+  "claims": [
+    {
+      "text": "62 existing NLP datasets were converted into an instructional format",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'We aggregate 62 text datasets that are publicly available on Tensorflow Datasets' (Section 2.1)."
+    },
+    {
+      "text": "Datasets were grouped into 12 task clusters",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'each dataset is categorized into one of twelve task clusters' (Section 2.1)."
+    },
+    {
+      "text": "Up to 10 unique templates were created per dataset",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'we manually compose ten unique templates that use natural language instructions to describe the task for that dataset' (Section 2.1)."
+    },
+    {
+      "text": "A 137B parameter pretrained language model (LaMDA-PT) was used as the base model",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'we use LaMDA-PT, a dense left-to-right, decoder-only transformer language model of 137B parameters' (Section 2.4)."
+    },
+    {
+      "text": "FLAN surpasses zero-shot GPT-3 on 20 out of 25 evaluated datasets",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract and Section 3 both state: 'zero-shot FLAN outperforms zero-shot GPT-3 on 20 of 25 datasets that we evaluate'."
+    },
+    {
+      "text": "Model scale ablation tested models of size 422M, 2B, 8B, 68B, and 137B parameters",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.2 states: 'we evaluate the effect of instruction tuning on models of size 422M, 2B, 8B, 68B, and 137B parameters'."
+    },
+    {
+      "text": "FLAN was compared against baselines including LaMDA-PT, GLaM, and 175B GPT-3",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3 explicitly compares against 'GPT-3 175B (Brown et al., 2020) and GLaM 64B/64E (Du et al., 2021)' in addition to LaMDA-PT."
+    },
+    {
+      "text": "Increasing the number of templates per dataset had a negligible effect on performance",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix B.1 states: 'Using more templates per dataset, however, had a comparatively negligible effect on performance'."
+    },
+    {
+      "text": "Instruction tuning is less effective for language modeling tasks such as commonsense reasoning and coreference resolution",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3 states: 'instruction tuning is less effective on tasks directly formulated as language modeling, where instructions would be largely redundant (e.g., commonsense reasoning and coreference resolution tasks)'."
+    },
+    {
+      "text": "FLAN outperforms few-shot GPT-3 by a large margin on ANLI, RTE, BoolQ, AI2-ARC, OpenbookQA, and StoryCloze",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract explicitly states: 'FLAN even outperforms few-shot GPT-3 by a large margin on ANLI, RTE, BoolQ, AI2-ARC, OpenbookQA, and StoryCloze'."
+    },
+    {
+      "text": "Instruction tuning uses less than 2% of the pretraining steps",
+      "verdict": "SUPPORTED",
+      "reason": "The Environmental Considerations section states: 'The additional instruction tuning gradient-steps for finetuning FLAN is less than 2% of the number of pretraining steps'."
+    },
+    {
+      "text": "TriviaQA is categorized as a Reading Comprehension dataset in this study",
+      "verdict": "CONTRADICTED",
+      "reason": "The paper categorizes TriviaQA under 'Closed-book QA' (Section 3, Figure 5, and Table 2 header 'CLOSED-BOOK QA'), not Reading Comprehension; the summary incorrectly lists it under Reading Comprehension."
+    },
+    {
+      "text": "The authors performed n-gram matching to create 'clean' versions of datasets to mitigate data contamination from the pretraining corpus",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix C explicitly describes this procedure: 'for each benchmark, produces a clean version that removes all potentially leaked examples, defined as examples for which any n-gram (n varies per dataset but is roughly 13) overlapped with anything in the pretraining corpus'."
+    }
+  ]
+}

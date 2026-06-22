@@ -1,0 +1,73 @@
+{
+  "config": "vlm",
+  "paper_id": "2103.00020",
+  "supported": 9,
+  "contradicted": 2,
+  "unverifiable": 1,
+  "claim_count": 12,
+  "factuality": 0.75,
+  "hallucination_rate": 0.17,
+  "unverifiable_rate": 0.08,
+  "claims": [
+    {
+      "text": "CLIP was pre-trained on a dataset of 400 million (image, text) pairs sourced from the internet (including WebText).",
+      "verdict": "CONTRADICTED",
+      "reason": "The paper states 400 million pairs were collected from the internet and named WIT (WebImageText), noting it has 'similar total word count as the WebText dataset used to train GPT-2' — WebText is only a size comparison reference, not a source of WIT data."
+    },
+    {
+      "text": "CLIP consists of an Image Encoder (using ResNet or Vision Transformer architectures) and a Text Encoder (a Transformer).",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.4 explicitly states CLIP uses ResNet-50 or ViT as image encoders, and a Transformer (Vaswani et al., 2017) as the text encoder."
+    },
+    {
+      "text": "Both encoders project inputs into a shared multi-modal embedding space via linear projection maps.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.3 states 'we instead use only a linear projection to map from each encoder's representation to the multi-modal embedding space.'"
+    },
+    {
+      "text": "For evaluation, the model uses prompt engineering where class names are wrapped in natural language descriptions such as 'a photo of a [class]'.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.1.4 states 'we found that using the prompt template A photo of a {label}. to be a good default' for zero-shot evaluation."
+    },
+    {
+      "text": "The model was pre-trained on a custom-curated dataset of 400 million (image, text) pairs.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract and Section 2.2 both state the dataset contains 400 million (image, text) pairs collected from the internet."
+    },
+    {
+      "text": "For evaluation, the authors used over 30 diverse datasets, including ImageNet, CIFAR-10/100, Pascal VOC, Stanford Cars, Food-101, EuroSAT, and Hateful Memes.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract states benchmarking was performed on 'over 30 different existing computer vision datasets'; Section 3.2 and Table 10 confirm evaluation on ImageNet, CIFAR-10/100, Stanford Cars, Food-101, EuroSAT, and Hateful Memes."
+    },
+    {
+      "text": "The authors used the FairFace dataset to analyze demographic biases.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 7.1 states 'We start by analyzing the performance of Zero-Shot CLIP on the face image dataset FairFace' to study demographic bias."
+    },
+    {
+      "text": "The authors used the CelebA and VIRAT datasets to test identity recognition and surveillance image performance.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 7.2 states CLIP was tested on the VIRAT dataset for surveillance images and on the CelebA dataset for zero-shot celebrity identification."
+    },
+    {
+      "text": "Linear probing uses the L-BFGS optimizer with L2 regularization.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix B states 'We train a logistic regression classifier using scikit-learn's L-BFGS implementation' and 'determine the L2 regularization strength lambda using a hyperparameter sweep.'"
+    },
+    {
+      "text": "The authors measured CLIP's robustness to distribution shifts using ImageNet-R, S, and A.",
+      "verdict": "CONTRADICTED",
+      "reason": "The paper uses ImageNet Rendition (ImageNet-R), ImageNet Sketch (not 'ImageNet-S'), and ImageNet Adversarial (ImageNet-A); the shorthand 'ImageNet-S' does not appear in the paper — the full name 'ImageNet Sketch' or 'ImageNet-Sketch' is used throughout."
+    },
+    {
+      "text": "Zero-shot CLIP matches the accuracy of the original ResNet-50 on ImageNet without using any of the 1.28 million training examples.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 and Section 3.1.3 confirm CLIP achieves 76.2% on ImageNet zero-shot, matching ResNet-50, 'despite using none of the 1.28 million crowd-labeled training examples available for this dataset.'"
+    },
+    {
+      "text": "The authors performed ablation studies on the YFCC100M dataset to analyze the impact of dataset scale and composition.",
+      "verdict": "UNVERIFIABLE",
+      "reason": "The paper does compare WIT vs. YFCC100M performance in Appendix D (Table 12) but frames it as a dataset comparison study rather than an ablation study on scale and composition; the paper does not characterize this as studying 'dataset scale' specifically."
+    }
+  ]
+}

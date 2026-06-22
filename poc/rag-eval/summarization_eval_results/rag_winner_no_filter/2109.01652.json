@@ -1,0 +1,83 @@
+{
+  "config": "rag_winner_no_filter",
+  "paper_id": "2109.01652",
+  "supported": 12,
+  "contradicted": 0,
+  "unverifiable": 2,
+  "claim_count": 14,
+  "factuality": 0.86,
+  "hallucination_rate": 0.00,
+  "unverifiable_rate": 0.14,
+  "claims": [
+    {
+      "text": "The FLAN model is based on a 137B parameter LaMDA-PT architecture.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'we use LaMDA-PT, a dense left-to-right, decoder-only transformer language model of 137B parameters' (Section 2.4)."
+    },
+    {
+      "text": "For each dataset, the authors manually created ten unique natural language templates to describe the task.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'for each dataset, we manually compose ten unique templates that use natural language instructions to describe the task for that dataset' (Section 2.1)."
+    },
+    {
+      "text": "Datasets were grouped into twelve task clusters (e.g., NLI, closed-book QA) to manage diversity and evaluate cross-task generalization.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'each dataset is categorized into one of twelve task clusters' (Section 2.1, Figure 3 caption)."
+    },
+    {
+      "text": "FLAN was finetuned on a mixture of over 60 NLP datasets, specifically 62 publicly available text datasets from TensorFlow Datasets (TFDS).",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'We aggregate 62 text datasets that are publicly available on Tensorflow Datasets' and abstract says 'over 60 NLP datasets' (Section 2.1)."
+    },
+    {
+      "text": "Training examples per dataset were capped at 30k to prevent any single dataset from dominating.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'we limit the number of training examples per dataset to 30k' (Section 2.4)."
+    },
+    {
+      "text": "The model was trained for 30k gradient steps with a batch size of 8,192 tokens.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'We finetune all models for 30k gradient steps with a batch size of 8,192 tokens' (Section 2.4)."
+    },
+    {
+      "text": "The model used the Adafactor Optimizer with a learning rate of 3e-5.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'using the Adafactor Optimizer (Shazeer & Stern, 2018) with a learning rate of 3e-5' (Section 2.4)."
+    },
+    {
+      "text": "The 62 datasets were publicly available from TensorFlow Datasets (TFDS), covering both NLU and NLG tasks.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'We aggregate 62 text datasets that are publicly available on Tensorflow Datasets, including both language understanding and language generation tasks' (Section 2.1)."
+    },
+    {
+      "text": "FLAN surpasses zero-shot GPT-3 on 20 of 25 evaluated datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper abstract and Section 3 both state: 'FLAN substantially improves the performance of its unmodified counterpart and surpasses zero-shot 175B GPT-3 on 20 of 25 datasets that we evaluate'."
+    },
+    {
+      "text": "Performance was measured using standard metrics such as Accuracy, F1, and BLEU.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 uses BLEU for translation tasks, Table 2 uses F1 for DROP/MultiRC/SQuAD and accuracy for classification tasks, confirming all three metric types."
+    },
+    {
+      "text": "Key findings indicate that model scale, the number of finetuning datasets, and the use of natural language instructions are critical for success.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper abstract states: 'number of finetuning datasets, model scale, and natural language instructions are key to the success of instruction tuning'."
+    },
+    {
+      "text": "Limitations include a 1024-token context window.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper Section 2.4 states input sequence length used in finetuning is 1024, and Appendix A notes summarization tasks cannot be evaluated because 'the mean input of most summarization datasets exceeds FLAN's input length of 1024 tokens'."
+    },
+    {
+      "text": "Limitations include occasional failures on very simple tasks.",
+      "verdict": "UNVERIFIABLE",
+      "reason": "The paper describes failures on language modeling-style tasks (commonsense reasoning and coreference resolution formatted as sentence completion), but does not characterize these as 'very simple tasks'; the framing 'very simple' does not appear in the paper."
+    },
+    {
+      "text": "The pretraining corpus consisted of 2.49T tokens from web documents (including computer code), dialog data, and Wikipedia, with about 10% non-English content.",
+      "verdict": "SUPPORTED",
+      "reason": "Paper states: 'pretrained on a collection of web documents (including those with computer code), dialog data, and Wikipedia, tokenized into 2.49T BPE tokens' and 'Around 10% of the pretraining data was non-English' (Section 2.4)."
+    }
+  ]
+}

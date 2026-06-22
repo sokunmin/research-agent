@@ -1,0 +1,78 @@
+{
+  "config": "vlm",
+  "paper_id": "2303.01469",
+  "supported": 10,
+  "contradicted": 2,
+  "unverifiable": 1,
+  "claim_count": 13,
+  "factuality": 0.77,
+  "hallucination_rate": 0.15,
+  "unverifiable_rate": 0.08,
+  "claims": [
+    {
+      "text": "The architecture utilizes NCSN++ for smaller datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix C (line 726) states: 'we use the NCSN++ architecture in Song et al. (2021) for all CIFAR-10 experiments'."
+    },
+    {
+      "text": "The architecture uses architectures from Dhariwal & Nichol (2021) for larger datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix C (line 726) states the paper 'take the corresponding network architectures from Dhariwal & Nichol (2021) when performing experiments on ImageNet 64x64, LSUN Bedroom 256x256 and LSUN Cat 256x256'."
+    },
+    {
+      "text": "Optimization is performed on Nvidia A100 GPUs using the Heun second-order ODE solver.",
+      "verdict": "SUPPORTED",
+      "reason": "Line 754 confirms 'We trained all models on a cluster of Nvidia A100 GPUs', and line 203 and Table 3 confirm the Heun ODE solver is used for CD experiments."
+    },
+    {
+      "text": "Consistency Models achieve state-of-the-art FID of 3.55 on CIFAR-10 for one-step generation.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract (line 7) explicitly states 'achieving the new state-of-the-art FID of 3.55 on CIFAR-10 ... for one-step generation'."
+    },
+    {
+      "text": "Consistency Models achieve FID of 6.20 on ImageNet 64x64 for one-step generation.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract (line 7) explicitly states 'achieving the new state-of-the-art FID of ... 6.20 on ImageNet 64x64 for one-step generation'."
+    },
+    {
+      "text": "Models were evaluated on LSUN Bedroom and LSUN Cat at 256x256 resolution.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 6 (line 197) explicitly lists 'LSUN Bedroom 256x256, and LSUN Cat 256x256' as evaluation datasets."
+    },
+    {
+      "text": "LPIPS is particularly effective for hyperparameter tuning.",
+      "verdict": "SUPPORTED",
+      "reason": "Line 205 states 'the optimal metric for CD is LPIPS, which outperforms both l1 and l2 by a large margin over all training iterations', and training uses LPIPS for hyperparameter selection."
+    },
+    {
+      "text": "In CT, the authors employ a progressive training schedule where the number of discretization steps (N) increases over time.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 5 (line 191) states 'we propose to progressively increase N during training according to a schedule function N(.)' for consistency training."
+    },
+    {
+      "text": "An Exponential Moving Average (EMA) update is applied to the model parameters to stabilize training.",
+      "verdict": "SUPPORTED",
+      "reason": "Lines 117 and 129 describe the EMA update rule (theta_minus = stopgrad(mu*theta_minus + (1-mu)*theta)) and note it 'can greatly stabilize the training process'."
+    },
+    {
+      "text": "CIFAR-10 is evaluated at 32x32 resolution and ImageNet at 64x64 resolution.",
+      "verdict": "SUPPORTED",
+      "reason": "Line 197 explicitly lists 'CIFAR-10 (Krizhevsky et al., 2009), ImageNet 64x64' as evaluation datasets, and CIFAR-10 is a well-known 32x32 dataset."
+    },
+    {
+      "text": "They achieve state-of-the-art results for one-step generation, surpassing GANs and other distillation methods.",
+      "verdict": "CONTRADICTED",
+      "reason": "Section 7 conclusion (line 305) explicitly states CT 'generate better samples than existing single-step generation models except for GANs', meaning CT does not surpass GANs; only CD surpasses distillation methods."
+    },
+    {
+      "text": "EDM remains the gold standard for maximum quality.",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 shows EDM achieves FID of 2.04 on CIFAR-10 with 35 NFE, outperforming all consistency model variants, and the conclusion (line 305) positions it as the benchmark reference with the highest multi-step quality."
+    },
+    {
+      "text": "A 'pseudo-objective' and 'stopgrad' operations are used in CD to enable gradient descent.",
+      "verdict": "UNVERIFIABLE",
+      "reason": "The paper describes the EMA-based target network and stopgrad operator (Eq. 8, line 127), but does not use the term 'pseudo-objective' for CD anywhere in the paper."
+    }
+  ]
+}

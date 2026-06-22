@@ -1,0 +1,73 @@
+{
+  "config": "rag_with_expansion",
+  "paper_id": "1801.06146",
+  "supported": 9,
+  "contradicted": 2,
+  "unverifiable": 1,
+  "claim_count": 12,
+  "factuality": 0.75,
+  "hallucination_rate": 0.17,
+  "unverifiable_rate": 0.08,
+  "claims": [
+    {
+      "text": "ULMFiT is evaluated on six text classification datasets: IMDb, Yelp-bi, Yelp-full (sentiment), TREC-6 (question), AG, and DBpedia (topic).",
+      "verdict": "SUPPORTED",
+      "reason": "Table 1 in the paper lists exactly these six datasets across the three task types described."
+    },
+    {
+      "text": "The three-stage pipeline consists of: (1) general-domain LM pretraining, (2) target task LM fine-tuning, and (3) target task classifier fine-tuning.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3 and Figure 1 explicitly describe these three stages (a, b, c) in the same order."
+    },
+    {
+      "text": "The classifier consists of two linear blocks with batch normalization and dropout.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.3 states 'we augment the pretrained language model with two additional linear blocks ... each block uses batch normalization and dropout'."
+    },
+    {
+      "text": "Discriminative fine-tuning uses lower learning rates for lower layers, typically with the formula η_{l-1} = η_l / 2.",
+      "verdict": "CONTRADICTED",
+      "reason": "The paper states the empirically found formula is η^{l-1} = η^l / 2.6, not divided by 2 as the summary claims."
+    },
+    {
+      "text": "Gradual unfreezing fine-tunes the classifier first, followed by gradual unfreezing of language model layers from top to bottom.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.3 describes gradual unfreezing starting from the last layer (top), progressively unfreezing lower layers, which is top-to-bottom order."
+    },
+    {
+      "text": "STLR linearly increases the learning rate quickly and then linearly decays it.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.2 states STLR 'first linearly increases the learning rate and then linearly decays it', matching the summary description."
+    },
+    {
+      "text": "Low-shot learning experiments use as few as 100 labeled examples combined with unlabeled data (50k for IMDb, 100k for AG).",
+      "verdict": "SUPPORTED",
+      "reason": "Section 5 states 'supervised ULMFiT with only 100 labeled examples' and specifies '50k for IMDb, 100k for AG' as unlabeled examples."
+    },
+    {
+      "text": "With only 100 labeled examples, ULMFiT can match the performance of models trained from scratch on 100x more data.",
+      "verdict": "CONTRADICTED",
+      "reason": "The paper states the 100x claim applies only in the semi-supervised setting on IMDb; on AG it is 100x more data, but on IMDb supervised it is only 10x more data. The abstract and Section 5 show this is dataset- and setting-dependent, not a universal 100x result."
+    },
+    {
+      "text": "ULMFiT reduces error rates by 18-24% on the majority of datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract and contributions section explicitly state 'an error reduction of 18-24% on the majority of datasets'."
+    },
+    {
+      "text": "The language model used is the AWD-LSTM (Merity et al., 2017a).",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3 states 'we use the state-of-the-art language model AWD-LSTM (Merity et al., 2017a)' for all experiments."
+    },
+    {
+      "text": "The authors mention future work including multi-task learning and applying the method to complex tasks like question answering.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 6 explicitly mentions 'multi-task learning fashion' and 'tasks with more complex interactions such as entailment or question answering' as future directions."
+    },
+    {
+      "text": "Concat pooling combines the last hidden state with max-pooled and mean-pooled representations of all hidden states to capture signal from long documents.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3.3 defines concat pooling as h_c = [h_T, maxpool(H), meanpool(H)] and states it addresses the problem of information loss in long documents."
+    }
+  ]
+}

@@ -1,0 +1,1581 @@
+[
+  {
+    "paper_id": "1608.06993",
+    "paper_title": "Densely Connected Convolutional Networks",
+    "query": "What is the top-1 single-crop error rate of DenseNet-201 on the ImageNet validation set?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "DenseNet-201 achieves a top-1 single-crop error rate of 22.58% on the ImageNet validation set.",
+    "gt_passages": [
+      "| DenseNet-201 | 22.58 / 21.46 | 6.34 / 5.54 |"
+    ]
+  },
+  {
+    "paper_id": "1608.06993",
+    "paper_title": "Densely Connected Convolutional Networks",
+    "query": "How does DenseNet use bottleneck layers and compression factor in DenseNet-BC to improve parameter efficiency?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "DenseNet uses bottleneck layers by introducing a 1×1 convolution before each 3×3 convolution (BN-ReLU-Conv(1×1)-BN-ReLU-Conv(3×3)), with each 1×1 convolution producing 4k feature-maps. For compression, if a dense block contains m feature-maps, the following transition layer generates floor(θm) output feature-maps, where θ=0.5 is the compression factor used in experiments. When both bottleneck and compression (θ<1) are used together, the model is called DenseNet-BC.",
+    "gt_passages": [
+      "We find this design especially effective for DenseNet and we refer to our network with such a bottleneck layer, i.e. , to the BN-ReLU-Conv(1 × 1)-BN-ReLU-Conv(3 × 3) version of H glyph[lscript] , as DenseNet-B. In our experiments, we let each 1 × 1 convolution produce 4 k feature-maps.",
+      "If a dense block contains m feature-maps, we let the following transition layer generate glyph[floorleft] θm glyph[floorright] output featuremaps, where 0 <θ ≤ 1 is referred to as the compression factor. When θ =1 , the number of feature-maps across transition layers remains unchanged. We refer the DenseNet with θ< 1 as DenseNet-C, and we set θ = 0 . 5 in our experiment. When both the bottleneck and transition layers with θ < 1 are used, we refer to our model as DenseNet-BC."
+    ]
+  },
+  {
+    "paper_id": "1608.06993",
+    "paper_title": "Densely Connected Convolutional Networks",
+    "query": "How does DenseNet improve information flow compared to traditional deep neural networks?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "DenseNet improves information flow by directly connecting every layer to all subsequent layers within the same dense block, so each layer receives feature maps from all preceding layers as input and passes its own feature maps to all later layers. Unlike ResNets which combine features by summation, DenseNet concatenates feature maps. This gives every layer direct access to gradients from the loss function and the original input signal, acting as implicit deep supervision, and ensures that early features remain accessible throughout the entire network without being washed out.",
+    "gt_passages": [
+      "To further improve the information flow between layers we propose a different connectivity pattern: we introduce direct connections from any layer to all subsequent layers. Figure 1 illustrates the layout of the resulting DenseNet schematically. Consequently, the glyph[lscript] th layer receives the feature-maps of all preceding layers, x 0 , . . . , x glyph[lscript] -1 , as input",
+      "Each layer has direct access to the gradients from the loss function and the original input signal, leading to an implicit deep supervision [20]. This helps training of deeper network architectures."
+    ]
+  },
+  {
+    "paper_id": "1608.06993",
+    "paper_title": "Densely Connected Convolutional Networks",
+    "query": "How many parameters does DenseNet-BC with L=100 and k=12 use, and how does its accuracy on CIFAR-10+ compare to the 1001-layer pre-activation ResNet which uses far more parameters?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "DenseNet-BC with L=100 and k=12 has 0.8M parameters and achieves 4.51% error on CIFAR-10+. The 1001-layer pre-activation ResNet has 10.2M parameters and achieves 4.62% error on CIFAR-10+. Therefore DenseNet-BC achieves comparable or slightly better accuracy while using roughly 90% fewer parameters (about 1/12th the parameter count).",
+    "gt_passages": [
+      "DenseNet-BC with L =100 and k =12 achieves comparable performance ( e.g. , 4.51% vs 4.62% error on C10+, 22.27% vs 22.71% error on C100+) as the 1001-layer pre-activation ResNet using 90% fewer parameters.",
+      "The right plot in Figure 4 shows that a DenseNet-BC with only 0.8M trainable parameters is able to achieve comparable accuracy as the 1001-layer (pre-activation) ResNet [12] with 10.2M parameters."
+    ]
+  },
+  {
+    "paper_id": "1608.06993",
+    "paper_title": "Densely Connected Convolutional Networks",
+    "query": "Does the paper discuss applying DenseNet to natural language processing or text classification tasks?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "1703.03400",
+    "paper_title": "Model-Agnostic Meta-Learning for Fast Adaptation of Deep Networks",
+    "query": "What accuracy did MAML achieve on 5-way 1-shot classification on the Omniglot dataset?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "MAML achieved 98.7 ± 0.4% accuracy on 5-way 1-shot Omniglot classification.",
+    "gt_passages": [
+      "MAML(ours)                                   | 98 . 7 ± 0 . 4 % | 99 . 9 ± 0 . 1 % | 95 . 8 ± 0 . 3 %  | 98 . 9 ± 0 . 2 %"
+    ]
+  },
+  {
+    "paper_id": "1703.03400",
+    "paper_title": "Model-Agnostic Meta-Learning for Fast Adaptation of Deep Networks",
+    "query": "How does MAML use second-order gradients during meta-optimization, and what is the effect of using a first-order approximation instead?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "The MAML meta-gradient update involves a gradient through a gradient, requiring an additional backward pass through the network to compute Hessian-vector products. A first-order approximation omits these second derivatives but still computes the meta-gradient at the post-update parameter values θ′_i. Surprisingly, the first-order approximation achieves nearly the same performance as the full second-order method and leads to roughly a 33% speed-up in network computation.",
+    "gt_passages": [
+      "The MAML meta-gradient update involves a gradient through a gradient. Computationally, this requires an additional backward pass through f to compute Hessian-vector products, which is supported by standard deep learning libraries such as TensorFlow (Abadi et al., 2016).",
+      "Surprisingly however, the performance of this method is nearly the same as that obtained with full second derivatives, suggesting that most of the improvement in MAML comes from the gradients of the objective at the post-update parameter values, rather than the second order updates from differentiating through the gradient update. Past work has observed that ReLU neural networks are locally almost linear (Goodfellow et al., 2015), which suggests that second derivatives may be close to zero in most cases, partially explaining the good performance of the first-order approximation. This approximation removes the need for computing Hessian-vector products in an additional backward pass, which we found led to roughly 33% speed-up in network computation."
+    ]
+  },
+  {
+    "paper_id": "1703.03400",
+    "paper_title": "Model-Agnostic Meta-Learning for Fast Adaptation of Deep Networks",
+    "query": "What is the core idea behind this paper's approach to helping a model learn new tasks quickly from very few examples?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The core idea is to train a model's initial parameters so that a small number of gradient descent steps on a new task's data will yield strong performance on that task. Rather than learning a separate update rule or optimizer, the method finds a shared weight initialization that is highly sensitive to task-specific losses, enabling rapid fine-tuning across classification, regression, and reinforcement learning.",
+    "gt_passages": [
+      "The key idea underlying our method is to train the model's initial parameters such that the model has maximal performance on a new task after the parameters have been updated through one or more gradient steps computed with a small amount of data from that new task.",
+      "In effect, our method trains the model to be easy to fine-tune."
+    ]
+  },
+  {
+    "paper_id": "1703.03400",
+    "paper_title": "Model-Agnostic Meta-Learning for Fast Adaptation of Deep Networks",
+    "query": "In the reinforcement learning experiments, what network architecture and meta-optimizer were used, and how does the training setup differ from the supervised classification experiments?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "For reinforcement learning, MAML uses a neural network policy with two hidden layers of size 100 with ReLU nonlinearities, and uses trust-region policy optimization (TRPO) as the meta-optimizer with vanilla policy gradient (REINFORCE) for gradient updates. This differs from the supervised classification setup, which uses a 4-module convolutional architecture (or a 4-layer fully connected network), cross-entropy loss, and Adam as the meta-optimizer. Additionally, each gradient step in RL requires new environment samples because policy gradient is on-policy, whereas supervised tasks reuse fixed datasets.",
+    "gt_passages": [
+      "In all of the domains, the model trained by MAML is a neural network policy with two hidden layers of size 100 , with ReLU nonlinearities. The gradient updates are computed using vanilla policy gradient (REINFORCE) (Williams, 1992), and we use trust-region policy optimization (TRPO) as the meta-optimizer (Schulman et al., 2015).",
+      "Since policy gradients are an on-policy algorithm, each additional gradient step during the adaptation of f θ requires new samples from the current policy f θ i ′ .",
+      "Our model follows the same architecture as the embedding function used by Vinyals et al. (2016), which has 4 modules with a 3 × 3 convolutions and 64 fi lters, followed by batch normalization (Ioffe &amp; Szegedy, 2015), a ReLU nonlinearity, and 2 × 2 max-pooling."
+    ]
+  },
+  {
+    "paper_id": "1703.03400",
+    "paper_title": "Model-Agnostic Meta-Learning for Fast Adaptation of Deep Networks",
+    "query": "Does the paper discuss how MAML handles continual learning or catastrophic forgetting when sequentially learning many tasks?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "1706.03762",
+    "paper_title": "Attention Is All You Need",
+    "query": "What BLEU score did the Transformer (big) model achieve on the WMT 2014 English-to-German translation task?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "The Transformer (big) model achieved a BLEU score of 28.4 on the WMT 2014 English-to-German translation task.",
+    "gt_passages": [
+      "On the WMT 2014 English-to-German translation task, the big transformer model (Transformer (big) in Table 2) outperforms the best previously reported models (including ensembles) by more than 2 . 0 BLEU, establishing a new state-of-the-art BLEU score of 28 . 4 ."
+    ]
+  },
+  {
+    "paper_id": "1706.03762",
+    "paper_title": "Attention Is All You Need",
+    "query": "How does Scaled Dot-Product Attention differ from additive attention, and why is a scaling factor of 1/sqrt(d_k) applied?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "Scaled Dot-Product Attention computes the dot product of queries and keys and divides by sqrt(d_k) before applying softmax, whereas additive attention uses a feed-forward network with a single hidden layer to compute compatibility. The scaling factor 1/sqrt(d_k) is applied because for large values of d_k the dot products grow large in magnitude, pushing the softmax function into regions with extremely small gradients.",
+    "gt_passages": [
+      "The two most commonly used attention functions are additive attention [2], and dot-product (multiplicative) attention. Dot-product attention is identical to our algorithm, except for the scaling factor of 1 √ d k . Additive attention computes the compatibility function using a feed-forward network with a single hidden layer.",
+      "We suspect that for large values of d k , the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients 4 . To counteract this effect, we scale the dot products by 1 √ d k ."
+    ]
+  },
+  {
+    "paper_id": "1706.03762",
+    "paper_title": "Attention Is All You Need",
+    "query": "What is the main idea behind the Transformer model and how does it differ from previous sequence-to-sequence architectures?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The Transformer is a sequence transduction model that relies entirely on attention mechanisms to draw global dependencies between input and output, completely dispensing with recurrence and convolutions. Unlike previous encoder-decoder architectures that use RNNs or CNNs, the Transformer uses stacked self-attention and point-wise feed-forward layers, enabling significantly more parallelization and faster training.",
+    "gt_passages": [
+      "In this work we propose the Transformer, a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies between input and output. The Transformer allows for significantly more parallelization and can reach a new state of the art in translation quality after being trained for as little as twelve hours on eight P100 GPUs.",
+      "In this work, we presented the Transformer, the first sequence transduction model based entirely on attention, replacing the recurrent layers most commonly used in encoder-decoder architectures with multi-headed self-attention."
+    ]
+  },
+  {
+    "paper_id": "1706.03762",
+    "paper_title": "Attention Is All You Need",
+    "query": "Given the base Transformer model's training hardware and schedule, how long did it take to train and what was the resulting BLEU score on the English-to-German development set?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "The base Transformer model was trained on one machine with 8 NVIDIA P100 GPUs for 100,000 steps (approximately 12 hours), and achieved a BLEU score of 25.8 on the English-to-German development set (newstest2013).",
+    "gt_passages": [
+      "We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using the hyperparameters described throughout the paper, each training step took about 0.4 seconds. We trained the base models for a total of 100,000 steps or 12 hours.",
+      "base | 6 | 512 | 2048 | 8 | 64 | 64 | 0.1 | 0.1 | 100K | 4.92 | 25.8 | 65"
+    ]
+  },
+  {
+    "paper_id": "1706.03762",
+    "paper_title": "Attention Is All You Need",
+    "query": "Does the paper discuss how to deploy the Transformer model as a production web service or REST API?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "1801.06146",
+    "paper_title": "Universal Language Model Fine-tuning for Text Classification",
+    "query": "What test error rate does ULMFiT achieve on the IMDb dataset?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "ULMFiT achieves a test error rate of 4.6% on the IMDb dataset.",
+    "gt_passages": [
+      "ULMFiT (ours)                          |    4.6 |        | ULMFiT (ours)                |    3.6 |"
+    ]
+  },
+  {
+    "paper_id": "1801.06146",
+    "paper_title": "Universal Language Model Fine-tuning for Text Classification",
+    "query": "How does discriminative fine-tuning differ from standard SGD in ULMFiT?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "In discriminative fine-tuning, each layer is tuned with a different learning rate rather than using the same learning rate for all layers. The parameters are split into layer-wise groups and each layer gets its own learning rate, with the empirical rule that lower layers use a learning rate of η^(l-1) = η^l / 2.6.",
+    "gt_passages": [
+      "Instead of using the same learning rate for all layers of the model, discriminative fine-tuning allows us to tune each layer with different learning rates.",
+      "We empirically found it to work well to first choose the learning rate η L of the last layer by fine-tuning only the last layer and using η l -1 = η l / 2 . 6 as the learning rate for lower layers."
+    ]
+  },
+  {
+    "paper_id": "1801.06146",
+    "paper_title": "Universal Language Model Fine-tuning for Text Classification",
+    "query": "How does ULMFiT allow a model trained on general text to be adapted for a specific classification task without losing what it already learned?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "ULMFiT uses three techniques in combination to adapt the model while preventing catastrophic forgetting: discriminative fine-tuning (different learning rates per layer), slanted triangular learning rates (a schedule that first increases then decays the learning rate), and gradual unfreezing (unfreezing layers one at a time from the top rather than all at once).",
+    "gt_passages": [
+      "We propose discriminative fine-tuning , slanted triangular learning rates , and gradual unfreezing , novel techniques to retain previous knowledge and avoid catastrophic forgetting during fine-tuning.",
+      "Rather than fine-tuning all layers at once, which risks catastrophic forgetting, we propose to gradually unfreeze the model starting from the last layer as this contains the least general knowledge (Yosinski et al., 2014): We first unfreeze the last layer and fine-tune all unfrozen layers for one epoch. We then unfreeze the next lower frozen layer and repeat, until we finetune all layers until convergence at the last iteration."
+    ]
+  },
+  {
+    "paper_id": "1801.06146",
+    "paper_title": "Universal Language Model Fine-tuning for Text Classification",
+    "query": "On which pretraining corpus is the language model pretrained, and how does pretraining affect performance when only 100 labeled examples are available?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "The language model is pretrained on Wikitext-103 (consisting of 28,595 preprocessed Wikipedia articles and 103 million words). With only 100 labeled examples, supervised ULMFiT matches the performance of training from scratch with 10× more data on IMDb and 20× more data on AG; in the semi-supervised setting (using unlabeled examples), it matches training from scratch with 100× more data on both AG and IMDb.",
+    "gt_passages": [
+      "We pretrain the language model on Wikitext-103 (Merity et al., 2017b) consisting of 28,595 preprocessed Wikipedia articles and 103 million words.",
+      "On IMDb and AG, supervised ULMFiT with only 100 labeled examples matches the performance of training from scratch with 10 × and 20 × more data respectively, clearly demonstrating the benefit of general-domain LM pretraining. If we allow ULMFiT to also utilize unlabeled examples ( 50 k for IMDb, 100 k for AG), at 100 labeled examples, we match the performance of training from scratch with 50 × and 100 × more data on AG and IMDb respectively."
+    ]
+  },
+  {
+    "paper_id": "1801.06146",
+    "paper_title": "Universal Language Model Fine-tuning for Text Classification",
+    "query": "Does the paper evaluate ULMFiT on named entity recognition or part-of-speech tagging benchmarks?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "1806.07366",
+    "paper_title": "Neural Ordinary Differential Equations",
+    "query": "What test error did ODE-Net achieve on MNIST, and how many parameters does it have?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "ODE-Net achieved a test error of 0.42% on MNIST with 0.22M parameters.",
+    "gt_passages": [
+      "| ODE-Net       | 0.42%        | 0.22M      | O (1)     | O ( ˜ L ) |"
+    ]
+  },
+  {
+    "paper_id": "1806.07366",
+    "paper_title": "Neural Ordinary Differential Equations",
+    "query": "How does the adjoint sensitivity method compute gradients through an ODE solver?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "The adjoint sensitivity method treats the ODE solver as a black box and computes gradients by solving a second, augmented ODE backwards in time. It defines the adjoint a(t) = ∂L/∂z(t), whose dynamics follow da(t)/dt = -a(t)^T * ∂f/∂z. This approach scales linearly with problem size, has low memory cost, and explicitly controls numerical error.",
+    "gt_passages": [
+      "We treat the ODE solver as a black box, and compute gradients using the adjoint sensitivity method (Pontryagin et al., 1962). This approach computes gradients by solving a second, augmented ODE backwards in time, and is applicable to all ODE solvers. This approach scales linearly with problem size, has low memory cost, and explicitly controls numerical error."
+    ]
+  },
+  {
+    "paper_id": "1806.07366",
+    "paper_title": "Neural Ordinary Differential Equations",
+    "query": "How does replacing discrete network layers with a continuous-time formulation reduce memory usage during training?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "By using an ODE solver as a black box and computing gradients with the adjoint sensitivity method, the model avoids storing any intermediate quantities of the forward pass. This results in constant memory cost as a function of depth, rather than the O(L) memory required by standard residual networks.",
+    "gt_passages": [
+      "Memory efficiency In Section 2, we show how to compute gradients of a scalar-valued loss with respect to all inputs of any ODE solver, without backpropagating through the operations of the solver . Not storing any intermediate quantities of the forward pass allows us to train our models with constant memory cost as a function of depth, a major bottleneck of training deep models."
+    ]
+  },
+  {
+    "paper_id": "1806.07366",
+    "paper_title": "Neural Ordinary Differential Equations",
+    "query": "In the latent ODE time-series experiment, what network architecture was used for the recognition model and what was the dimensionality of the latent space, and how did the latent ODE compare to the RNN baseline when given 30 observations?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "The recognition network was an RNN with 25 hidden units, and a 4-dimensional latent space was used. When given 30 out of 100 observations, the latent ODE achieved a predictive RMSE of 0.1642, substantially lower than the RNN baseline of 0.3937.",
+    "gt_passages": [
+      "The recognition network is an RNN with 25 hidden units. We use a 4-dimensional latent space. We parameterize the dynamics function f with a one-hidden-layer network with 20 hidden units.",
+      "| RNN              |   0.3937 |   0.3202 |    0.1813 |\n| Latent ODE       |   0.1642 |   0.1502 |    0.1346 |"
+    ]
+  },
+  {
+    "paper_id": "1806.07366",
+    "paper_title": "Neural Ordinary Differential Equations",
+    "query": "Does the paper discuss transformer-based attention mechanisms or their application to sequence modeling?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "1810.04805",
+    "paper_title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    "query": "What percentage of WordPiece tokens does BERT mask during pre-training, and how are those selected positions handled?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "BERT masks 15% of all WordPiece tokens at random. For each selected position: 80% of the time the token is replaced with [MASK], 10% of the time it is replaced with a random token, and 10% of the time the original token is kept unchanged.",
+    "gt_passages": [
+      "In all of our experiments, we mask 15% of all WordPiece tokens in each sequence at random.",
+      "The training data generator chooses 15% of the token positions at random for prediction. If the i -th token is chosen, we replace the i -th token with (1) the [MASK] token 80% of the time (2) a random token 10% of the time (3) the unchanged i -th token 10% of the time."
+    ]
+  },
+  {
+    "paper_id": "1810.04805",
+    "paper_title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    "query": "How does BERT use the [CLS] token and WordPiece embeddings in its input representation?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "BERT uses WordPiece embeddings with a 30,000 token vocabulary. The first token of every sequence is always the special [CLS] classification token, and its final hidden state is used as the aggregate sequence representation for classification tasks. The input representation for each token is constructed by summing the token, segment, and position embeddings.",
+    "gt_passages": [
+      "We use WordPiece embeddings (Wu et al., 2016) with a 30,000 token vocabulary. The first token of every sequence is always a special classification token ( [CLS] ). The final hidden state corresponding to this token is used as the aggregate sequence representation for classification tasks.",
+      "For a given token, its input representation is constructed by summing the corresponding token, segment, and position embeddings."
+    ]
+  },
+  {
+    "paper_id": "1810.04805",
+    "paper_title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    "query": "How does BERT allow the same pre-trained model to be applied to many different language tasks without redesigning the model for each one?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "BERT uses a unified architecture with minimal difference between pre-training and downstream task architectures. For each task, task-specific inputs and outputs are plugged into BERT and all parameters are fine-tuned end-to-end, requiring only one additional output layer. The self-attention mechanism allows BERT to handle both single-text and text-pair tasks by swapping appropriate inputs and outputs.",
+    "gt_passages": [
+      "A distinctive feature of BERT is its unified architecture across different tasks. There is mini- mal difference between the pre-trained architecture and the final downstream architecture.",
+      "For each task, we simply plug in the taskspecific inputs and outputs into BERT and finetune all the parameters end-to-end.",
+      "Fine-tuning is straightforward since the selfattention mechanism in the Transformer allows BERT to model many downstream taskswhether they involve single text or text pairs-by swapping out the appropriate inputs and outputs."
+    ]
+  },
+  {
+    "paper_id": "1810.04805",
+    "paper_title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    "query": "What evidence in the paper supports the claim that both bidirectional pre-training and next sentence prediction are necessary for BERT's strong performance on question answering?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "The ablation study in Section 5.1 shows two complementary findings: (1) removing next sentence prediction (NSP) hurts SQuAD F1 from 88.5 to 87.9, and (2) replacing bidirectional masked LM with a left-to-right LM (LTR & No NSP) causes SQuAD F1 to collapse to 77.8. Adding a BiLSTM on top of the LTR model recovers to 84.9 but still falls far short of the full BERT baseline, demonstrating that bidirectionality is especially critical for token-level tasks like question answering.",
+    "gt_passages": [
+      "In Table 5, we show that removing NSP hurts performance significantly on QNLI, MNLI, and SQuAD 1.1. Next, we evaluate the impact of training bidirectional representations by comparing 'No NSP' to 'LTR & No NSP'. The LTR model performs worse than the MLM model on all tasks, with large drops on MRPC and SQuAD.",
+      "For SQuAD it is intuitively clear that a LTR model will perform poorly at token predictions, since the token-level hidden states have no rightside context. In order to make a good faith attempt at strengthening the LTR system, we added a randomly initialized BiLSTM on top. This does significantly improve results on SQuAD, but the results are still far worse than those of the pretrained bidirectional models.",
+      "Tasks       | MNLI-m (Acc) | QNLI (Acc) | MRPC (Acc) | SST-2 (Acc) | SQuAD (F1)\nBERT BASE   | 84.4         | 88.4       | 86.7       | 92.7        | 88.5\nNo NSP      | 83.9         | 84.9       | 86.5       | 92.6        | 87.9\nLTR &No NSP | 82.1         | 84.3       | 77.5       | 92.1        | 77.8\n+ BiLSTM    | 82.1         | 84.1       | 75.7       | 91.6        | 84.9"
+    ]
+  },
+  {
+    "paper_id": "1810.04805",
+    "paper_title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    "query": "Does the paper discuss how to deploy BERT in a low-latency production serving environment?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2002.05709",
+    "paper_title": "A Simple Framework for Contrastive Learning of Visual Representations",
+    "query": "What top-1 accuracy does a linear classifier achieve on ImageNet when trained on representations learned by SimCLR with ResNet-50 (4×)?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "76.5% top-1 accuracy",
+    "gt_passages": [
+      "A linear classifier trained on self-supervised representations learned by SimCLR achieves 76.5% top-1 accuracy, which is a 7% relative improvement over previous state-of-the-art, matching the performance of a supervised ResNet-50."
+    ]
+  },
+  {
+    "paper_id": "2002.05709",
+    "paper_title": "A Simple Framework for Contrastive Learning of Visual Representations",
+    "query": "How does SimCLR use NT-Xent loss with normalized embeddings and a temperature parameter during contrastive pretraining?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "NT-Xent (Normalized Temperature-scaled Cross Entropy) loss is applied on l2-normalized embeddings with a temperature parameter τ. The loss for a positive pair (i, j) is the negative log of the ratio of the exponentiated cosine similarity between the pair divided by the sum over all 2N examples in the minibatch. l2 normalization combined with an appropriate temperature effectively weights different examples and helps the model learn from hard negatives.",
+    "gt_passages": [
+      "This loss has been used in previous work (Sohn, 2016; Wu et al., 2018; Oord et al., 2018); for convenience, we term it NT-Xent (the normalized temperature-scaled cross entropy loss).",
+      "We next test the importance of the glyph[lscript] 2 normalization (i.e. cosine similarity vs dot product) and temperature τ in our default NT-Xent loss. Table 5 shows that without normalization and proper temperature scaling, performance is significantly worse. Without glyph[lscript] 2 normalization, the contrastive task accuracy is higher, but the resulting representation is worse under linear evaluation."
+    ]
+  },
+  {
+    "paper_id": "2002.05709",
+    "paper_title": "A Simple Framework for Contrastive Learning of Visual Representations",
+    "query": "What is the key idea behind SimCLR's approach to learning image representations without labeled data?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "SimCLR learns visual representations by maximizing agreement between two differently augmented views of the same image using a contrastive loss in the latent space. It applies stochastic data augmentations to create two correlated views of each image, encodes them with a shared neural network, and then trains a projection head to maximize similarity between the two views of the same image while pushing apart representations of different images.",
+    "gt_passages": [
+      "SimCLR learns representations by maximizing agreement between differently augmented views of the same data example via a contrastive loss in the latent space.",
+      "A stochastic data augmentation module that transforms any given data example randomly resulting in two correlated views of the same example, denoted ˜ x i and ˜ x j , which we consider as a positive pair. In this work, we sequentially apply three simple augmentations: random cropping followed by resize back to the original size, random color distortions , and random Gaussian blur ."
+    ]
+  },
+  {
+    "paper_id": "2002.05709",
+    "paper_title": "A Simple Framework for Contrastive Learning of Visual Representations",
+    "query": "Why does SimCLR discard the projection head after pretraining, and how does the quality of the representation before the projection head compare to the representation after it?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "SimCLR discards the projection head g(·) after pretraining because the representation h before the projection head is significantly better for downstream tasks than the projection z=g(h). The projection head is trained to be invariant to data transformations, which causes it to remove information (such as color or orientation) that may be useful for downstream tasks. Experimentally, the hidden layer h before the projection head is more than 10% better than z=g(h) under linear evaluation, and Table 3 shows h retains far more information about the applied transformations (e.g., 67.6% vs 25.6% for rotation prediction).",
+    "gt_passages": [
+      "After training is completed, we throw away the projection head g ( · ) and use encoder f ( · ) and representation h for downstream tasks.",
+      "Furthermore, even when nonlinear projection is used, the layer before the projection head, h , is still much better (&gt;10%) than the layer after, z = g ( h ) , which shows that the hidden layer before the projection head is a better representation than the layer after .",
+      "We conjecture that the importance of using the representation before the nonlinear projection is due to loss of information induced by the contrastive loss. In particular, z = g ( h ) is trained to be invariant to data transformation. Thus, g can remove information that may be useful for the downstream task, such as the color or orientation of objects."
+    ]
+  },
+  {
+    "paper_id": "2002.05709",
+    "paper_title": "A Simple Framework for Contrastive Learning of Visual Representations",
+    "query": "Does the SimCLR paper discuss techniques for handling class imbalance in the ImageNet pretraining dataset?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2006.11239",
+    "paper_title": "Denoising Diffusion Probabilistic Models",
+    "query": "What FID score did the unconditional CIFAR10 model achieve?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "The unconditional CIFAR10 model achieved a state-of-the-art FID score of 3.17.",
+    "gt_passages": [
+      "On the unconditional CIFAR10 dataset, we obtain an Inception score of 9.46 and a state-of-the-art FID score of 3.17.",
+      "With our FID score of 3.17, our unconditional model achieves better sample quality than most models in the literature, including class conditional models."
+    ]
+  },
+  {
+    "paper_id": "2006.11239",
+    "paper_title": "Denoising Diffusion Probabilistic Models",
+    "query": "How does the epsilon-prediction parameterization relate to denoising score matching and annealed Langevin dynamics?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "The epsilon-prediction parameterization of the reverse process reveals an equivalence with denoising score matching over multiple noise levels during training and with annealed Langevin dynamics during sampling. Optimizing the simplified objective resembling denoising score matching is equivalent to using variational inference to fit the finite-time marginal of a sampling chain resembling Langevin dynamics.",
+    "gt_passages": [
+      "we show that a certain parameterization of diffusion models reveals an equivalence with denoising score matching over multiple noise levels during training and with annealed Langevin dynamics during sampling (Section 3.2) [55, 61]. We obtained our best sample quality results using this parameterization (Section 4.2), so we consider this equivalence to be one of our primary contributions.",
+      "which resembles denoising score matching over multiple noise scales indexed by t [55]. As Eq. (12) is equal to (one term of) the variational bound for the Langevin-like reverse process (11), we see that optimizing an objective resembling denoising score matching is equivalent to using variational inference to fit the finite-time marginal of a sampling chain resembling Langevin dynamics."
+    ]
+  },
+  {
+    "paper_id": "2006.11239",
+    "paper_title": "Denoising Diffusion Probabilistic Models",
+    "query": "How does the paper train the model to generate images by reversing a noise-adding process?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The model is trained as a parameterized Markov chain using variational inference. A forward diffusion process gradually adds Gaussian noise to data over T timesteps. A neural network learns to reverse this process by predicting the noise added at each step (epsilon-prediction), minimizing a simplified objective that is a weighted variational bound. During sampling, the model iteratively denoises from pure Gaussian noise back to a clean image.",
+    "gt_passages": [
+      "A diffusion probabilistic model (which we will call a 'diffusion model' for brevity) is a parameterized Markov chain trained using variational inference to produce samples matching the data after finite time. Transitions of this chain are learned to reverse a diffusion process, which is a Markov chain that gradually adds noise to the data in the opposite direction of sampling until signal is destroyed.",
+      "we found it beneficial to sample quality (and simpler to implement) to train on the following variant of the variational bound:",
+      "Since our simplified objective (14) discards the weighting in Eq. (12), it is a weighted variational bound that emphasizes different aspects of reconstruction compared to the standard variational bound [18, 22]. In particular, our diffusion process setup in Section 4 causes the simplified objective to down-weight loss terms corresponding to small t . These terms train the network to denoise data with very small amounts of noise, so it is beneficial to down-weight them so that the network can focus on more difficult denoising tasks at larger t terms."
+    ]
+  },
+  {
+    "paper_id": "2006.11239",
+    "paper_title": "Denoising Diffusion Probabilistic Models",
+    "query": "What neural network architecture is used and how many parameters does it have for CIFAR10 versus the LSUN/CelebA-HQ models?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "The model uses a U-Net backbone based on a Wide ResNet (following PixelCNN++), with group normalization replacing weight normalization, self-attention at the 16x16 feature map resolution, and Transformer sinusoidal position embeddings to condition on diffusion timestep. The CIFAR10 model has 35.7 million parameters, while the LSUN and CelebA-HQ models have 114 million parameters.",
+    "gt_passages": [
+      "To represent the reverse process, we use a U-Net backbone similar to an unmasked PixelCNN++ [52, 48] with group normalization throughout [66]. Parameters are shared across time, which is specified to the network using the Transformer sinusoidal position embedding [60]. We use self-attention at the 16 × 16 feature map resolution [63, 60].",
+      "Our neural network architecture follows the backbone of PixelCNN++ [52], which is a U-Net [48] based on a Wide ResNet [72]. We replaced weight normalization [49] with group normalization [66] to make the implementation simpler. Our 32 × 32 models use four feature map resolutions ( 32 × 32 to 4 × 4 ), and our 256 × 256 models use six. All models have two convolutional residual blocks per resolution level and self-attention blocks at the 16 × 16 resolution between the convolutional blocks [6]. Diffusion time t is specified by adding the Transformer sinusoidal position embedding [60] into each residual block. Our CIFAR10 model has 35.7 million parameters, and our LSUN and CelebA-HQ models have 114 million parameters."
+    ]
+  },
+  {
+    "paper_id": "2006.11239",
+    "paper_title": "Denoising Diffusion Probabilistic Models",
+    "query": "Does the paper evaluate the model on text or audio generation tasks?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2010.11929",
+    "paper_title": "AN IMAGE IS WORTH 16X16 WORDS: TRANSFORMERS FOR IMAGE RECOGNITION AT SCALE",
+    "query": "What accuracy did the best ViT model achieve on ImageNet and CIFAR-100 when pre-trained on JFT-300M?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "The best model (ViT-H/14) achieved 88.55% accuracy on ImageNet and 94.55% on CIFAR-100 when pre-trained on JFT-300M.",
+    "gt_passages": [
+      "When pre-trained on the public ImageNet-21k dataset or the in-house JFT-300M dataset, ViT approaches or beats state of the art on multiple image recognition benchmarks. In particular, the best model reaches the accuracy of 88 . 55% on ImageNet, 90 . 72% on ImageNet-ReaL, 94 . 55% on CIFAR-100, and 77 . 63% on the VTAB suite of 19 tasks."
+    ]
+  },
+  {
+    "paper_id": "2010.11929",
+    "paper_title": "AN IMAGE IS WORTH 16X16 WORDS: TRANSFORMERS FOR IMAGE RECOGNITION AT SCALE",
+    "query": "How does ViT handle positional information using learnable 1D position embeddings, and why were 2D-aware position embeddings not adopted?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "ViT uses standard learnable 1D position embeddings added to patch embeddings to retain positional information. 2D-aware position embeddings were not adopted because no significant performance gains were observed from using them.",
+    "gt_passages": [
+      "Position embeddings are added to the patch embeddings to retain positional information. We use standard learnable 1D position embeddings, since we have not observed significant performance gains from using more advanced 2D-aware position embeddings (Appendix D.4). The resulting sequence of embedding vectors serves as input to the encoder."
+    ]
+  },
+  {
+    "paper_id": "2010.11929",
+    "paper_title": "AN IMAGE IS WORTH 16X16 WORDS: TRANSFORMERS FOR IMAGE RECOGNITION AT SCALE",
+    "query": "How does the Vision Transformer apply a standard NLP architecture to process images without using convolutions?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "ViT splits an image into fixed-size patches, linearly embeds each patch, adds position embeddings, and feeds the resulting sequence of vectors to a standard Transformer encoder — treating image patches the same way as word tokens in NLP. A learnable classification token is prepended to the sequence, and its output state is used as the image representation for classification.",
+    "gt_passages": [
+      "To do so, we split an image into patches and provide the sequence of linear embeddings of these patches as an input to a Transformer. Image patches are treated the same way as tokens (words) in an NLP application. We train the model on image classification in supervised fashion.",
+      "We split an image into fixed-size patches, linearly embed each of them, add position embeddings, and feed the resulting sequence of vectors to a standard Transformer encoder. In order to perform classification, we use the standard approach of adding an extra learnable 'classification token' to the sequence."
+    ]
+  },
+  {
+    "paper_id": "2010.11929",
+    "paper_title": "AN IMAGE IS WORTH 16X16 WORDS: TRANSFORMERS FOR IMAGE RECOGNITION AT SCALE",
+    "query": "Why does ViT underperform ResNets when trained on small datasets, yet outperform them when trained on large datasets like JFT-300M?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "ViT underperforms on small datasets because it lacks the image-specific inductive biases that CNNs have (such as locality, translation equivariance, and two-dimensional neighborhood structure), so it does not generalize well without sufficient data. However, large-scale training overcomes this limitation: when pre-trained on 14M–300M images, ViT learns the relevant spatial patterns directly from data, making large-scale training trump inductive bias and allowing ViT to match or exceed state-of-the-art ResNets.",
+    "gt_passages": [
+      "When trained on mid-sized datasets such as ImageNet without strong regularization, these models yield modest accuracies of a few percentage points below ResNets of comparable size. This seemingly discouraging outcome may be expected: Transformers lack some of the inductive biases inherent to CNNs, such as translation equivariance and locality, and therefore do not generalize well when trained on insufficient amounts of data.",
+      "However, the picture changes if the models are trained on larger datasets (14M-300M images). We find that large scale training trumps inductive bias.",
+      "This result reinforces the intuition that the convolutional inductive bias is useful for smaller datasets, but for larger ones, learning the relevant patterns directly from data is sufficient, even beneficial."
+    ]
+  },
+  {
+    "paper_id": "2010.11929",
+    "paper_title": "AN IMAGE IS WORTH 16X16 WORDS: TRANSFORMERS FOR IMAGE RECOGNITION AT SCALE",
+    "query": "Does the paper discuss applying Vision Transformer to object detection or semantic segmentation tasks?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2101.00190",
+    "paper_title": "Prefix-Tuning: Optimizing Continuous Prompts for Generation",
+    "query": "How many parameters does prefix-tuning use compared to fine-tuning, and what ROUGE-L score does it achieve on XSUM with 2% parameters?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "Prefix-tuning uses 1000x fewer parameters than fine-tuning (storing only 0.1% of parameters). With 2% parameters, prefix-tuning achieves a ROUGE-L score of 36.05 on XSUM, compared to 37.25 for full fine-tuning.",
+    "gt_passages": [
+      "In terms of storage, prefix-tuning stores 1000x fewer parameters than fine-tuning.",
+      "with 2% parameters, prefix-tuning obtains slightly lower performance than fine- tuning (36.05 vs. 37.25 in ROUGE-L)."
+    ]
+  },
+  {
+    "paper_id": "2101.00190",
+    "paper_title": "Prefix-Tuning: Optimizing Continuous Prompts for Generation",
+    "query": "How does prefix-tuning use reparametrization of P_theta with an MLP to stabilize optimization, and what happens to those reparametrization parameters after training?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "Directly updating P_theta leads to unstable optimization, so the matrix is reparametrized as P_theta[i,:] = MLP_theta(P'_theta[i,:]), composed of a smaller matrix P'_theta and a large feedforward neural network MLP_theta. Once training is complete, the reparametrization parameters can be dropped and only the prefix (P_theta) needs to be saved.",
+    "gt_passages": [
+      "Empirically, directly updating the P θ parameters leads to unstable optimization and a slight drop in performance. So we reparametrize the matrix P θ [ i, :] = MLP θ ( P ′ θ [ i, :]) by a smaller matrix ( P ′ θ ) composed with a large feedforward neural network (MLP θ ). Note that P θ and P ′ θ has the same rows dimension (i.e. the prefix length), but different columns dimension. Once training is complete, these reparametrization parameters can be dropped, and only the prefix ( P θ ) needs to be saved."
+    ]
+  },
+  {
+    "paper_id": "2101.00190",
+    "paper_title": "Prefix-Tuning: Optimizing Continuous Prompts for Generation",
+    "query": "How does the proposed method allow a single language model to serve many different users or tasks simultaneously without interference between them?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "Prefix-tuning keeps the language model parameters frozen and only trains a small task-specific prefix for each task or user. Because the shared LM is never modified, a single model can support many tasks at once by prepending the appropriate prefix at inference time. This also enables batching queries from different users in a single forward pass by prepending each user's personalized prefix to their input.",
+    "gt_passages": [
+      "In contrast to fine-tuning, prefix-tuning is modular: we train an upstream prefix which steers a downstream LM, which remains unmodified. Thus, a single LM can support many tasks at once.",
+      "prefix-tuning allows batching different users' queries even though they are backed by different prefixes. When multiple users query a cloud GPU device with their inputs, it is computationally efficient to put these users in the same batch. Prefix-tuning keeps the shared LM intact; consequently, batching requires a simple step of prepending the personalized prefix to user input, and all the remaining computation is unchanged."
+    ]
+  },
+  {
+    "paper_id": "2101.00190",
+    "paper_title": "Prefix-Tuning: Optimizing Continuous Prompts for Generation",
+    "query": "In low-data settings, by how much does prefix-tuning outperform fine-tuning on table-to-text, and what qualitative failure mode does fine-tuning exhibit that prefix-tuning avoids?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "In low-data settings, prefix-tuning outperforms fine-tuning by 2.9 BLEU on average for table-to-text. Qualitatively, fine-tuning in low-data regimes tends to generate content that is unfaithful to the source table — for example, falsely claiming a low customer rating when the true rating is average — whereas prefix-tuning generates descriptions that are more faithful to the table.",
+    "gt_passages": [
+      "Figure 3 (right) shows that prefix-tuning outperforms fine-tuning in low-data regimes by 2 . 9 BLEU on average, in addition to requiring many fewer parameters, but the gap narrows as the dataset size increases.",
+      "While both methods tend to undergenerate (missing table contents) in low data regimes, prefix-tuning tends to be more faithful than fine-tuning. For example, finetuning (100, 200) falsely claims a low customer rating while the true rating is average, whereas prefix-tuning (100, 200) generates a description that is faithful to the table."
+    ]
+  },
+  {
+    "paper_id": "2101.00190",
+    "paper_title": "Prefix-Tuning: Optimizing Continuous Prompts for Generation",
+    "query": "Does the paper evaluate prefix-tuning on question answering or reading comprehension benchmarks such as SQuAD or TriviaQA?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2103.00020",
+    "paper_title": "Learning Transferable Visual Models From Natural Language Supervision",
+    "query": "How many V100 GPUs were used to train the largest ResNet model RN50x64, and how many days did it take?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "The largest ResNet model RN50x64 took 18 days to train on 592 V100 GPUs.",
+    "gt_passages": [
+      "The largest ResNet model, RN50x64, took 18 days to train on 592 V100 GPUs while the largest Vision Transformer took 12 days on 256 V100 GPUs."
+    ]
+  },
+  {
+    "paper_id": "2103.00020",
+    "paper_title": "Learning Transferable Visual Models From Natural Language Supervision",
+    "query": "What is the contrastive objective used in CLIP training and how does it relate to InfoNCE loss and multi-class N-pair loss?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "CLIP is trained to predict which of N×N possible (image, text) pairings actually occurred in a batch by maximizing cosine similarity of real pairs and minimizing cosine similarity of incorrect pairings using a symmetric cross entropy loss. This batch construction technique was first introduced as the multi-class N-pair loss by Sohn (2016) and popularized for contrastive representation learning by Oord et al. (2018) as the InfoNCE loss.",
+    "gt_passages": [
+      "Given a batch of N (image, text) pairs, CLIP is trained to predict which of the N × N possible (image, text) pairings across a batch actually occurred. To do this, CLIP learns a multi-modal embedding space by jointly training an image encoder and text encoder to maximize the cosine similarity of the image and text embeddings of the N real pairs in the batch while minimizing the cosine similarity of the embeddings of the N 2 -N incorrect pairings. We optimize a symmetric cross entropy loss over these similarity scores.",
+      "To our knowledge this batch construction technique and objective was first introduced in the area of deep metric learning as the multi-class N-pair loss Sohn (2016), was popularized for contrastive representation learning by Oord et al. (2018) as the InfoNCE loss, and was recently adapted for contrastive (text, image) representation learning in the domain of medical imaging by Zhang et al. (2020)."
+    ]
+  },
+  {
+    "paper_id": "2103.00020",
+    "paper_title": "Learning Transferable Visual Models From Natural Language Supervision",
+    "query": "How does CLIP enable image classification on datasets it was never explicitly trained on, without requiring any labeled examples from those datasets?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "CLIP enables zero-shot classification by using its text encoder to generate a classifier at inference time. For each target dataset, the names of all classes are embedded by the text encoder, producing a set of text feature vectors. The image to be classified is then embedded by the image encoder, and the class with the highest cosine similarity between the image embedding and the text embeddings is predicted. This way, no labeled training examples from the target dataset are needed; the model transfers knowledge from its large-scale image-text pre-training.",
+    "gt_passages": [
+      "CLIP is pre-trained to predict if an image and a text snippet are paired together in its dataset. To perform zero-shot classification, we reuse this capability. For each dataset, we use the names of all the classes in the dataset as the set of potential text pairings and predict the most probable (image, text) pair according to CLIP. In a bit more detail, we first compute the feature embedding of the image and the feature embedding of the set of possible texts by their respective encoders. The cosine similarity of these embeddings is then calculated, scaled by a temperature parameter τ , and normalized into a probability distribution via a softmax."
+    ]
+  },
+  {
+    "paper_id": "2103.00020",
+    "paper_title": "Learning Transferable Visual Models From Natural Language Supervision",
+    "query": "What is the relationship between CLIP's training dataset size, the efficiency gain from the contrastive objective over a bag-of-words baseline, and how these factors together enabled competitive zero-shot ImageNet performance?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "CLIP was trained on a new dataset of 400 million (image, text) pairs (WIT). Compared to a bag-of-words prediction baseline, switching to the contrastive objective improved zero-shot transfer efficiency by 4x (on top of the BoW baseline already being 3x faster than a transformer-based caption prediction approach). Together with this large dataset, these efficiency gains allowed CLIP to match the zero-shot ImageNet accuracy of 76.2%, equaling the performance of the original ResNet-50 trained on 1.28 million labeled ImageNet examples.",
+    "gt_passages": [
+      "To address this, we constructed a new dataset of 400 million (image, text) pairs collected form a variety of publicly available sources on the Internet.",
+      "Starting with the same bag-of-words encoding baseline, we swapped the predictive objective for a contrastive objective in Figure 2 and observed a further 4x efficiency improvement in the rate of zero-shot transfer to ImageNet.",
+      "The best CLIP model improves accuracy on ImageNet from a proof of concept 11.5% to 76.2% and matches the performance of the original ResNet-50 despite using none of the 1.28 million crowd-labeled training examples available for this dataset."
+    ]
+  },
+  {
+    "paper_id": "2103.00020",
+    "paper_title": "Learning Transferable Visual Models From Natural Language Supervision",
+    "query": "Does the paper propose a method for fine-tuning CLIP end-to-end on downstream task datasets to improve performance beyond zero-shot transfer?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2106.09685",
+    "paper_title": "LORA: LOW-RANK ADAPTATION OF LARGE LANGUAGE MODELS",
+    "query": "By how much does LoRA reduce the number of trainable parameters and GPU memory requirement compared to full fine-tuning GPT-3 175B with Adam?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "LoRA reduces the number of trainable parameters by 10,000 times and the GPU memory requirement by 3 times compared to GPT-3 175B fine-tuned with Adam.",
+    "gt_passages": [
+      "Compared to GPT-3 175B fine-tuned with Adam, LoRA can reduce the number of trainable parameters by 10,000 times and the GPU memory requirement by 3 times."
+    ]
+  },
+  {
+    "paper_id": "2106.09685",
+    "paper_title": "LORA: LOW-RANK ADAPTATION OF LARGE LANGUAGE MODELS",
+    "query": "How does LoRA use rank decomposition matrices and frozen pretrained weights in the Transformer architecture during adaptation?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "LoRA freezes the pretrained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture. For a pretrained weight matrix W0, its update is represented as a low-rank decomposition W0 + BA, where B and A are low-rank matrices with rank r much smaller than the original dimensions. During training, W0 is frozen while A and B contain the trainable parameters.",
+    "gt_passages": [
+      "LoRA, which freezes the pretrained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture, greatly reducing the number of trainable parameters for downstream tasks.",
+      "For a pre-trained weight matrix W 0 ∈ R d × k , we constrain its update by representing the latter with a low-rank decomposition W 0 +∆ W = W 0 + BA , where B ∈ R d × r , A ∈ R r × k , and the rank r glyph[lessmuch] min( d, k ) . During training, W 0 is frozen and does not receive gradient updates, while A and B contain trainable parameters."
+    ]
+  },
+  {
+    "paper_id": "2106.09685",
+    "paper_title": "LORA: LOW-RANK ADAPTATION OF LARGE LANGUAGE MODELS",
+    "query": "What is the key idea behind LoRA that allows it to adapt large language models efficiently without slowing down inference?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "LoRA's key idea is that the weight changes needed to adapt a pretrained model to a new task have a low intrinsic rank. Instead of updating all parameters, LoRA trains small low-rank matrices that represent the weight updates, while keeping the original weights frozen. At inference time, these low-rank matrices can be merged back into the original weights, so there is no additional latency compared to a fully fine-tuned model.",
+    "gt_passages": [
+      "We hypothesize that the change in weights during model adaptation also has a low 'intrinsic rank', leading to our proposed Lo wR ank A daptation (LoRA) approach. LoRA allows us to train some dense layers in a neural network indirectly by optimizing rank decomposition matrices of the dense layers' change during adaptation instead, while keeping the pre-trained weights frozen.",
+      "When deployed in production, we can explicitly compute and store W = W 0 + BA and perform inference as usual. Note that both W 0 and BA are in R d × k . When we need to switch to another downstream task, we can recover W 0 by subtracting BA and then adding a different B ′ A ′ , a quick operation with very little memory overhead. Critically, this guarantees that we do not introduce any additional latency during inference compared to a fine-tuned model by construction."
+    ]
+  },
+  {
+    "paper_id": "2106.09685",
+    "paper_title": "LORA: LOW-RANK ADAPTATION OF LARGE LANGUAGE MODELS",
+    "query": "On GPT-3 175B, what VRAM reduction does LoRA achieve during training, and what is the resulting checkpoint size when using rank 4 with only query and value projection matrices adapted?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "LoRA reduces VRAM consumption during training of GPT-3 175B from 1.2TB to 350GB (roughly a 3x reduction). When using rank r=4 and adapting only the query and value projection matrices, the checkpoint size is reduced by roughly 10,000 times, from 350GB to 35MB.",
+    "gt_passages": [
+      "For a large Transformer trained with Adam, we reduce that VRAM usage by up to 2 / 3 if r glyph[lessmuch] d model as we do not need to store the optimizer states for the frozen parameters. On GPT-3 175B, we reduce the VRAM consumption during training from 1.2TB to 350GB. With r = 4 and only the query and value projection matrices being adapted, the checkpoint size is reduced by roughly 10,000 × (from 350GB to 35MB)"
+    ]
+  },
+  {
+    "paper_id": "2106.09685",
+    "paper_title": "LORA: LOW-RANK ADAPTATION OF LARGE LANGUAGE MODELS",
+    "query": "Does the paper discuss how LoRA can be applied to convolutional neural networks for computer vision tasks such as image classification?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2109.01652",
+    "paper_title": "FINETUNED LANGUAGE MODELS ARE ZERO-SHOT LEARNERS",
+    "query": "How many gradient steps was FLAN finetuned for, and what batch size was used?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "FLAN was finetuned for 30,000 gradient steps with a batch size of 8,192 tokens.",
+    "gt_passages": [
+      "We finetune all models for 30k gradient steps with a batch size of 8,192 tokens using the Adafactor Optimizer (Shazeer & Stern, 2018) with a learning rate of 3e-5."
+    ]
+  },
+  {
+    "paper_id": "2109.01652",
+    "paper_title": "FINETUNED LANGUAGE MODELS ARE ZERO-SHOT LEARNERS",
+    "query": "What is the examples-proportional mixing scheme with mixing rate maximum used during FLAN's instruction tuning pipeline?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "FLAN's instruction tuning pipeline limits the number of training examples per dataset to 30k and follows the examples-proportional mixing scheme with a mixing rate maximum of 3k, meaning a dataset does not receive additional sampling weight for examples in excess of 3,000.",
+    "gt_passages": [
+      "To balance the different sizes of datasets, we limit the number of training examples per dataset to 30k and follow the examples-proportional mixing scheme (Raffel et al., 2020) with a mixing rate maximum of 3k.",
+      "In this mixing scheme, a mixing rate maximum of 3,000 means that a dataset does not receive additional sampling weight for examples in excess of 3,000."
+    ]
+  },
+  {
+    "paper_id": "2109.01652",
+    "paper_title": "FINETUNED LANGUAGE MODELS ARE ZERO-SHOT LEARNERS",
+    "query": "How does the paper improve a large language model's ability to handle tasks it has never seen before, without providing any examples at test time?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The paper proposes instruction tuning, which finetunes a pretrained language model on a mixture of many NLP datasets expressed via natural language instruction templates. By training on tasks described through instructions and evaluating on held-out task clusters never seen during finetuning, the model learns to follow instructions and generalize to new, unseen tasks in a zero-shot manner.",
+    "gt_passages": [
+      "We show that instruction tuning -finetuning language models on a collection of datasets described via instructions-substantially improves zeroshot performance on unseen tasks.",
+      "The idea is that by using supervision to teach an LM to perform tasks described via instructions, the LM will learn to follow instructions and do so even for unseen tasks."
+    ]
+  },
+  {
+    "paper_id": "2109.01652",
+    "paper_title": "FINETUNED LANGUAGE MODELS ARE ZERO-SHOT LEARNERS",
+    "query": "For which model sizes does instruction tuning hurt rather than help generalization to unseen tasks, and what is the proposed explanation for this behavior?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "Instruction tuning hurts generalization on unseen tasks for models at the 8B parameter scale and smaller (422M, 2B, 8B). The proposed explanation is that for small-scale models, learning the approximately 40 tasks used during instruction tuning fills the entire model capacity, leaving no remaining capacity for generalizing to new tasks. In contrast, larger models (on the order of 100B parameters, i.e., 68B and 137B) have enough capacity to both learn the instruction tuning tasks and still generalize.",
+    "gt_passages": [
+      "We evaluate the effect of instruction tuning on models of size 422M, 2B, 8B, 68B, and 137B parameters.",
+      "We see that for the two models on the order of 100B parameters, instruction tuning substantially improves performance on held-out tasks, as is expected given the prior results in our paper. The behavior on held-out tasks for the 8B and smaller models, however, is thought-provoking-instruction tuning actually hurts performance on held-out tasks. One potential explanation for this result could be that for small-scale models, learning the ∼ 40 tasks used during instruction tuning fills the entire model capacity, causing these models to perform worse on new tasks."
+    ]
+  },
+  {
+    "paper_id": "2109.01652",
+    "paper_title": "FINETUNED LANGUAGE MODELS ARE ZERO-SHOT LEARNERS",
+    "query": "Does the paper discuss using reinforcement learning from human feedback to align FLAN's outputs with human preferences?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2109.07958",
+    "paper_title": "TruthfulQA: Measuring How Models Mimic Human Falsehoods",
+    "query": "What percentage of questions did the best-performing model answer truthfully, and what was the human baseline on TruthfulQA?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "The best-performing model (GPT-3-175B with the 'helpful' prompt) was truthful on 58% of questions, while human performance was 94%.",
+    "gt_passages": [
+      "Under human evaluation, the best-performing model (GPT-3-175B with 'helpful' prompt) was truthful on 58% of questions, while human performance was 94% (Fig. 4)."
+    ]
+  },
+  {
+    "paper_id": "2109.07958",
+    "paper_title": "TruthfulQA: Measuring How Models Mimic Human Falsehoods",
+    "query": "How does GPT-judge achieve automated evaluation of truthfulness, and what validation accuracy does it reach on held-out model families?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "GPT-judge is a GPT-3-6.7B model finetuned to classify answers to TruthfulQA questions as true or false. It achieves 90–96% validation accuracy on held-out model families.",
+    "gt_passages": [
+      "We finetuned GPT-3 on human evaluations of whether an answer is true or false and achieved 90-96% accuracy on held-out models (Section 4.4).",
+      "GPT-judge is a GPT-3-6.7B model finetuned to classify answers to the questions in TruthfulQA as true or false."
+    ]
+  },
+  {
+    "paper_id": "2109.07958",
+    "paper_title": "TruthfulQA: Measuring How Models Mimic Human Falsehoods",
+    "query": "Why do larger language models tend to perform worse on this benchmark, and what does that imply about scaling as a strategy for improving model honesty?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "Larger models tend to generate more imitative falsehoods because they are better at learning the training distribution, which contains many human-written false statements. This implies that simply scaling up models is unlikely to improve truthfulness, and that alternative approaches such as fine-tuning with objectives other than text imitation are more promising.",
+    "gt_passages": [
+      "The largest models were generally the least truthful. This contrasts with other NLP tasks, where performance improves with model size. However, this result is expected if false answers are learned from the training distribution. We suggest that scaling up models alone is less promising for improving truthfulness than fine-tuning using training objectives other than imitation of text from the web.",
+      "One explanation of this result is that larger models produce more imitative falsehoods because they are better at learning the training distribution."
+    ]
+  },
+  {
+    "paper_id": "2109.07958",
+    "paper_title": "TruthfulQA: Measuring How Models Mimic Human Falsehoods",
+    "query": "How was TruthfulQA constructed, and what evidence did the authors gather to support the claim that the benchmark primarily targets imitative falsehoods rather than syntactic weaknesses?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "TruthfulQA was constructed using an adversarial procedure: the authors wrote questions that some humans would answer falsely, filtered out those that GPT-3-175B consistently answered correctly (producing 437 filtered questions), and added 380 unfiltered questions based on experience. To show the benchmark targets imitative rather than syntactic falsehoods, three lines of evidence were used: (1) the inverse scaling trend transferred to GPT-Neo/J, which was not used for adversarial filtering; (2) matched control questions with 1–3 word edits showed positive scaling (larger models did better), unlike TruthfulQA questions; and (3) paraphrased versions of TruthfulQA questions produced similar truthfulness scores, with larger models still performing worse.",
+    "gt_passages": [
+      "We wrote questions that some humans would answer falsely. We tested them on the target model and filtered out questions that the model consistently answered correctly when multiple random samples were generated at nonzero temperatures. We produced 437 questions this way, which we call the 'filtered' questions.",
+      "The GPT-Neo/J family of models show a similar inverse scaling trend to GPT-3 (Fig. 2). Yet we did not do adversarial filtering with GPT-Neo/J.",
+      "Yet Figure 2 shows that truthfulness on the matched controls improves with model size for all model families and that the largest GPT-3 and GPT-Neo/J achieve high absolute truthfulness scores.",
+      "Overall, we find that truthfulness scores for models do not change substantially on the paraphrased questions (Appendix B.9). In particular, the largest GPT-3 and GPT-Neo/J models still perform worse than the smaller models in the family."
+    ]
+  },
+  {
+    "paper_id": "2109.07958",
+    "paper_title": "TruthfulQA: Measuring How Models Mimic Human Falsehoods",
+    "query": "Does TruthfulQA include questions collected from real users of deployed language model systems?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2111.06377",
+    "paper_title": "Masked Autoencoders Are Scalable Vision Learners",
+    "query": "What top-1 accuracy does a ViT-Huge model achieve on ImageNet-1K when fine-tuned at 448 image size using MAE pre-training?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "87.8% top-1 accuracy on ImageNet-1K.",
+    "gt_passages": [
+      "By fine-tuning with a 448 size, we achieve 87.8 % accuracy, using only IN1K data ."
+    ]
+  },
+  {
+    "paper_id": "2111.06377",
+    "paper_title": "Masked Autoencoders Are Scalable Vision Learners",
+    "query": "How does the asymmetric encoder-decoder architecture with mask tokens shifted to the decoder affect training FLOPs and wall-clock speedup compared to an encoder that includes mask tokens?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "Removing mask tokens from the encoder reduces overall training FLOPs by 3.3x and achieves a 2.8x wall-clock speedup (up to 4.1x for a smaller decoder or larger encoder such as ViT-H).",
+    "gt_passages": [
+      "Moreover, by skipping the mask token in the encoder, we greatly reduce training computation. In Table 1c, we reduce the overall training FLOPs by 3.3 × . This leads to a 2.8 × wall-clock speedup in our implementation (see Table 2). The wall-clock speedup is even bigger (3.5-4.1 × ), for a smaller decoder (1-block), a larger encoder (ViT-H), or both."
+    ]
+  },
+  {
+    "paper_id": "2111.06377",
+    "paper_title": "Masked Autoencoders Are Scalable Vision Learners",
+    "query": "What is the core idea behind how MAE learns visual representations without using labeled data?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "MAE learns by randomly masking a large proportion (e.g., 75%) of image patches and training the model to reconstruct the missing pixels. An encoder processes only the visible patches without mask tokens, and a lightweight decoder reconstructs the full image from the encoder's latent representation plus mask tokens, creating a self-supervised task that forces the model to learn meaningful visual features.",
+    "gt_passages": [
+      "Our MAE approach is simple: we mask random patches of the input image and reconstruct the missing pixels. It is based on two core designs. First, we develop an asymmetric encoder-decoder architecture, with an encoder that operates only on the visible subset of patches (without mask tokens), along with a lightweight decoder that reconstructs the original image from the latent representation and mask tokens. Second, we find that masking a high proportion of the input image, e.g ., 75%, yields a nontrivial and meaningful self-supervisory task."
+    ]
+  },
+  {
+    "paper_id": "2111.06377",
+    "paper_title": "Masked Autoencoders Are Scalable Vision Learners",
+    "query": "Considering both the default masking ratio used in pre-training and the decoder default configuration, how much of the full token set does the decoder process and what fraction of the encoder's compute does it consume per token?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "The decoder processes the full set of tokens (both encoded visible patches and mask tokens), but with a default masking ratio of 75% the encoder only sees 25% of patches. The default decoder (8 blocks, 512-d width) consumes only 9% of the FLOPs per token compared to ViT-L (24 blocks, 1024-d).",
+    "gt_passages": [
+      "our encoder only operates on a small subset ( e.g ., 25%) of the full set. Masked patches are removed; no mask tokens are used.",
+      "Overall, our default MAE decoder is lightweight. It has 8 blocks and a width of 512-d ( gray in Table 1). It only has 9% FLOPs per token vs . ViT-L (24 blocks, 1024-d). As such, while the decoder processes all tokens, it is still a small fraction of the overall compute."
+    ]
+  },
+  {
+    "paper_id": "2111.06377",
+    "paper_title": "Masked Autoencoders Are Scalable Vision Learners",
+    "query": "Does the paper discuss techniques for handling multi-modal inputs that combine image and text during MAE pre-training?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2111.09883",
+    "paper_title": "Swin Transformer V2: Scaling Up Capacity and Resolution",
+    "query": "What top-1 accuracy did SwinV2-G achieve on the ImageNet-V2 benchmark?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "SwinV2-G achieved 84.0% top-1 accuracy on the ImageNet-V2 benchmark.",
+    "gt_passages": [
+      "It achieves a top-1 accuracy of 84.0% on the ImageNet V2 benchmark, which is +0.7% higher than previous best one (83.3%)."
+    ]
+  },
+  {
+    "paper_id": "2111.09883",
+    "paper_title": "Swin Transformer V2: Scaling Up Capacity and Resolution",
+    "query": "How does the log-spaced continuous position bias (Log-CPB) reduce the extrapolation ratio when transferring from an 8×8 pre-trained window to a 16×16 fine-tuned window?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "Using log-spaced coordinates reduces the extrapolation ratio to 0.33× of the original range when transferring from an 8×8 to a 16×16 window, compared to 1.14× with linear-spaced coordinates — approximately 4 times smaller.",
+    "gt_passages": [
+      "For an example of transferring from a pre-trained 8 × 8 window size to a fine-tuned 16 × 16 window size, using the original raw coordinates, the input coordinate range will be from [ -7 , 7] × [ -7 , 7] to [ -15 , 15] × [ -15 , 15] . The extrapolation ratio is 8 7 = 1 . 14 × of the original range. Using log-spaced coordinates, the input range will be from [ -2 . 079 , 2 . 079] × [ -2 . 079 , 2 . 079] to [ -2 . 773 , 2 . 773] × [ -2 . 773 , 2 . 773] . The extrapolation ratio is 0 . 33 × of the original range, which is an about 4 times smaller extrapolation ratio than that using the original linear-spaced coordinates."
+    ]
+  },
+  {
+    "paper_id": "2111.09883",
+    "paper_title": "Swin Transformer V2: Scaling Up Capacity and Resolution",
+    "query": "How does this paper address the problem of training instability that arises when scaling vision transformers to larger sizes?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The paper proposes two techniques: (1) a residual post-normalization configuration that moves the layer norm to the end of each residual block so activation amplitudes do not accumulate across layers, and (2) a scaled cosine attention that replaces dot-product attention, making attention logits independent of input amplitude and preventing attention maps from being dominated by a few pixel pairs.",
+    "gt_passages": [
+      "Post normalization To ease this problem, we propose to use a residual post normalization approach instead, as shown in Figure 1. In this approach, the output of each residual block is normalized before merging back into the main branch, and the amplitude of the main branch does not accumulate when the layer goes deeper.",
+      "Scaled cosine attention In the original self-attention computation, the similarity terms of the pixel pairs are computed as a dot product of the query and key vectors. We find that when this approach is used in large visual models, the learnt attention maps of some blocks and heads are frequently dominated by a few pixel pairs, especially in the res-post-norm configuration. To ease this issue, we propose a scaled cosine attention approach that computes the attention logit of a pixel pair i and j by a scaled cosine function"
+    ]
+  },
+  {
+    "paper_id": "2111.09883",
+    "paper_title": "Swin Transformer V2: Scaling Up Capacity and Resolution",
+    "query": "Considering both the model's parameter count and the labelled data used for pre-training, how does SwinV2-G compare in training efficiency to Google's billion-level visual models such as ViT-G?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "SwinV2-G has 3 billion parameters and was pre-trained on 70 million labelled images (ImageNet-22K-ext), whereas ViT-G uses 1.8 billion parameters but was pre-trained on JFT-3B (approximately 3 billion images). The paper states that Swin Transformer V2 training consumes 40 times less labelled data and 40 times less training time than previous practice with JFT-3B, while still achieving higher ImageNet-V2 accuracy.",
+    "gt_passages": [
+      "Also note our training is much more efficient than that in Google's billion-level visual models, which consumes 40 times less labelled data and 40 times less training time.",
+      "By this approach, we successfully trained a powerful Swin Transformer model of 3 billion parameters which achieves state-of-the-art (SOTA) on 4 representative visual benchmarks, by using only 70 million labelled images (1/40 of that in JFT-3B)."
+    ]
+  },
+  {
+    "paper_id": "2111.09883",
+    "paper_title": "Swin Transformer V2: Scaling Up Capacity and Resolution",
+    "query": "Does the paper discuss deploying Swin Transformer V2 models on edge devices or mobile hardware with limited compute resources?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper.",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2112.10752",
+    "paper_title": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "query": "What FID score did the LDM-4 model achieve on CelebA-HQ 256x256 for unconditional image synthesis?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "LDM-4 achieved a FID score of 5.11 on CelebA-HQ 256x256, which the authors report as a new state-of-the-art for likelihood-based models.",
+    "gt_passages": [
+      "On CelebA-HQ, we report a new state-of-the-art FID of 5 . 11 , outperforming previous likelihood-based models as well as GANs."
+    ]
+  },
+  {
+    "paper_id": "2112.10752",
+    "paper_title": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "query": "How does the cross-attention conditioning mechanism work in Latent Diffusion Models, and what domain-specific encoder is used for text prompts?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "A domain-specific encoder τ_θ projects the conditioning input y into an intermediate representation, which is then mapped to the intermediate layers of the UNet via a cross-attention layer. For text prompts, τ_θ is implemented as a transformer using the BERT-tokenizer.",
+    "gt_passages": [
+      "We turn DMs into more flexible conditional image generators by augmenting their underlying UNet backbone with the cross-attention mechanism [97], which is effective for learning attention-based models of various input modalities [35,36]. To pre-process y from various modalities (such as language prompts) we introduce a domain specific encoder τ θ that projects y to an intermediate representation τ θ ( y ) ∈ R M × d τ , which is then mapped to the intermediate layers of the UNet via a cross-attention layer implementing Attention ( Q,K,V ) = softmax ( QK T √ d ) · V",
+      "we train a 1.45B parameter KL -regularized LDM conditioned on language prompts on LAION-400M [78]. We employ the BERT-tokenizer [14] and implement τ θ as a transformer [97] to infer a latent code which is mapped into the UNet via (multi-head) cross-attention (Sec. 3.3)."
+    ]
+  },
+  {
+    "paper_id": "2112.10752",
+    "paper_title": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "query": "What is the main idea behind this paper's approach to making diffusion model training cheaper without losing image quality?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The key idea is to first train an autoencoder that compresses images into a lower-dimensional latent space that is perceptually equivalent to the original pixel space, and then train diffusion models in that latent space instead of directly in pixel space. This greatly reduces computational cost while preserving visual quality.",
+    "gt_passages": [
+      "We propose to circumvent this drawback by introducing an explicit separation of the compressive from the generative learning phase (see Fig. 2). To achieve this, we utilize an autoencoding model which learns a space that is perceptually equivalent to the image space, but offers significantly reduced computational complexity.",
+      "we apply them in the latent space of powerful pretrained autoencoders. In contrast to previous work, training diffusion models on such a representation allows for the first time to reach a near-optimal point between complexity reduction and detail preservation, greatly boosting visual fidelity."
+    ]
+  },
+  {
+    "paper_id": "2112.10752",
+    "paper_title": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "query": "What training speedup and FID improvement does the latent-based LDM-4 achieve over the pixel-based LDM-1 on the inpainting task, and how many parameters does the larger inpainting model use?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "LDM-4 achieves at least a 2.7x speedup in training throughput and reduces FID by a factor of at least 1.6x compared to pixel-based LDM-1. The larger inpainting UNet model has 387M parameters.",
+    "gt_passages": [
+      "Overall, we observe a speed-up of at least 2 . 7 × between pixel- and latent-based diffusion models while improving FID scores by a factor of at least 1 . 6 × .",
+      "Following [15], the UNet of this diffusion model uses attention layers on three levels of its feature hierarchy, the BigGAN [3] residual block for up- and downsampling and has 387M parameters instead of 215M."
+    ]
+  },
+  {
+    "paper_id": "2112.10752",
+    "paper_title": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "query": "Does this paper discuss reinforcement learning from human feedback (RLHF) as a method for improving the quality of generated images?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2201.03545",
+    "paper_title": "A ConvNet for the 2020s",
+    "query": "What ImageNet top-1 accuracy does ConvNeXt-XL achieve when pre-trained on ImageNet-22K and fine-tuned at 384x384 resolution?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "ConvNeXt-XL achieves 87.8% ImageNet top-1 accuracy when pre-trained on ImageNet-22K and fine-tuned at 384x384 resolution.",
+    "gt_passages": [
+      "our ConvNeXt-XL model achieves an accuracy of 87.8% - a decent improvement over ConvNeXt-L at 384 2 , demonstrating that ConvNeXts are scalable architectures."
+    ]
+  },
+  {
+    "paper_id": "2201.03545",
+    "paper_title": "A ConvNet for the 2020s",
+    "query": "How does replacing BatchNorm with LayerNorm and using depthwise convolution with inverted bottleneck affect ConvNeXt's training and accuracy compared to the ResNet baseline?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "Substituting LayerNorm for BatchNorm does not cause training difficulties and slightly improves accuracy to 81.5%. Combined with depthwise convolution and the inverted bottleneck design, these changes are part of the modernization roadmap that progressively improves accuracy from the 78.8% ResNet-50 baseline toward the final ConvNeXt-T result of 82.0%.",
+    "gt_passages": [
+      "We observe that our ConvNet model does not have any difficulties training with LN; in fact, the performance is slightly better, obtaining an accuracy of 81.5%.",
+      "Despite the increased FLOPs for the depthwise convolution layer, this change reduces the whole network FLOPs to 4.6G, due to the significant FLOPs reduction in the downsampling residual blocks' shortcut 1 × 1 conv layer. Interestingly, this results in slightly improved performance (80.5% to 80.6%)."
+    ]
+  },
+  {
+    "paper_id": "2201.03545",
+    "paper_title": "A ConvNet for the 2020s",
+    "query": "What is the main idea behind this paper, and how do the authors show that a traditional convolutional network can match modern vision Transformers?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The paper systematically modernizes a standard ResNet by adopting design choices from vision Transformers (such as larger kernels, inverted bottlenecks, LayerNorm, and a patchify stem) without introducing any attention mechanism. The resulting pure ConvNet family, ConvNeXt, matches or outperforms Swin Transformers on ImageNet classification, COCO detection, and ADE20K segmentation, demonstrating that the performance gap was largely due to architectural and training recipe differences rather than an inherent superiority of self-attention.",
+    "gt_passages": [
+      "We gradually 'modernize' a standard ResNet toward the design of a vision Transformer, and discover several key components that contribute to the performance difference along the way. The outcome of this exploration is a family of pure ConvNet models dubbed ConvNeXt. Constructed entirely from standard ConvNet modules, ConvNeXts compete favorably with Transformers in terms of accuracy and scalability, achieving 87.8% ImageNet top-1 accuracy and outperforming Swin Transformers on COCO detection and ADE20K segmentation, while maintaining the simplicity and efficiency of standard ConvNets."
+    ]
+  },
+  {
+    "paper_id": "2201.03545",
+    "paper_title": "A ConvNet for the 2020s",
+    "query": "Starting from the ResNet-50 baseline trained with the enhanced recipe, what sequence of architectural changes leads to the final ConvNeXt-T model, and what is the cumulative accuracy improvement at each major step?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "Starting from ResNet-50 with the enhanced training recipe (78.8%), the steps and resulting accuracies are: (1) stage ratio change to (3,3,9,3): 79.4%; (2) patchify stem (4x4, stride-4 conv): 79.5%; (3) depthwise conv + width increase to 96 channels: 80.5%; (4) inverted bottleneck: 80.6%; (5) moving depthwise conv up + 7x7 kernel: 80.6%; (6) ReLU replaced with GELU: 80.6%; (7) fewer activations (single GELU): 81.3%; (8) fewer normalization layers: 81.4%; (9) BatchNorm replaced with LayerNorm: 81.5%; (10) separate downsampling layers (ConvNeXt-T): 82.0%.",
+    "gt_passages": [
+      "ResNet-50 (enhanced recipe)     | 78.82 ± 0.07 |     4.09",
+      "stage ratio                     | 79.36 ± 0.07 |     4.53",
+      "'patchify' stem                 | 79.51 ± 0.18 |     4.42",
+      "increase width                  | 80.50 ± 0.02 |     5.27",
+      "inverting dimensions            | 80.64 ± 0.03 |     4.64",
+      "kernel size → 7                 | 80.57 ± 0.14 |     4.15",
+      "ReLU → GELU                     | 80.62 ± 0.14 |     4.15",
+      "fewer activations               | 81.27 ± 0.06 |     4.15",
+      "fewer norms                     | 81.41 ± 0.09 |     4.15",
+      "BN → LN                         | 81.47 ± 0.09 |     4.46",
+      "separate d.s. conv (ConvNeXt-T) | 81.97 ± 0.06 |     4.49"
+    ]
+  },
+  {
+    "paper_id": "2201.03545",
+    "paper_title": "A ConvNet for the 2020s",
+    "query": "Does the paper propose a new self-attention mechanism or multi-head attention module for ConvNeXt to improve its performance on vision tasks?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2201.11903",
+    "paper_title": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+    "query": "What accuracy did PaLM 540B achieve on the GSM8K benchmark using chain-of-thought prompting?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "PaLM 540B achieved 56.9% accuracy on GSM8K with chain-of-thought prompting, which represents state-of-the-art performance on that benchmark, surpassing even finetuned GPT-3 with a verifier.",
+    "gt_passages": [
+      "prompting a PaLM 540B with just eight chain-of-thought exemplars achieves state-of-the-art accuracy on the GSM8K benchmark of math word problems, surpassing even finetuned GPT-3 with a verifier.",
+      "PaLM  | 540B | 17.9     | 56.9    | 69.4     | 79.0    | 72.1     | 73.9    | 25.2     | 35.8   | 79.2     | 93.3"
+    ]
+  },
+  {
+    "paper_id": "2201.11903",
+    "paper_title": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+    "query": "How does chain-of-thought prompting differ from standard few-shot prompting, and what is the input format used?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "In standard few-shot prompting, a language model is given input-output pairs as exemplars and directly produces the answer. Chain-of-thought prompting augments each exemplar with a chain of thought — a series of intermediate natural language reasoning steps — so the input format becomes triples of (input, chain of thought, output) rather than simple (input, output) pairs.",
+    "gt_passages": [
+      "For the baseline, we consider standard few-shot prompting, popularized by Brown et al. (2020), in which a language model is given in-context exemplars of input-output pairs before outputting a prediction for a test-time example. Exemplars are formatted as questions and answers. The model gives the answer directly, as shown in Figure 1 (left).",
+      "Our proposed approach is to augment each exemplar in few-shot prompting with a chain of thought for an associated answer, as illustrated in Figure 1 (right).",
+      "we explore the ability of language models to perform few-shot prompting for reasoning tasks, given a prompt that consists of triples: 〈 input, chain of thought , output 〉 . A chain of thought is a series of intermediate natural language reasoning steps that lead to the final output, and we refer to this approach as chain-of-thought prompting ."
+    ]
+  },
+  {
+    "paper_id": "2201.11903",
+    "paper_title": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+    "query": "What is the main idea behind the technique proposed in this paper for improving language model reasoning, and why does it not require any model training?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The paper proposes guiding large language models through complex problems by providing a few example prompts that include step-by-step reasoning before the final answer. Because the technique works entirely through prompting — presenting demonstrations at inference time — no finetuning or gradient updates are needed; the reasoning capability is elicited from a pre-existing off-the-shelf model.",
+    "gt_passages": [
+      "We explore how generating a chain of thought -a series of intermediate reasoning steps-significantly improves the ability of large language models to perform complex reasoning. In particular, we show how such reasoning abilities emerge naturally in sufficiently large language models via a simple method called chain-ofthought prompting , where a few chain of thought demonstrations are provided as exemplars in prompting.",
+      "In all experiments, chain-of-thought reasoning is elicited simply by prompting an off-the-shelf language model. No language models were finetuned in the process of writing this paper."
+    ]
+  },
+  {
+    "paper_id": "2201.11903",
+    "paper_title": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+    "query": "For which model scale threshold does chain-of-thought prompting begin to yield positive performance gains, and how does this relate to the error types observed in smaller models?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "Chain-of-thought prompting begins to yield positive gains only at approximately 100B parameters; models below that scale show flat or negative improvements. Error analysis of smaller models (e.g., PaLM 62B) revealed that they disproportionately make semantic understanding errors and one-step missing errors, and scaling to 540B fixed a substantial portion of those errors, suggesting that the threshold corresponds to the emergence of adequate semantic understanding and arithmetic ability.",
+    "gt_passages": [
+      "chain-of-thought prompting is an emergent ability of model scale (Wei et al., 2022b). That is, chain-of-thought prompting does not positively impact performance for small models, and only yields performance gains when used with models of ∼ 100B parameters. We qualitatively found that models of smaller scale produced fluent but illogical chains of thought, leading to lower performance than standard prompting.",
+      "This small analysis involved manually reading 45 errors made by PaLM 62B and categorizing them into semantic understanding (20 errors), one step missing (18 errors), and other errors (7 errors).",
+      "scaling PaLM to 540B parameters fixed a substantial portion of errors in all three categories."
+    ]
+  },
+  {
+    "paper_id": "2201.11903",
+    "paper_title": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+    "query": "Does the paper discuss how to apply chain-of-thought prompting to multilingual or cross-lingual reasoning tasks?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2202.12837",
+    "paper_title": "Rethinking the Role of Demonstrations: What Makes In-Context Learning Work?",
+    "query": "How many models were used in the experiments, and what is the default number of demonstration examples used?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "12 models were used in total, and the default number of demonstration examples (k) is 16.",
+    "gt_passages": [
+      "We experiment with 12 models in total. We include 6 language models (Table 1), all of which are decoder-only, dense LMs. We use each LM with two inference methods, direct and channel, following Min et al. (2021a).",
+      "We use k = 16 examples as demonstrations by default for all experiments in the paper, unless otherwise specified."
+    ]
+  },
+  {
+    "paper_id": "2202.12837",
+    "paper_title": "Rethinking the Role of Demonstrations: What Makes In-Context Learning Work?",
+    "query": "What is the performance drop range when replacing gold labels with random labels in the demonstrations, and how does it differ between MetaICL and other models?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "When replacing gold labels with random labels, models see performance drop in the range of 0-5% absolute overall. There is less impact in multi-choice tasks (1.7% on average) than in classification tasks (2.6% absolute). MetaICL shows particularly little performance drop of only 0.1-0.9% absolute, suggesting meta-training with an explicit in-context learning objective encourages the model to ignore the input-label mapping.",
+    "gt_passages": [
+      "We then find that replacing gold labels with random labels only marginally hurts performance . The trend is consistent over nearly all models: models see performance drop in the range of 0-5% absolute. There is less impact in replacing labels in multi-choice tasks (1.7% on average) than in classification tasks (2.6% absolute).",
+      "It is also worth noting that there is particularly little performance drop in MetaICL: 0.1-0.9% absolute. This suggests that meta-training with an explicit in-context learning objective actually encourages the model to essentially ignore the input- label mapping and exploit other components of the demonstrations (more discussion in Section 5.4)."
+    ]
+  },
+  {
+    "paper_id": "2202.12837",
+    "paper_title": "Rethinking the Role of Demonstrations: What Makes In-Context Learning Work?",
+    "query": "What does this paper reveal about why showing examples helps a language model perform a new task, even when those examples have wrong answers?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The paper reveals that the benefit of demonstrations in in-context learning comes primarily from three aspects independent of correct answer pairings: (1) exposing the model to the label space, (2) providing examples from the distribution of the input text, and (3) establishing the overall input-label pairing format. The model appears to already possess task knowledge from pretraining and uses demonstrations to locate and activate that knowledge rather than to learn the input-output mapping from scratch.",
+    "gt_passages": [
+      "Instead, we find that other aspects of the demonstrations are the key drivers of end task performance, including the fact that they provide a few examples of (1) the label space, (2) the distribution of the input text, and (3) the overall format of the sequence.",
+      "This strongly suggests that the models are capable of recovering the expected inputlabel correspondence for the task; however, it is not directly from the pairings in the demonstrations."
+    ]
+  },
+  {
+    "paper_id": "2202.12837",
+    "paper_title": "Rethinking the Role of Demonstrations: What Makes In-Context Learning Work?",
+    "query": "For the Direct MetaICL model, what percentage of in-context learning performance gains can be retained using only the format and randomly sampled sentences from a corpus paired with the label set, and how does meta-training explain this behavior?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "Direct MetaICL can retain 95% of classification improvements and 82% of multi-choice improvements by simply sampling random sentences from a corpus and randomly pairing them with the label set. This is explained by meta-training encouraging the model to exclusively exploit simpler aspects of the demonstrations such as format rather than the input-label mapping, making it almost entirely reliant on format and label space cues rather than correct input-label correspondence.",
+    "gt_passages": [
+      "For instance, with Direct MetaICL, it is possible to retain 95% and 82% of improvements from in-context learning (demonstrations with gold labels) by simply sampling random sentences from a corpus and randomly pairing them with the label set ( /squaresolid in Figure 10) in classification and multi-choice, respectively.",
+      "Based on this observation, we hypothesize that meta-training encourages the model to exclusively exploit simpler aspects of the demonstrations and to ignore others . This is based on our intuition that (1) the input-label mapping is likely harder to exploit, (2) the format is likely easier to exploit, and (3) the space of the text that the model is trained to generate is likely easier to exploit than the space of the text that the model conditions on."
+    ]
+  },
+  {
+    "paper_id": "2202.12837",
+    "paper_title": "Rethinking the Role of Demonstrations: What Makes In-Context Learning Work?",
+    "query": "Does this paper provide analysis of how in-context learning performance changes across different pretraining data sizes or when scaling the pretraining corpus?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2203.15556",
+    "paper_title": "Training Compute-Optimal Large Language Models",
+    "query": "What average 5-shot accuracy did Chinchilla achieve on the MMLU benchmark?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "Chinchilla achieved 67.6% average 5-shot accuracy on the MMLU benchmark.",
+    "gt_passages": [
+      "On this benchmark, Chinchilla significantly outperforms Gopher despite being much smaller, with an average accuracy of 67.6% (improving upon Gopher by 7.6%)."
+    ]
+  },
+  {
+    "paper_id": "2203.15556",
+    "paper_title": "Training Compute-Optimal Large Language Models",
+    "query": "What are the IsoFLOP profile scaling exponents for optimal model size and training tokens found in Approach 2?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "For Approach 2 (IsoFLOP profiles), the scaling exponent for optimal model size is a = 0.49 and the scaling exponent for optimal training tokens is b = 0.51.",
+    "gt_passages": [
+      "Again, we fit exponents of the form 𝑁𝑜𝑝𝑡 / 𝐶 𝑎 and 𝐷𝑜𝑝𝑡 / 𝐶 𝑏 and we find that 𝑎 = 0 49 and 𝑏 = 0 51-as summarized in Table 2."
+    ]
+  },
+  {
+    "paper_id": "2203.15556",
+    "paper_title": "Training Compute-Optimal Large Language Models",
+    "query": "What is the core finding about how model size and training data should be balanced when increasing compute budget?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The paper finds that for compute-optimal training, model size and the number of training tokens should be scaled in equal proportions — every doubling of model size should be matched by a doubling of training tokens. Current large language models are significantly undertrained because the field has focused on scaling model size while keeping training data roughly constant.",
+    "gt_passages": [
+      "We find that for compute-optimal training, the model size and the number of training tokens should be scaled equally: for every doubling of model size the number of training tokens should also be doubled.",
+      "All three approaches suggest that as compute budget increases, model size and the amount of training data should be increased in approximately equal proportions."
+    ]
+  },
+  {
+    "paper_id": "2203.15556",
+    "paper_title": "Training Compute-Optimal Large Language Models",
+    "query": "Chinchilla uses the same compute budget as Gopher but is trained differently — what are its parameter count and training token count, and how does its BIG-bench performance compare to Gopher?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "Chinchilla has 70 billion parameters and is trained on 1.4 trillion tokens, using the same compute budget as Gopher (280 billion parameters, 300 billion tokens). On BIG-bench, Chinchilla improves average performance by 10.7% over Gopher, reaching 65.1% accuracy versus 54.4% for Gopher, outperforming Gopher on 58 of 62 tasks.",
+    "gt_passages": [
+      "Based on our analysis in Section 3, the optimal model size for the Gopher compute budget is somewhere between 40 and 70 billion parameters. We test this hypothesis by training a model on the larger end of this range-70B parameters-for 1.4T tokens, due to both dataset and computational efficiency considerations.",
+      "We find that Chinchilla improves the average performance by 10.7%, reaching an accuracy of 65.1% versus 54.4% for Gopher . Of the 62 tasks we consider, Chinchilla performs worse than Gopher on only four-crash_blossom, dark_humor_detection, mathematical_induction and logical_args ."
+    ]
+  },
+  {
+    "paper_id": "2203.15556",
+    "paper_title": "Training Compute-Optimal Large Language Models",
+    "query": "Does the paper discuss how to reduce toxic language generation during the pre-training phase through data filtering techniques?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2205.14135",
+    "paper_title": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+    "query": "How much faster is FlashAttention compared to the Nvidia MLPerf 1.1 training speed record for BERT-large?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "FlashAttention is 15% faster than the Nvidia MLPerf 1.1 training speed record for BERT-large, reducing training time from 20.0 minutes to 17.4 minutes on 8 A100 GPUs.",
+    "gt_passages": [
+      "FlashAttention yields the fastest single-node BERT training speed that we know of. We train a BERT-large [22] model with FlashAttention on Wikipedia. Table 1 compares our training time to the implementation from Nvidia that set the training speed record for MLPerf 1.1 [58]. Our implementation is 15% faster."
+    ]
+  },
+  {
+    "paper_id": "2205.14135",
+    "paper_title": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+    "query": "What is the HBM access complexity of FlashAttention compared to standard attention, and how does tiling and recomputation reduce the number of memory reads and writes in the CUDA kernel?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "Standard attention requires Theta(Nd + N^2) HBM accesses, while FlashAttention requires Theta(N^2 d^2 M^-1) HBM accesses, where M is the SRAM size. By using tiling to process blocks entirely on-chip SRAM and recomputation to avoid storing large intermediate attention matrices, FlashAttention fuses all attention operations into one CUDA kernel, greatly reducing HBM reads and writes.",
+    "gt_passages": [
+      "Theorem 2. Let N be the sequence length, d be the head dimension, and M be size of SRAM with d ≤ M ≤ Nd. Standard attention (Algorithm 0) requires Θ(Nd + N^2) HBM accesses, while FlashAttention (Algorithm 1) requires Θ(N^2 d^2 M^-1) HBM accesses.",
+      "Tiling enables us to implement our algorithm in one CUDA kernel, loading input from HBM, performing all the computation steps (matrix multiply, softmax, optionally masking and dropout, matrix multiply), then write the result back to HBM (masking and dropout in Appendix B). This avoids repeatedly reading and writing of inputs and outputs from and to HBM."
+    ]
+  },
+  {
+    "paper_id": "2205.14135",
+    "paper_title": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+    "query": "How does FlashAttention manage to compute exact attention while using less memory than the standard approach, without storing the full attention matrix?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "FlashAttention avoids materializing the full N×N attention matrix by splitting the input Q, K, V into blocks and processing them one block at a time in fast on-chip SRAM using a tiling technique that incrementally computes the softmax. For the backward pass, instead of storing the large intermediate attention matrices, it stores only the softmax normalization statistics and recomputes attention on-chip as needed, keeping overall memory usage linear in sequence length.",
+    "gt_passages": [
+      "We propose FlashAttention, a new attention algorithm that computes exact attention with far fewer memory accesses. Our main goal is to avoid reading and writing the attention matrix to and from HBM. This requires (i) computing the softmax reduction without access to the whole input (ii) not storing the large intermediate attention matrix for the backward pass. We apply two well-established techniques to address these challenges. (i) We restructure the attention computation to split the input into blocks and make several passes over input blocks, thus incrementally performing the softmax reduction (also known as tiling). (ii) We store the softmax normalization factor from the forward pass to quickly recompute attention on-chip in the backward pass, which is faster than the standard approach of reading the intermediate attention matrix from HBM."
+    ]
+  },
+  {
+    "paper_id": "2205.14135",
+    "paper_title": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+    "query": "FlashAttention trains GPT-2 with a 4K context length faster than Megatron-LM trains GPT-2 with a 1K context length. What perplexity improvement does this longer-context model achieve, and how does the training speed compare?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "GPT-2 small with FlashAttention at context length 4K is still 30% faster than GPT-2 from Megatron-LM at context length 1K (3.6 days vs 4.7 days), while achieving 0.7 better perplexity (17.5 vs 18.2 on OpenWebText).",
+    "gt_passages": [
+      "The runtime and memory-efficiency of FlashAttention allow us to increase the context length of GPT-2 by 4x while still running faster than the optimized implementation from Megatron-LM. Table 4 shows that that GPT-2 with FlashAttention and context length 4K is still 30% faster than GPT-2 from Megatron with context length 1K, while achieving 0.7 better perplexity.",
+      "GPT-2 small - Megatron-LM: Context length 1k, OpenWebText (ppl) 18.2, Training time 4.7 days (1.0x); GPT-2 small - FlashAttention: Context length 4k, OpenWebText (ppl) 17.5, Training time 3.6 days (1.3x)"
+    ]
+  },
+  {
+    "paper_id": "2205.14135",
+    "paper_title": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+    "query": "Does the paper discuss how FlashAttention can be used to reduce energy consumption or carbon footprint during Transformer training?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2212.10560",
+    "paper_title": "SELF-INSTRUCT: Aligning Language Models with Self-Generated Instructions",
+    "query": "How many instructions and instances were generated by applying SELF-INSTRUCT to GPT3?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "52,445 instructions and 82,439 instances were generated after filtering.",
+    "gt_passages": [
+      "We generate a total of over 52K instructions and more than 82K instances corresponding to these instructions after filtering.",
+      "| # of instructions                      | 52,445 |\n| - # of classification instructions     | 11,584 |\n| - # of non-classification instructions | 40,861 |\n| # of instances                         | 82,439 |"
+    ]
+  },
+  {
+    "paper_id": "2212.10560",
+    "paper_title": "SELF-INSTRUCT: Aligning Language Models with Self-Generated Instructions",
+    "query": "What ROUGE-L similarity threshold is used to filter out duplicate instructions in SELF-INSTRUCT, and what keywords cause an instruction to be excluded?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "A new instruction is added to the task pool only when its ROUGE-L similarity with any existing instruction is less than 0.7. Instructions containing keywords such as 'image', 'picture', or 'graph' are excluded because they cannot be processed by language models.",
+    "gt_passages": [
+      "To encourage diversity, a new instruction is added to the task pool only when its ROUGE-L similarity with any existing instruction is less than 0.7. We also exclude instructions that contain some specific keywords (e.g., image, picture, graph) that usually can not be processed by LMs."
+    ]
+  },
+  {
+    "paper_id": "2212.10560",
+    "paper_title": "SELF-INSTRUCT: Aligning Language Models with Self-Generated Instructions",
+    "query": "How does SELF-INSTRUCT enable a language model to improve its instruction-following ability without relying on large amounts of human-labeled data?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "SELF-INSTRUCT uses the language model itself to bootstrap instruction data. Starting from a small seed set of 175 manually written tasks, it iteratively prompts the model to generate new task instructions, determines if each is a classification or non-classification task, generates input-output instances, filters low-quality or duplicate generations, and adds the valid data back to the task pool. The resulting large-scale synthetic dataset is then used to finetune the same model, improving its ability to follow instructions with minimal human annotation.",
+    "gt_passages": [
+      "We introduce SELF-INSTRUCT, a framework for improving the instruction-following capabilities of pretrained language models by bootstrapping off their own generations. Our pipeline generates instructions, input, and output samples from a language model, then filters invalid or similar ones before using them to finetune the original model.",
+      "In this work, we introduce SELF-INSTRUCT, a semi-automated process for instruction-tuning a pretrained LM using instructional signals from the model itself. The overall process is an iterative bootstrapping algorithm (see Figure 2), which starts off with a limited (e.g., 175 in our study) seed set of manually-written tasks that are used to guide the overall generation."
+    ]
+  },
+  {
+    "paper_id": "2212.10560",
+    "paper_title": "SELF-INSTRUCT: Aligning Language Models with Self-Generated Instructions",
+    "query": "What was the performance gap between GPT3 SELF-INST and InstructGPT 001 on the SUPERNI benchmark, and how did improving the data quality with output regeneration affect performance on the user-oriented instruction set?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "On the SUPERNI benchmark, GPT3 SELF-INST scored 39.9 ROUGE-L while InstructGPT 001 scored 40.8 ROUGE-L, a gap of about 0.9 points. On the user-oriented instruction set, regenerating outputs using InstructGPT 003 to improve data quality resulted in a 10% improvement over training on the original generated data.",
+    "gt_passages": [
+      "| GPT3 S ELF -I NST (Ours)                      | 175B       |      39.9 |\n| InstructGPT 001                               | 175B       |      40.8 |",
+      "As is shown in Figure 7, the resulting model outperforms the counterpart trained with the original data by 10%, which suggests big room for future work on using our generation pipeline to get initial data and then improving the data quality with human experts or distillation from better models."
+    ]
+  },
+  {
+    "paper_id": "2212.10560",
+    "paper_title": "SELF-INSTRUCT: Aligning Language Models with Self-Generated Instructions",
+    "query": "Does the paper discuss how SELF-INSTRUCT can be applied to multimodal or vision-language models?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2303.01469",
+    "paper_title": "Consistency Models",
+    "query": "What FID score did consistency distillation achieve on CIFAR-10 for one-step generation?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "Consistency distillation achieved an FID of 3.55 on CIFAR-10 for one-step generation.",
+    "gt_passages": [
+      "On CIFAR-10, consistency models reach new state-of-the-art FIDs of 3.55 and 2.93 for one-step and two-step generation; on ImageNet 64 ˆ 64 , it achieves record-breaking FIDs of 6.20 and 4.70 with one and two network evaluations respectively."
+    ]
+  },
+  {
+    "paper_id": "2303.01469",
+    "paper_title": "Consistency Models",
+    "query": "What metric function and ODE solver were found to be optimal for consistency distillation training on CIFAR-10, and what value of N was selected?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "The optimal metric function for consistency distillation on CIFAR-10 is LPIPS, the optimal ODE solver is the Heun second-order solver, and the best number of discretization steps is N = 18.",
+    "gt_passages": [
+      "As visualized in Fig. 3a, the optimal metric for CD is LPIPS, which outperforms both ℓ 1 and ℓ 2 by a large margin over all training iterations.",
+      "As shown in Figs. 3b and 3c, Heun ODE solver and N ' 18 are the best choices."
+    ]
+  },
+  {
+    "paper_id": "2303.01469",
+    "paper_title": "Consistency Models",
+    "query": "How do consistency models allow fast image generation without running the full iterative denoising process used by diffusion models?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "Consistency models learn a mapping from any noisy point on a diffusion trajectory directly back to the clean data point (the trajectory's origin). This self-consistency property means a single forward pass through the network suffices to generate a sample from noise, eliminating the need for many sequential denoising steps.",
+    "gt_passages": [
+      "We propose to learn a model that maps any point at any time step to the trajectory's starting point. A notable property of our model is self-consistency: points on the same trajectory map to the same initial point . We therefore refer to such models as consistency models . Consistency models allow us to generate data samples (initial points of ODE trajectories, e.g ., x 0 in Fig. 1) by converting random noise vectors (endpoints of ODE trajectories, e.g ., x T in Fig. 1) with only one network evaluation."
+    ]
+  },
+  {
+    "paper_id": "2303.01469",
+    "paper_title": "Consistency Models",
+    "query": "When consistency models are trained in isolation (without a pre-trained diffusion model), how does the training objective relate to the distillation objective, and what schedule is introduced to improve convergence?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "The consistency training (CT) loss is derived by replacing the pre-trained score model with an unbiased estimator of the score function, making it equal to the consistency distillation loss up to a small remainder term of order O(Δt) as shown in Theorem 2. To improve convergence, the paper proposes progressively increasing N (the number of discretization steps) and the EMA decay rate μ according to schedule functions during training, which balances the bias-variance trade-off across training stages.",
+    "gt_passages": [
+      "This unbiased estimate suffices to replace the pre-trained diffusion model in consistency distillation when using the Euler method as the ODE solver in the limit of N Ñ8 , as justified by the following result.",
+      "For improved practical performance, we propose to progressively increase N during training according to a schedule function N p¨q . The intuition ( cf ., Fig. 3d) is that the consistency training loss has less 'variance' but more 'bias' with respect to the underlying consistency distillation loss ( i.e ., the left-hand side of Eq. (9)) when N is small ( i.e ., ∆ t is large), which facilitates faster convergence at the beginning of training. On the contrary, it has more 'variance' but less 'bias' when N is large ( i.e ., ∆ t is small), which is desirable when closer to the end of training. For best performance, we also find that µ should change along with N , according to a schedule function µ p¨q ."
+    ]
+  },
+  {
+    "paper_id": "2303.01469",
+    "paper_title": "Consistency Models",
+    "query": "Does the paper discuss applying consistency models to text-to-image generation or conditioning on text prompts?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2305.18290",
+    "paper_title": "Direct Preference Optimization: Your Language Model is Secretly a Reward Model",
+    "query": "What win rate does DPO achieve on TL;DR summarization at a temperature of 0.0, and how does it compare to PPO at its optimal temperature?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "DPO achieves a win rate of approximately 61% at a temperature of 0.0, exceeding PPO's performance of 57% at its optimal sampling temperature of 0.0.",
+    "gt_passages": [
+      "We find that DPO has a win rate of approximately 61% at a temperature of 0.0, exceeding the performance of PPO at 57% at its optimal sampling temperature of 0.0."
+    ]
+  },
+  {
+    "paper_id": "2305.18290",
+    "paper_title": "Direct Preference Optimization: Your Language Model is Secretly a Reward Model",
+    "query": "How does the DPO loss function use the Bradley-Terry preference model and KL-divergence constraint to define the policy optimization objective?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "DPO uses a change of variables to reparameterize the reward function in terms of the policy directly under the Bradley-Terry model. Because the Bradley-Terry model depends only on the difference of rewards between two completions, the partition function cancels when substituting the reparameterization, allowing the preference probability to be expressed solely in terms of the policy ratios. This yields a maximum likelihood objective (the DPO loss) that increases the log probability of preferred completions relative to dispreferred ones, weighted by how incorrectly the implicit reward model ranks them, without requiring explicit reward modeling or RL.",
+    "gt_passages": [
+      "DPO uses a change of variables to define the preference loss as a function of the policy directly. Given a dataset of human preferences over model responses, DPO can therefore optimize a policy using a simple binary cross entropy objective, producing the optimal policy to an implicit reward function fit to the preference data.",
+      "the gradient of the loss function L DPO increases the likelihood of the preferred completions y w and decreases the likelihood of dispreferred completions y l . Importantly, the examples are weighed by how much higher the implicit reward model ˆ r θ rates the dispreferred completions, scaled by β , i.e, how incorrectly the implicit reward model orders the completions, accounting for the strength of the KL constraint."
+    ]
+  },
+  {
+    "paper_id": "2305.18290",
+    "paper_title": "Direct Preference Optimization: Your Language Model is Secretly a Reward Model",
+    "query": "What is the core idea behind this paper's approach to aligning language models with human preferences, and why does it avoid the need for reinforcement learning?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The core idea is that the standard RLHF objective — reward maximization subject to a KL-divergence constraint — has an analytical closed-form optimal policy. By reparameterizing the reward function in terms of this optimal policy, the authors show that optimizing human preference data is equivalent to a simple binary cross-entropy classification loss over the policy itself. Because the optimal policy can be extracted in closed form from the preference model, there is no need for a separate reward model or a reinforcement learning training loop.",
+    "gt_passages": [
+      "our key insight is to leverage an analytical mapping from reward functions to optimal policies, which enables us to transform a loss function over reward functions into a loss function over policies. This change-of-variables approach avoids fitting an explicit, standalone reward model, while still optimizing under existing models of human preferences, such as the Bradley-Terry model.",
+      "In this paper, we show how to directly optimize a language model to adhere to human preferences, without explicit reward modeling or reinforcement learning. We propose Direct Preference Optimization (DPO) , an algorithm that implicitly optimizes the same objective as existing RLHF algorithms (reward maximization with a KL-divergence constraint) but is simple to implement and straightforward to train."
+    ]
+  },
+  {
+    "paper_id": "2305.18290",
+    "paper_title": "Direct Preference Optimization: Your Language Model is Secretly a Reward Model",
+    "query": "In the out-of-distribution generalization experiment on CNN/DailyMail news articles, what hyperparameters were used during DPO training and what win rates did DPO and PPO achieve at temperature 0?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "DPO was trained with β = 0.5, batch size 64, RMSprop optimizer with learning rate 1e-6 (warmed up over 150 steps). In the out-of-distribution CNN/DailyMail evaluation, DPO achieved a win rate of 0.36 against ground-truth summaries at temperature 0, while PPO achieved 0.26 at the same temperature, meaning DPO outperformed PPO by a significant margin on this unseen distribution.",
+    "gt_passages": [
+      "Unless noted otherwise, we use a β = 0 . 1 , batch size of 64 and the RMSprop optimizer with a learning rate of 1e-6 by default. We linearly warmup the learning rate from 0 to 1e-6 over 150 steps. For TL;DR summarization, we use β = 0 . 5 , while rest of the parameters remain the same.",
+      "The results are presented in Table 1. We computed the GPT-4 win rate against the ground-truth summaries in the datasets, using the same GPT- Table 1: GPT-4 win rates vs. ground truth summaries for out-of-distribution CNN/DailyMail input articles.",
+      "For this new distribution, DPO continues to outperform the PPO policy by a significant margin. This experiment provides initial evidence that DPO policies can generalize similarly well to PPO policies, even though DPO does not use the additional unlabeled Reddit TL;DR prompts that PPO uses."
+    ]
+  },
+  {
+    "paper_id": "2305.18290",
+    "paper_title": "Direct Preference Optimization: Your Language Model is Secretly a Reward Model",
+    "query": "Does this paper propose or evaluate a method for continual learning or catastrophic forgetting prevention when fine-tuning language models with DPO?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2312.00752",
+    "paper_title": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+    "query": "How much higher inference throughput does Mamba achieve compared to a Transformer of similar size?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "Mamba achieves 4-5 times higher inference throughput than a Transformer of similar size.",
+    "gt_passages": [
+      "Mamba achieves 4-5 × higher inference throughput than a Transformer of similar size, since without the KV cache it can use much higher batch sizes."
+    ]
+  },
+  {
+    "paper_id": "2312.00752",
+    "paper_title": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+    "query": "How does the selective SSM (S6) differ from a standard SSM (S4) in terms of the parameters B, C, and delta?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "In S6, the parameters B, C, and delta are functions of the input (input-dependent), giving them a length dimension L, whereas in S4 these parameters are fixed constants (time-invariant). Specifically, B and C have shape (B, L, N) in S6 versus (D, N) in S4, and delta has shape (B, L, D) in S6 versus a scalar D in S4.",
+    "gt_passages": [
+      "The main difference is simply making several parameters Δ , 𝑩 , 𝑪 functions of the input, along with the associated changes to tensor shapes throughout. In particular, we highlight that these parameters now have a length dimension 𝐿 , meaning that the model has changed from time-invariant to time-varying."
+    ]
+  },
+  {
+    "paper_id": "2312.00752",
+    "paper_title": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+    "query": "What is the key idea behind Mamba that allows it to handle long sequences efficiently without using attention?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "Mamba introduces a selection mechanism that makes SSM parameters input-dependent, allowing the model to selectively remember or ignore information based on content. It overcomes the resulting computational challenge through a hardware-aware parallel algorithm that avoids materializing the large expanded state in slow GPU memory, instead keeping computations in fast SRAM. This combination enables linear scaling in sequence length with strong performance on dense modalities like language.",
+    "gt_passages": [
+      "First, simply letting the SSM parameters be functions of the input addresses their weakness with discrete modalities, allowing the model to selectively propagate or forget information along the sequence length dimension depending on the current token. Second, even though this change prevents the use of efficient convolutions, we design a hardware-aware parallel algorithm in recurrent mode.",
+      "The main idea is to leverage properties of modern accelerators (GPUs) to materialize the state ℎ only in more efficient levels of the memory hierarchy. In particular, most operations (except matrix multiplication) are bounded by memory bandwidth (Dao, Fu, Ermon, et al. 2022; Ivanov et al. 2021; Williams, Waterman, and Patterson 2009). This includes our scan operation, and we use kernel fusion to reduce the amount of memory IOs, leading to a significant speedup compared to a standard implementation."
+    ]
+  },
+  {
+    "paper_id": "2312.00752",
+    "paper_title": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+    "query": "Why does increasing the SSM state dimension N improve language modeling perplexity only when B and C are also made selective, and what is the parameter cost of doing so?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "Increasing N improves performance only when B and C are selective because, without selective B and C, the model cannot use the larger state to capture finer-grained input-dependent context — non-selective (constant) B and C cannot modulate what information enters or exits the state based on content. With selective B and C, raising N from 1 to 16 yields over a 1.0 perplexity improvement for only about 1% additional parameters, validating the core motivation that maximizing hidden state dimension without large efficiency costs requires the selection mechanism.",
+    "gt_passages": [
+      "Of particular note is the dramatic improvement of the selective SSM when the state size 𝑁 is increased, with over a 1.0 perplexity improvement for a cost of only 1% additional parameters. This validates our core motivation in Sections 3.1 and 3.3.",
+      "As discussed in Section 3.1, the most important property of selectivity is filtering out irrelevant information so that a sequence model's context can be compressed into an efficient state. In an SSM, modifying 𝑩 and 𝑪 to be selective allows finer-grained control over whether to let an input 𝑥 𝑡 into the state ℎ 𝑡 , or the state into the output 𝑦 𝑡 ."
+    ]
+  },
+  {
+    "paper_id": "2312.00752",
+    "paper_title": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+    "query": "Does the paper discuss how to fine-tune Mamba using reinforcement learning from human feedback (RLHF)?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2404.02905",
+    "paper_title": "Visual Autoregressive Modeling: Scalable Image Generation via Next-Scale Prediction",
+    "query": "What FID score did VAR achieve on the ImageNet 256x256 benchmark, and how does it compare to the AR baseline?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "VAR achieved an FID of 1.73 on ImageNet 256x256, improving from the AR baseline FID of 18.65.",
+    "gt_passages": [
+      "On ImageNet 256 × 256 benchmark, VAR significantly improve AR baseline by improving Fréchet inception distance (FID) from 18.65 to 1.73, inception score (IS) from 80.4 to 350.2, with 20 × faster inference speed."
+    ]
+  },
+  {
+    "paper_id": "2404.02905",
+    "paper_title": "Visual Autoregressive Modeling: Scalable Image Generation via Next-Scale Prediction",
+    "query": "What is the time complexity of VAR generation compared to standard autoregressive generation for an image with n×n latent tokens?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "Standard autoregressive (AR) generation has O(n^6) time complexity, while VAR generation reduces this to O(n^4) due to parallel token generation within each scale.",
+    "gt_passages": [
+      "A full autoregressive generation of n 2 tokens requires O ( n 2 ) decoding iterations and O ( n 6 ) total computations. In contrast, V AR only requires O (log( n )) iterations and O ( n 4 ) total computations."
+    ]
+  },
+  {
+    "paper_id": "2404.02905",
+    "paper_title": "Visual Autoregressive Modeling: Scalable Image Generation via Next-Scale Prediction",
+    "query": "How does the VAR model approach image generation differently from traditional autoregressive methods?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "Instead of generating one token at a time in a raster-scan order (next-token prediction), VAR generates images coarse-to-fine by predicting entire token maps at progressively higher resolutions (next-scale prediction), starting from a 1×1 token map and expanding in resolution at each step.",
+    "gt_passages": [
+      "We reconceptualize the autoregressive modeling on images by shifting from 'nexttoken prediction' to 'next-scale prediction' strategy. Here, the autoregressive unit is an entire token map , rather than a single token . Westart by quantizing a feature map f ∈ R h × w × C into K multi-scale token maps ( r 1 , r 2 , . . . , r K ) , each at a increasingly higher resolution h k × w k , culminating in r K matches the original feature map's resolution h × w ."
+    ]
+  },
+  {
+    "paper_id": "2404.02905",
+    "paper_title": "Visual Autoregressive Modeling: Scalable Image Generation via Next-Scale Prediction",
+    "query": "How many model sizes were trained for the scaling law experiments, and what was the range of parameters covered? What Pearson correlation coefficient was observed for the scaling laws?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "VAR was trained across 12 different model sizes ranging from 18M to 2B parameters. The Pearson correlation coefficients for the scaling laws were near -0.998, indicating a strong linear relationship between log(N) and log(L).",
+    "gt_passages": [
+      "We trained models across 12 different sizes, from 18M to 2B parameters, on the ImageNet training set [24] containing 1.28M images (or 870B image tokens under our VQVAE) per epoch.",
+      "Scaling up V AR models exhibits clear power-law scaling laws similar to those observed in LLMs, with linear correlation coefficients near -0 . 998 as solid evidence."
+    ]
+  },
+  {
+    "paper_id": "2404.02905",
+    "paper_title": "Visual Autoregressive Modeling: Scalable Image Generation via Next-Scale Prediction",
+    "query": "Does the paper discuss using VAR for text-to-image generation with a trained text encoder integrated into the VAR architecture?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  },
+  {
+    "paper_id": "2407.10490",
+    "paper_title": "LEARNING DYNAMICS OF LLM FINETUNING",
+    "query": "How many examples were randomly selected from the training split to create the training set D_train in the experiments?",
+    "query_type": "Factual",
+    "is_negative": false,
+    "gt_answer": "5000 examples were randomly selected from the training split to create D_train.",
+    "gt_passages": [
+      "We first create the training set D train by randomly selecting 5000 examples from the training split of the dataset."
+    ]
+  },
+  {
+    "paper_id": "2407.10490",
+    "paper_title": "LEARNING DYNAMICS OF LLM FINETUNING",
+    "query": "What is the 'squeezing effect' in the context of gradient ascent with softmax output heads, and what happens to probability mass when a negative gradient is imposed on an unlikely label?",
+    "query_type": "Keyword-heavy",
+    "is_negative": false,
+    "gt_answer": "The squeezing effect occurs when a negative gradient is imposed on a label under a softmax output head: the confidence of the targeted label decreases, and the decreased probability mass is largely squeezed into the most-likely output. When the targeted label is unlikely under the current model, the squeezing effect is exacerbated — the probability mass of almost all other outputs decreases while the most confident prediction increases even more.",
+    "gt_passages": [
+      "Guarantee: the confidence of y -u , i.e., π θ t +1 ( y -u ) will decrease.",
+      "Guarantee: the decreased probability mass is largely 'squeezed' into the output which was most confident before the update: if y ∗ = argmax i ∈ [ V ] \\{ y -u } π θ t ( y = i ) , then π θ t +1 ( y = y ∗ ) will increase.",
+      "Trend: smaller π θ t ( y -u ) exacerbate the squeezing effect: if y -u is unlikely under π θ t , the probability mass of all other π θ t +1 ( y = y ∗ ) will be more seriously decreased, and the π θ t +1 ( y = y ∗ ) increases more."
+    ]
+  },
+  {
+    "paper_id": "2407.10490",
+    "paper_title": "LEARNING DYNAMICS OF LLM FINETUNING",
+    "query": "How does this paper explain why a language model might produce hallucinations after supervised finetuning, specifically by borrowing content from other training examples?",
+    "query_type": "Semantic",
+    "is_negative": false,
+    "gt_answer": "The paper explains that during SFT, learning from a response for question x_u not only increases the model's confidence on that response but also indirectly pulls up the likelihood of responses that are 'similar' to it. In particular, the model's confidence on a preferred response for a different question x_j also keeps increasing because learning that other example directly pulls up its likelihood. This means that when asked question x_u, the model may produce a response drawn from another unrelated question's training response, which is a specific type of hallucination.",
+    "gt_passages": [
+      "These observations provide us with a unique explanation of why specific types of hallucinations are amplified after SFT. Specifically, the increase of π θ t ( y + j = u | χ u ) means if we ask the model to answer a question x u , it might provide a response from (or partially from) another unrelated question x j = u in the training set."
+    ]
+  },
+  {
+    "paper_id": "2407.10490",
+    "paper_title": "LEARNING DYNAMICS OF LLM FINETUNING",
+    "query": "In the proposed 'extend' training method, how does including negative responses during SFT affect the squeezing effect during the subsequent DPO stage, and what win-rate does the extended method achieve against the baseline after 4 epochs of DPO according to ChatGPT evaluation?",
+    "query_type": "Multi-hop",
+    "is_negative": false,
+    "gt_answer": "Including negative responses (y^-) during SFT makes those responses more likely before DPO starts, so they are no longer in the low-probability 'valley' region. This weakens the squeezing effect during DPO because the negative gradient is imposed on a less unlikely label, causing other responses to decay more slowly. According to Table 1, after 4 epochs of DPO, the extended method achieves a ChatGPT win-rate of 0.6928 against the baseline.",
+    "gt_passages": [
+      "Since y -u is no longer so unlikely before DPO, the squeezing effect should not be as strong as in the baseline procedure.",
+      "It is clear that the squeezing effect is mitigated, because the confidence of other responses all decays slower during DPO, and we also observe a big drop in the greedydecoding response when DPO starts.",
+      "|         4 |    0.6928 |   0.6045 |"
+    ]
+  },
+  {
+    "paper_id": "2407.10490",
+    "paper_title": "LEARNING DYNAMICS OF LLM FINETUNING",
+    "query": "Does this paper discuss how to apply learning dynamics analysis to federated learning or distributed training settings?",
+    "query_type": "Negative",
+    "is_negative": true,
+    "gt_answer": "Not discussed in this paper",
+    "gt_passages": []
+  }
+]

@@ -1,0 +1,176 @@
+[
+  {
+    "query_id": "groupC_001",
+    "query": "How do Chain-of-Thought prompting and SELF-INSTRUCT differ in how they elicit reasoning or instruction-following from LLMs?",
+    "query_type": "Comparison",
+    "paper_ids": ["2201.11903", "2212.10560"],
+    "gt_answer": "Chain-of-Thought prompting elicits multi-step reasoning at inference time by providing a few demonstrations that include intermediate reasoning steps, requiring no model weight updates — it is purely a prompting technique applied to an already-pretrained model. SELF-INSTRUCT, by contrast, elicits instruction-following by first using the model to generate a large synthetic dataset of instructions and input-output pairs, then fine-tuning the same model on that generated data. CoT targets in-context reasoning ability during inference; SELF-INSTRUCT targets generalized instruction-following by modifying the model weights through supervised fine-tuning.",
+    "gt_passages": [
+      {
+        "paper_id": "2201.11903",
+        "passage": "We explore how generating a chain of thought -a series of intermediate reasoning steps-significantly improves the ability of large language models to perform complex reasoning. In particular, we show how such reasoning abilities emerge naturally in sufficiently large language models via a simple method called chain-ofthought prompting , where a few chain of thought demonstrations are provided as exemplars in prompting."
+      },
+      {
+        "paper_id": "2212.10560",
+        "passage": "We introduce SELF-INSTRUCT, a framework for improving the instruction-following capabilities of pretrained language models by bootstrapping off their own generations. Our pipeline generates instructions, input, and output samples from a language model, then filters invalid or similar ones before using them to finetune the original model."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_002",
+    "query": "Both the ICL paper and the Chain-of-Thought paper study how demonstrations affect LLM performance. How do their conclusions about what demonstrations contribute differ?",
+    "query_type": "Comparison",
+    "paper_ids": ["2202.12837", "2201.11903"],
+    "gt_answer": "The ICL paper (Min et al., 2022) finds that the correctness of input-label mappings in demonstrations matters very little — replacing gold labels with random labels barely hurts performance. What actually drives gains are the label space, the distribution of input text, and the overall format. The Chain-of-Thought paper, in contrast, shows that the specific content of the chain-of-thought reasoning steps in demonstrations is critical: providing examples of intermediate reasoning (not just format or label space) is what enables models to solve complex multi-step problems. CoT demonstrations must include coherent, logically correct reasoning steps, while standard ICL demonstrations can function even with randomly shuffled labels.",
+    "gt_passages": [
+      {
+        "paper_id": "2202.12837",
+        "passage": "We show that ground truth demonstrations are in fact not required-randomly replacing labels in the demonstrations barely hurts performance on a range of classification and multi-choce tasks, consistently over 12 different models including GPT-3. Instead, we find that other aspects of the demonstrations are the key drivers of end task performance, including the fact that they provide a few examples of (1) the label space, (2) the distribution of the input text, and (3) the overall format of the sequence."
+      },
+      {
+        "paper_id": "2201.11903",
+        "passage": "Chain of thought after answer. Another potential benefit of chain-of-thought prompting could simply be that such prompts allow the model to better access relevant knowledge acquired during pretraining. Therefore, we test an alternative configuration where the chain of thought prompt is only given after the answer, isolating whether the model actually depends on the produced chain of thought to give the final answer. This variant performs about the same as the baseline, which suggests that the sequential reasoning embodied in the chain of thought is useful for reasons beyond just activating knowledge."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_003",
+    "query": "How do DPO and SELF-INSTRUCT compare as approaches to aligning language models to follow human intent?",
+    "query_type": "Comparison",
+    "paper_ids": ["2305.18290", "2212.10560"],
+    "gt_answer": "SELF-INSTRUCT aligns models by generating synthetic instruction-following data using the model itself and then fine-tuning on that data, requiring no human preference labels — it is a supervised fine-tuning approach driven by LLM-generated data. DPO, on the other hand, aligns models using human preference data (pairs of preferred and dispreferred responses) and optimizes a policy directly via a binary cross-entropy loss, bypassing the need for an explicit reward model or reinforcement learning. SELF-INSTRUCT focuses on teaching diverse task-following behavior from synthetic data; DPO focuses on steering behavior according to human relative preferences without RL.",
+    "gt_passages": [
+      {
+        "paper_id": "2212.10560",
+        "passage": "SELF-INSTRUCT provides an almost annotation-free method for aligning pretrained language models with instructions, and we release our large synthetic dataset to facilitate future studies on instruction tuning."
+      },
+      {
+        "paper_id": "2305.18290",
+        "passage": "In this paper we introduce a new parameterization of the reward model in RLHF that enables extraction of the corresponding optimal policy in closed form, allowing us to solve the standard RLHF problem with only a simple classification loss. The resulting algorithm, which we call Direct Preference Optimization (DPO), is stable, performant, and computationally lightweight, eliminating the need for sampling from the LM during fine-tuning or performing significant hyperparameter tuning."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_004",
+    "query": "Synthesize what the Chinchilla paper, the Chain-of-Thought paper, and the ICL paper together reveal about model scale as a prerequisite for emergent LLM capabilities.",
+    "query_type": "Synthesis",
+    "paper_ids": ["2203.15556", "2201.11903", "2202.12837"],
+    "gt_answer": "Together these three papers paint a nuanced picture of scale. Chinchilla shows that prior large models were severely undertrained relative to their parameter count, and that optimal performance requires scaling training tokens in proportion to parameters — meaning raw size is not enough without sufficient data. The Chain-of-Thought paper shows that coherent multi-step reasoning is an emergent property that only appears reliably at roughly 100B parameters, suggesting that certain capabilities require a minimum scale threshold regardless of data. The ICL paper implies that, at sufficient scale, models have already internalized task semantics from pretraining, because they can perform tasks even with randomly incorrect demonstration labels — the input-label mapping is recoverable from the pretraining prior rather than the demonstrations alone. Thus: optimal scale requires both model size and data (Chinchilla); reasoning emergence requires a scale threshold (CoT); and alignment capabilities are partially baked in from large-scale pretraining (ICL).",
+    "gt_passages": [
+      {
+        "paper_id": "2203.15556",
+        "passage": "We find that current large language models are significantly undertrained, a consequence of the recent focus on scaling language models whilst keeping the amount of training data constant. By training over 400 language models ranging from 70 million to over 16 billion parameters on 5 to 500 billion tokens, we find that for compute-optimal training, the model size and the number of training tokens should be scaled equally: for every doubling of model size the number of training tokens should also be doubled."
+      },
+      {
+        "paper_id": "2201.11903",
+        "passage": "chain-of-thought prompting is an emergent ability of model scale (Wei et al., 2022b). That is, chain-of-thought prompting does not positively impact performance for small models, and only yields performance gains when used with models of ∼ 100B parameters. We qualitatively found that models of smaller scale produced fluent but illogical chains of thought, leading to lower performance than standard prompting."
+      },
+      {
+        "paper_id": "2202.12837",
+        "passage": "The model performs a downstream task without relying on the input-label correspondence from the demonstrations. This suggests that the model has learned the (implicit notion of) input-label correspondence from the language modeling objective alone, e.g., associating a positive review with the word 'positive'."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_005",
+    "query": "How do DPO and RLHF with PPO relate to each other theoretically, and what does DPO offer in practice that PPO-based RLHF does not?",
+    "query_type": "Synthesis",
+    "paper_ids": ["2305.18290"],
+    "gt_answer": "DPO and PPO-based RLHF optimize the same underlying KL-constrained reward maximization objective. DPO's key insight is that, by reparameterizing the reward function in terms of the policy itself, the partition function cancels when using the Bradley-Terry preference model, enabling the optimal policy to be expressed in closed form. This means DPO can directly optimize a binary cross-entropy loss over preference pairs without training a separate reward model or running an RL optimization loop. In practice, DPO achieves a better reward/KL tradeoff frontier than PPO, is more robust to sampling temperature, and is simpler to implement — while PPO requires sampling from the model during training and careful hyperparameter tuning.",
+    "gt_passages": [
+      {
+        "paper_id": "2305.18290",
+        "passage": "We propose Direct Preference Optimization (DPO) , an algorithm that implicitly optimizes the same objective as existing RLHF algorithms (reward maximization with a KL-divergence constraint) but is simple to implement and straightforward to train. Intuitively, the DPO update increases the relative log probability of preferred to dispreferred responses, but it incorporates a dynamic, per-example importance weight that prevents the model degeneration that we find occurs with a naive probability ratio objective."
+      },
+      {
+        "paper_id": "2305.18290",
+        "passage": "We find that DPO produces by far the most efficient frontier, achieving the highest reward while still achieving low KL. This result is particularly notable for multiple reasons. First, DPO and PPO optimize the same objective, but DPO is notably more efficient; DPO's reward/KL tradeoff strictly dominates PPO. Second, DPO achieves a better frontier than PPO, even when PPO can access ground truth rewards (PPO-GT)."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_006",
+    "query": "Synthesize the data generation strategies in SELF-INSTRUCT and DPO: how do they use model-generated data for alignment?",
+    "query_type": "Synthesis",
+    "paper_ids": ["2212.10560", "2305.18290"],
+    "gt_answer": "SELF-INSTRUCT generates alignment data entirely from the LLM itself in a bootstrapping loop: starting from 175 seed tasks, the model generates new instructions, inputs, and outputs, which are filtered and used to fine-tune the same model via supervised learning. This creates ~52K instructions from an unannotated starting point. DPO, in contrast, requires human preference labels — pairs of preferred and dispreferred model responses annotated by humans. DPO then optimizes a policy directly on these human preference pairs without an RL loop. The key difference is the supervision signal: SELF-INSTRUCT relies entirely on the model's own generations as a self-supervision signal, while DPO requires human judgments of relative quality.",
+    "gt_passages": [
+      {
+        "paper_id": "2212.10560",
+        "passage": "The overall process is an iterative bootstrapping algorithm (see Figure 2), which starts off with a limited (e.g., 175 in our study) seed set of manually-written tasks that are used to guide the overall generation. In the first phase, the model is prompted to generate instructions for new tasks. This step leverages the existing collection of instructions to create more broad-coverage instructions that define (often new) tasks."
+      },
+      {
+        "paper_id": "2305.18290",
+        "passage": "The general DPO pipeline is as follows: 1) Sample completions y 1 , y 2 ∼ π ref ( · | x ) for every prompt x , label with human preferences to construct the offline dataset of preferences D = { x ( i ) , y ( i ) w , y l ) ( i ) } N i =1 and 2) optimize the language model π θ to minimize L DPO for the given π ref and D and desired β ."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_007",
+    "query": "How did the compute-optimal scaling findings of Chinchilla challenge the trajectory of LLM development between 2020 and 2022?",
+    "query_type": "Timeline",
+    "paper_ids": ["2203.15556"],
+    "gt_answer": "Between 2020 and 2022, following GPT-3 and Kaplan et al.'s scaling laws, the field's consensus was to scale model parameters much faster than training data, with most large models (GPT-3, Gopher, Jurassic-1, MT-NLG) trained on approximately 300 billion tokens regardless of parameter count. Chinchilla (2022) overturned this by showing that, given a fixed compute budget, model size and training tokens should scale equally. The 70B-parameter Chinchilla, trained on 1.4 trillion tokens with the same compute as the 280B Gopher, outperformed Gopher, GPT-3, and MT-NLG 530B across a wide range of benchmarks, demonstrating that the entire prior generation of large models was significantly undertrained.",
+    "gt_passages": [
+      {
+        "paper_id": "2203.15556",
+        "passage": "Following Kaplan et al. (2020) and the training setup of GPT-3 (Brown et al., 2020), many of the recently trained large models have been trained for approximately 300 billion tokens (Table 1), in line with the approach of predominantly increasing model size when increasing compute."
+      },
+      {
+        "paper_id": "2203.15556",
+        "passage": "Based on our estimated compute-optimal frontier, we predict that for the compute budget used to train Gopher , an optimal model should be 4 times smaller, while being training on 4 times more tokens. We verify this by training a more compute-optimal 70B model, called Chinchilla , on 1.4 trillion tokens. Not only does Chinchilla outperform its much larger counterpart, Gopher , but its reduced model size reduces inference cost considerably and greatly facilitates downstream uses on smaller hardware."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_008",
+    "query": "Trace the timeline from instruction-tuning with human-written data to SELF-INSTRUCT to DPO: how did the role of human annotation evolve across these approaches?",
+    "query_type": "Timeline",
+    "paper_ids": ["2212.10560", "2305.18290"],
+    "gt_answer": "The first generation of instruction-tuned models (e.g., InstructGPT) relied on extensive private human-written instruction data and human feedback via RLHF with PPO — requiring both human demonstrations and human preference labels, making the process costly and opaque. SELF-INSTRUCT (Wang et al., 2022) dramatically reduced the human annotation requirement by bootstrapping instruction data from the LLM itself using only 175 seed tasks, achieving near-InstructGPT performance with almost no human labeling. DPO (Rafailov et al., 2023) then eliminated the need for RL and a separate reward model, but still requires human preference pairs — it simplifies the algorithm, not the human data collection. The trajectory shows a shift from heavy human annotation to synthetic data generation (SELF-INSTRUCT) and from complex RL pipelines to simple classification losses (DPO).",
+    "gt_passages": [
+      {
+        "paper_id": "2212.10560",
+        "passage": "Applying our method to the vanilla GPT3, we demonstrate a 33% absolute improvement over the original model on SUPER-NATURALINSTRUCTIONS, on par with the performance of InstructGPT 001 , which was trained with private user data and human annotations."
+      },
+      {
+        "paper_id": "2305.18290",
+        "passage": "However, RLHF is a complex and often unstable procedure, first fitting a reward model that reflects the human preferences, and then fine-tuning the large unsupervised LM using reinforcement learning to maximize this estimated reward without drifting too far from the original model."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_009",
+    "query": "The ICL paper claims that ground-truth labels barely matter for in-context learning performance. Does this contradict the Chain-of-Thought paper's reliance on correct reasoning demonstrations?",
+    "query_type": "Contradiction",
+    "paper_ids": ["2202.12837", "2201.11903"],
+    "gt_answer": "There is a genuine tension between these findings. The ICL paper shows that replacing correct labels with random labels barely hurts performance on classification and multi-choice tasks, implying that the specific input-label mapping in demonstrations is largely irrelevant. The Chain-of-Thought paper, however, finds that providing logically correct, step-by-step reasoning in demonstrations is essential for solving complex reasoning tasks — random or incorrect reasoning steps would not produce the same gains. The apparent contradiction resolves when considering task type: for classification tasks with labels already known to the model from pretraining, ICL demonstrations mainly serve as format signals. But for complex arithmetic and symbolic reasoning, the sequential content of demonstrations — the actual reasoning steps — matters critically because the model needs to learn a new output structure, not just a label.",
+    "gt_passages": [
+      {
+        "paper_id": "2202.12837",
+        "passage": "replacing the labels in demonstrations with random labels barely hurts performance in a range of classification and multi-choice tasks (Figure 1). The result is consistent over 12 different models including the GPT-3 family (Radford et al., 2019; Min et al., 2021b; Wang and Komatsuzaki, 2021; Artetxe et al., 2021; Brown et al., 2020). This strongly suggests, counter-intuitively, that the model does not rely on the input-label mapping in the demonstrations to perform the task."
+      },
+      {
+        "paper_id": "2201.11903",
+        "passage": "Variable compute only. Another intuition is that chain of thought allows the model to spend more computation (i.e., intermediate tokens) on harder problems. To isolate the effect of variable computation from chain-of-thought reasoning, we test a configuration where the model is prompted to output a only sequence of dots ( . . . ) equal to the number of characters in the equation needed to solve the problem. This variant performs about the same as the baseline, which suggests that variable computation by itself is not the reason for the success of chainof-thought prompting, and that there appears to be utility from expressing intermediate steps via natural language."
+      }
+    ]
+  },
+  {
+    "query_id": "groupC_010",
+    "query": "The Chinchilla paper argues that larger models are undertrained, while the Chain-of-Thought paper argues that reasoning only emerges at very large scale. Do these findings contradict each other?",
+    "query_type": "Contradiction",
+    "paper_ids": ["2203.15556", "2201.11903"],
+    "gt_answer": "These findings are in surface tension but are not contradictory — they address different questions. Chinchilla argues that, for a given compute budget, you get better performance from a smaller model trained on more tokens than a larger model trained on fewer tokens. This does not deny that scale matters; it redefines the optimal scale frontier. The Chain-of-Thought paper finds that CoT reasoning only emerges at ~100B parameters and that smaller models actually perform worse with CoT prompting than without it. Chinchilla's finding is compatible: a compute-optimal 70B model trained on 1.4T tokens may cross the scale threshold needed for CoT, whereas a poorly-trained 280B model trained on only 300B tokens might have weaker emergent reasoning relative to its parameter count. The contradiction dissolves when recognizing that Chinchilla is about optimal parameter/token allocation at a fixed compute budget, while CoT emergence is about an absolute minimum parameter threshold.",
+    "gt_passages": [
+      {
+        "paper_id": "2203.15556",
+        "passage": "Our findings suggests that the current generation of large language models are considerably over-sized, given their respective compute budgets, as shown in Figure 1. For example, we find that a 175 billion parameter model should be trained with a compute budget of 4 41 10 24 FLOPs and on over 4.2 trillion tokens."
+      },
+      {
+        "paper_id": "2201.11903",
+        "passage": "The finding that successful chain-of-thought reasoning predictably emerges only at certain model scales is intriguing. Scaling up language models has been shown to confer benefits such as improved performance and sample efficiency (Kaplan et al., 2020), but chain-of-thought reasoning is emergent in the sense that its success cannot be predicted only by extrapolating the performance of small scale models, as chain of thought actually hurts performance for most models smaller than 10B parameters."
+      }
+    ]
+  }
+]

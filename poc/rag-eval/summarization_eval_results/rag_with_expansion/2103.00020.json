@@ -1,0 +1,88 @@
+{
+  "config": "rag_with_expansion",
+  "paper_id": "2103.00020",
+  "supported": 15,
+  "contradicted": 0,
+  "unverifiable": 0,
+  "claim_count": 15,
+  "factuality": 1.00,
+  "hallucination_rate": 0.00,
+  "unverifiable_rate": 0.00,
+  "claims": [
+    {
+      "text": "The dataset consists of 400 million (image, text) pairs collected from the public internet.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper explicitly states: 'we constructed a new dataset of 400 million (image, text) pairs collected form a variety of publicly available sources on the Internet.'"
+    },
+    {
+      "text": "The new dataset is called WIT (WebImageText).",
+      "verdict": "SUPPORTED",
+      "reason": "The paper explicitly names it: 'We refer to this dataset as WIT for WebImageText.'"
+    },
+    {
+      "text": "The dataset was built using 500,000 queries based on Wikipedia words and bi-grams.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'we search for (image, text) pairs as part of the construction process whose text includes one of a set of 500,000 queries,' with the base list being Wikipedia words augmented with bi-grams."
+    },
+    {
+      "text": "Each query was limited to 20,000 pairs to maintain class balance.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'We approximately class balance the results by including up to 20,000 (image, text) pairs per query.'"
+    },
+    {
+      "text": "Linear-probe evaluation fits a linear classifier on frozen representations across 27 different datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper describes a '27 dataset evaluation suite' and explicitly chooses linear classifiers over fine-tuning for evaluation."
+    },
+    {
+      "text": "Linear probes were chosen over end-to-end fine-tuning to better highlight failures in general representation learning and ensure fair comparisons.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states fine-tuning 'can compensate for and potentially mask failures to learn general and robust representations during the pre-training phase' and linear classifiers 'highlight these failures and provide clear feedback during development.'"
+    },
+    {
+      "text": "The linear-probe evaluation compares across 66 different models.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper explicitly states: 'Studying 66 different models on 27 different datasets requires tuning 1782 different evaluations.'"
+    },
+    {
+      "text": "The architecture consists of an image encoder and a text encoder that map inputs into a shared multi-modal embedding space, using a linear projection for each encoder.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'We do not use the non-linear projection... We instead use only a linear projection to map from each encoder's representation to the multi-modal embedding space.'"
+    },
+    {
+      "text": "The temperature parameter tau is directly optimized during training as a log-parameterized multiplicative scalar.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'the temperature parameter which controls the range of the logits in the softmax, tau, is directly optimized during training as a log-parameterized multiplicative scalar to avoid turning as a hyper-parameter.'"
+    },
+    {
+      "text": "CLIP is trained from scratch without using pre-trained weights for either encoder.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper explicitly states: 'We train CLIP from scratch without initializing the image encoder with ImageNet weights or the text encoder with pre-trained weights.'"
+    },
+    {
+      "text": "A random square crop is the only data augmentation used during training.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'A random square crop from resized images is the only data augmentation used during training.'"
+    },
+    {
+      "text": "CLIP matches the accuracy of the original ResNet-50 on ImageNet in a zero-shot setting.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract states: 'we match the accuracy of the original ResNet-50 on ImageNet zero-shot without needing to use any of the 1.28 million training examples it was trained on.'"
+    },
+    {
+      "text": "The model suffers from poor data efficiency as an acknowledged limitation.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states in the Limitations section: 'CLIP does not address the poor data efficiency of deep learning' and the summary's conclusion section also explicitly lists it."
+    },
+    {
+      "text": "The model reflects social biases present in unfiltered internet data.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'These image-text pairs are unfiltered and uncurated and result in CLIP models learning many social biases,' and Section 7 provides detailed bias analysis."
+    },
+    {
+      "text": "Future work is suggested in combining CLIP with self-supervised learning to improve efficiency.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'Combining CLIP with self-supervised... and self-training methods is a promising direction given their demonstrated ability to improve data efficiency over standard supervised learning.'"
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "config": "rag_fixed_queries",
+  "paper_id": "2109.01652",
+  "supported": 13,
+  "contradicted": 1,
+  "unverifiable": 0,
+  "claim_count": 14,
+  "factuality": 0.93,
+  "hallucination_rate": 0.07,
+  "unverifiable_rate": 0.00,
+  "claims": [
+    {
+      "text": "The authors aggregated 62 publicly available datasets, categorized into twelve task clusters.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'We aggregate 62 text datasets that are publicly available on Tensorflow Datasets... each dataset is categorized into one of twelve task clusters' (Section 2.1)."
+    },
+    {
+      "text": "For each dataset, ten unique natural language templates were manually created to describe the task.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper explicitly states: 'For each dataset, we manually compose ten unique templates that use natural language instructions to describe the task for that dataset' (Section 2.1)."
+    },
+    {
+      "text": "Some templates 'turn the task around' and each dataset includes up to three such reversed templates to increase diversity.",
+      "verdict": "CONTRADICTED",
+      "reason": "The paper specifies 'up to three templates that turned the task around' are included among the ten total templates per dataset, not in addition to them; the summary implies these are supplementary, misrepresenting the template design (Section 2.1)."
+    },
+    {
+      "text": "The authors used LaMDA-PT, a 137B parameter decoder-only transformer.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'we use LaMDA-PT, a dense left-to-right, decoder-only transformer language model of 137B parameters' (Section 2.4)."
+    },
+    {
+      "text": "The instruction tuning process mixed the 62 datasets, limiting each to 30k examples to prevent any single dataset from dominating.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'we limit the number of training examples per dataset to 30k' (Section 2.4)."
+    },
+    {
+      "text": "The model was finetuned for 30k gradient steps with a batch size of 8,192 tokens using the Adafactor Optimizer (learning rate: 3e-5).",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'We finetune all models for 30k gradient steps with a batch size of 8,192 tokens using the Adafactor Optimizer... with a learning rate of 3e-5' (Section 2.4)."
+    },
+    {
+      "text": "Input sequences were capped at 1024 tokens and targets at 256.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'The input and target sequence lengths used in finetuning are 1024 and 256, respectively' (Section 2.4)."
+    },
+    {
+      "text": "Packing was used to combine multiple examples into single sequences, separated by EOS tokens.",
+      "verdict": "SUPPORTED",
+      "reason": "The paper states: 'We use packing... to combine multiple training examples into a single sequence, separating inputs from targets using a special EOS token' (Section 2.4)."
+    },
+    {
+      "text": "The datasets were sourced from TensorFlow Datasets (TFDS), encompassing both NLU and NLG tasks, including benchmarks like ANLI, BoolQ, TriviaQA, and WMT translation tasks.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 2.1 confirms TensorFlow Datasets sourcing covering both NLU and NLG tasks; ANLI, BoolQ, TriviaQA, and WMT datasets are all listed in Figure 3 and the results tables."
+    },
+    {
+      "text": "The authors performed a data contamination analysis using n-gram matching against the pretraining corpus, marking 'dirty' datasets like PIQA and ReCoRD with asterisks.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix C describes the n-gram matching contamination procedure, and Table 2 marks PIQA and ReCoRD results with asterisks due to higher contamination rates."
+    },
+    {
+      "text": "FLAN surpassed zero-shot GPT-3 on 20 of 25 evaluated datasets.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract and Section 3 both state: 'zero-shot FLAN outperforms zero-shot GPT-3 on 20 of 25 datasets'."
+    },
+    {
+      "text": "FLAN outperforms few-shot GPT-3 by a large margin on ANLI, RTE, BoolQ, AI2-ARC, OpenbookQA, and StoryCloze.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract explicitly lists these exact six datasets where FLAN surpasses few-shot GPT-3 by a large margin."
+    },
+    {
+      "text": "Instruction tuning improves prompt tuning performance on the SuperGLUE benchmark.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.5 explicitly reports that prompt tuning achieves higher performance when applied to FLAN versus LaMDA-PT across all SuperGLUE tasks tested, including in the low-resource 32-example setting."
+    },
+    {
+      "text": "FLAN struggles with some simple tasks such as returning the second word of a sentence and is limited by a 1024-token context window.",
+      "verdict": "SUPPORTED",
+      "reason": "Appendix E (FAQ) explicitly states: 'FLAN fails at the very simple task of returning the second word in a sentence' and 'Additional limitations include a context length of only 1024 tokens'."
+    }
+  ]
+}

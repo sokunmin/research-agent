@@ -1,0 +1,88 @@
+{
+  "config": "rag_winner_no_filter",
+  "paper_id": "1608.06993",
+  "supported": 15,
+  "contradicted": 0,
+  "unverifiable": 0,
+  "claim_count": 15,
+  "factuality": 1.00,
+  "hallucination_rate": 0.00,
+  "unverifiable_rate": 0.00,
+  "claims": [
+    {
+      "text": "DenseNet connects every layer to every other layer in a feed-forward fashion, concatenating feature-maps of all preceding layers as inputs to the current layer.",
+      "verdict": "SUPPORTED",
+      "reason": "The abstract and Section 3 explicitly state that each layer receives feature-maps of all preceding layers as input via concatenation in a feed-forward fashion."
+    },
+    {
+      "text": "The composite function in each dense block consists of Batch Normalization (BN), ReLU, and a 3x3 convolution.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3 (Composite function) states: 'we define H_l(.) as a composite function of three consecutive operations: batch normalization (BN), followed by a rectified linear unit (ReLU) and a 3x3 convolution (Conv)'."
+    },
+    {
+      "text": "Transition layers perform down-sampling via 1x1 convolution and 2x2 average pooling.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3 (Pooling layers) states: 'The transition layers used in our experiments consist of a batch normalization layer and an 1x1 convolutional layer followed by a 2x2 average pooling layer'."
+    },
+    {
+      "text": "Bottleneck layers (DenseNet-B) introduce 1x1 convolutions before 3x3 convolutions to reduce the number of input feature-maps and improve efficiency.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3 (Bottleneck layers) explicitly describes DenseNet-B as the version using BN-ReLU-Conv(1x1)-BN-ReLU-Conv(3x3) to reduce input feature-maps and improve computational efficiency."
+    },
+    {
+      "text": "Compression (DenseNet-C) uses a factor theta in transition layers to reduce feature-maps and enhance model compactness.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3 (Compression) defines the compression factor theta (0 < theta <= 1) used in transition layers, with theta=0.5 set in experiments, and calls the variant DenseNet-C."
+    },
+    {
+      "text": "Models were trained using SGD with Nesterov momentum of 0.9 and weight decay of 10^-4.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.2 states: 'we use a weight decay of 10^-4 and a Nesterov momentum of 0.9 without dampening'."
+    },
+    {
+      "text": "Initial learning rate was 0.1, decayed by a factor of 10 at 50% and 75% of epochs for CIFAR/SVHN, and at epochs 30 and 60 for ImageNet.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.2 states: 'The initial learning rate is set to 0.1, and is divided by 10 at 50% and 75% of the total number of training epochs. On ImageNet, ... the learning rate is lowered by 10 times at epoch 30 and 60'."
+    },
+    {
+      "text": "For datasets without data augmentation (CIFAR-10, CIFAR-100, and SVHN), a dropout layer with a rate of 0.2 was added after each convolutional layer to prevent overfitting.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.2 confirms dropout rate 0.2 is applied for C10, C100, and SVHN, though the paper specifies 'after each convolutional layer (except the first one)' — the core claim is accurate."
+    },
+    {
+      "text": "CIFAR-10 and CIFAR-100 are 32x32 colored natural images with 50k training and 10k test images.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.1 states: 'CIFAR-10 (C10) consists of images drawn from 10 and CIFAR-100 (C100) from 100 classes. The training and test sets contain 50,000 and 10,000 images respectively'."
+    },
+    {
+      "text": "SVHN has 73k training, 26k test, and 531k additional training images.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.1 states: '73,257 images in the training set, 26,032 images in the test set, and 531,131 images for additional training'."
+    },
+    {
+      "text": "ImageNet (ILSVRC 2012) is a large-scale benchmark with 1.2 million training images across 1,000 classes and 50k validation images.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.1 states: 'The ILSVRC 2012 classification dataset consists 1.2 million images for training, and 50,000 for validation, from 1,000 classes'."
+    },
+    {
+      "text": "ResNets use additive skip-connections (identity connections) to combine features.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 3 and Section 5 explicitly contrast ResNet's summation-based skip connections with DenseNet's concatenation, stating 'we never combine features through summation before they are passed into a layer'."
+    },
+    {
+      "text": "For ImageNet, the authors used top-1 and top-5 error rates on the validation set using both single-crop and 10-crop testing.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.1 and Table 3 report single-crop and 10-crop top-1 and top-5 validation errors on ImageNet."
+    },
+    {
+      "text": "DenseNet achieves comparable performance to deep ResNets with significantly fewer parameters, with DenseNet-BC requiring about 90% fewer parameters than a 1001-layer pre-activation ResNet on C10+.",
+      "verdict": "SUPPORTED",
+      "reason": "Section 4.3 explicitly states DenseNet-BC with L=100 and k=12 achieves comparable performance to the 1001-layer pre-activation ResNet 'using 90% fewer parameters'."
+    },
+    {
+      "text": "Future work focuses on studying feature transfer for other computer vision tasks.",
+      "verdict": "SUPPORTED",
+      "reason": "The conclusion states: 'Because of their compact internal representations and reduced feature redundancy, DenseNets may be good feature extractors for various computer vision tasks... We plan to study such feature transfer with DenseNets in future work'."
+    }
+  ]
+}

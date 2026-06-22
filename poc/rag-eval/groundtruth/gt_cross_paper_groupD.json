@@ -1,0 +1,180 @@
+[
+  {
+    "query_id": "groupD_001",
+    "query": "How do SimCLR and CLIP differ in their approach to learning visual representations without labeled data?",
+    "query_type": "Comparison",
+    "paper_ids": ["2002.05709", "2103.00020"],
+    "gt_answer": "SimCLR learns visual representations by maximizing agreement between differently augmented views of the same image using a contrastive loss entirely within the visual domain, relying on data augmentation to define positive pairs. CLIP, by contrast, learns from natural language supervision by training an image encoder and a text encoder jointly to predict which image-text pairings co-occur in a large dataset of 400 million (image, text) pairs. While SimCLR operates in a purely self-supervised, image-only regime, CLIP connects visual representations to language, enabling zero-shot transfer to downstream classification tasks without any task-specific training examples.",
+    "gt_passages": [
+      {
+        "paper_id": "2002.05709",
+        "passage": "SimCLR learns representations by maximizing agreement between differently augmented views of the same data example via a contrastive loss in the latent space."
+      },
+      {
+        "paper_id": "2103.00020",
+        "passage": "We demonstrate that the simple pre-training task of predicting which caption goes with which image is an efficient and scalable way to learn SOTA image representations from scratch on a dataset of 400 million (image, text) pairs collected from the internet. After pre-training, natural language is used to reference learned visual concepts (or describe new ones) enabling zero-shot transfer of the model to downstream tasks."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_002",
+    "query": "How does DenseNet's feature reuse mechanism differ from ResNet's skip connections, and how did ConvNeXt later revisit these CNN design principles?",
+    "query_type": "Comparison",
+    "paper_ids": ["1608.06993", "2201.03545"],
+    "gt_answer": "DenseNet connects each layer to every subsequent layer through concatenation of feature maps, enabling explicit feature reuse and requiring fewer parameters because redundant feature maps need not be relearned. ResNet, by contrast, uses additive identity skip connections that combine the residual output and identity via summation, which can impede information flow. ConvNeXt later revisited CNN design choices by systematically modernizing a ResNet toward Transformer design decisions—adopting depthwise convolutions, inverted bottlenecks, larger kernel sizes, and LayerNorm—ultimately producing a pure ConvNet that competes with Swin Transformers without requiring specialized attention modules.",
+    "gt_passages": [
+      {
+        "paper_id": "1608.06993",
+        "passage": "Crucially, in contrast to ResNets, we never combine features through summation before they are passed into a layer; instead, we combine features by concatenating them."
+      },
+      {
+        "paper_id": "2201.03545",
+        "passage": "We gradually 'modernize' a standard ResNet toward the design of a vision Transformer, and discover several key components that contribute to the performance difference along the way. The outcome of this exploration is a family of pure ConvNet models dubbed ConvNeXt. Constructed entirely from standard ConvNet modules, ConvNeXts compete favorably with Transformers in terms of accuracy and scalability, achieving 87.8% ImageNet top-1 accuracy and outperforming Swin Transformers on COCO detection and ADE20K segmentation, while maintaining the simplicity and efficiency of standard ConvNets."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_003",
+    "query": "What data efficiency strategies do SimCLR and CLIP each rely on, and how do they compare in terms of the amount and type of training data required?",
+    "query_type": "Comparison",
+    "paper_ids": ["2002.05709", "2103.00020"],
+    "gt_answer": "SimCLR achieves strong representations using only ImageNet-scale labeled images but requires no labels during pre-training, instead relying heavily on strong data augmentation—particularly the composition of random cropping and color distortion—and large batch sizes (up to 8192). CLIP, in contrast, trains on a custom dataset of 400 million (image, text) pairs collected from the internet, trading compute for scale and leveraging natural language as a supervision signal. SimCLR's 76.5% top-1 linear evaluation accuracy matches a supervised ResNet-50 on ImageNet, while CLIP matches the original ResNet-50 on ImageNet zero-shot without using any of its 1.28 million labeled training examples.",
+    "gt_passages": [
+      {
+        "paper_id": "2002.05709",
+        "passage": "One composition of augmentations stands out: random cropping and random color distortion. We conjecture that one serious issue when using only random cropping as data augmentation is that most patches from an image share a similar color distribution. Figure 6 shows that color histograms alone suffice to distinguish images. Neural nets may exploit this shortcut to solve the predictive task. Therefore, it is critical to compose cropping with color distortion in order to learn generalizable features."
+      },
+      {
+        "paper_id": "2103.00020",
+        "passage": "For instance, we match the accuracy of the original ResNet-50 on ImageNet zero-shot without needing to use any of the 1.28 million training examples it was trained on."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_004",
+    "query": "How did CNN architectures evolve from DenseNet (2016) to ConvNeXt (2022) in terms of parameter efficiency and design philosophy?",
+    "query_type": "Timeline",
+    "paper_ids": ["1608.06993", "2201.03545"],
+    "gt_answer": "DenseNet (2016) introduced dense connectivity by concatenating feature maps from all preceding layers to each subsequent layer, yielding strong parameter efficiency—DenseNet-BC with L=100 and k=12 achieves comparable accuracy to a 1001-layer pre-activation ResNet using 90% fewer parameters. ConvNeXt (2022) took a different trajectory: rather than dense connectivity, it modernized a standard ResNet by adopting Transformer-inspired design decisions such as depthwise convolutions with 7×7 kernels, inverted bottlenecks, GELU activations, LayerNorm, and fewer activation functions per block. ConvNeXt achieved 87.8% ImageNet top-1 accuracy, demonstrating that pure CNNs can rival vision Transformers when trained with modern recipes.",
+    "gt_passages": [
+      {
+        "paper_id": "1608.06993",
+        "passage": "DenseNet-BC with L =100 and k =12 achieves comparable performance ( e.g. , 4.51% vs 4.62% error on C10+, 22.27% vs 22.71% error on C100+) as the 1001-layer pre-activation ResNet using 90% fewer parameters."
+      },
+      {
+        "paper_id": "2201.03545",
+        "passage": "By itself, this enhanced training recipe increased the performance of the ResNet-50 model from 76.1% [1] to 78.8% (+2.7%), implying that a significant portion of the performance difference between traditional ConvNets and vision Transformers may be due to the training techniques."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_005",
+    "query": "How did the paradigm for image generation evolve from raster-scan autoregressive models to VAR's next-scale prediction, and how does CLIP's representation learning relate to zero-shot generalization in both discriminative and generative settings?",
+    "query_type": "Timeline",
+    "paper_ids": ["2103.00020", "2404.02905"],
+    "gt_answer": "CLIP (2021) established zero-shot generalization for discriminative vision tasks by learning joint image-text embeddings from 400 million internet pairs, allowing a trained model to classify images into unseen categories via natural language prompts. VAR (2024) extended the concept of zero-shot generalization to image generation by redefining autoregressive modeling as next-scale prediction rather than raster-scan next-token prediction, enabling zero-shot image editing capabilities such as in-painting and out-painting. Both models demonstrate that large-scale pre-training with the right inductive structure—language supervision in CLIP and coarse-to-fine scale ordering in VAR—transfers to tasks never seen during training.",
+    "gt_passages": [
+      {
+        "paper_id": "2103.00020",
+        "passage": "After pre-training, natural language is used to reference learned visual concepts (or describe new ones) enabling zero-shot transfer of the model to downstream tasks. We study the performance of this approach by benchmarking on over 30 different existing computer vision datasets, spanning tasks such as OCR, action recognition in videos, geo-localization, and many types of fine-grained object classification."
+      },
+      {
+        "paper_id": "2404.02905",
+        "passage": "VAR further showcases zero-shot generalization ability in downstream tasks including image in-painting, out-painting, and editing. These results suggest VAR has initially emulated the two important properties of LLMs: Scaling Laws and zero-shot generalization."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_006",
+    "query": "What common themes across DenseNet, SimCLR, CLIP, ConvNeXt, and VAR explain why feature reuse, scale, and architectural inductive biases consistently improve visual learning?",
+    "query_type": "Synthesis",
+    "paper_ids": ["1608.06993", "2002.05709", "2103.00020", "2201.03545", "2404.02905"],
+    "gt_answer": "Across these five works, a consistent theme is that explicit structural choices about how information is organized and reused lead to large gains. DenseNet shows that concatenating all preceding feature maps enables parameter-efficient feature reuse. SimCLR demonstrates that composing multiple data augmentations—not architecture changes—defines effective self-supervised tasks. CLIP shows that the scale and diversity of natural language supervision, rather than a specialized architecture, drives zero-shot generalization. ConvNeXt reveals that many Transformer gains over CNNs can be attributed to modernized training and micro-design choices rather than attention itself. VAR demonstrates that reordering the autoregressive generation unit from single tokens to multi-scale maps fixes fundamental mathematical and structural issues in image generation. Together, these works suggest that principled organization of information flow—whether through dense connections, augmentation composition, language supervision, kernel design, or scale ordering—is a unifying driver of progress in visual learning.",
+    "gt_passages": [
+      {
+        "paper_id": "1608.06993",
+        "passage": "Instead of drawing representational power from extremely deep or wide architectures, DenseNets exploit the potential of the network through feature reuse, yielding condensed models that are easy to train and highly parameter efficient."
+      },
+      {
+        "paper_id": "2002.05709",
+        "passage": "Composition of multiple data augmentation operations is crucial in defining the contrastive prediction tasks that yield effective representations. In addition, unsupervised contrastive learning benefits from stronger data augmentation than supervised learning."
+      },
+      {
+        "paper_id": "2404.02905",
+        "passage": "This simple, intuitive methodology allows autoregressive (AR) transformers to learn visual distributions fast and can generalize well: VAR, for the first time, makes GPT-style AR models surpass diffusion transformers in image generation."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_007",
+    "query": "How do CLIP and VAR each leverage scale—in data and model size—to achieve transfer and generalization capabilities, and what does each paper say about the relationship between scale and performance?",
+    "query_type": "Synthesis",
+    "paper_ids": ["2103.00020", "2404.02905"],
+    "gt_answer": "CLIP trains on 400 million internet image-text pairs and observes that zero-shot transfer performance is a smoothly predictable function of compute, with a log-log linear scaling trend across a 44x increase in model compute. VAR also exhibits scaling laws: training models from 18M to 2B parameters on ImageNet reveals a clear power-law relationship between model size and test cross-entropy loss, with Pearson correlation coefficients near -0.998, closely mirroring the scaling behavior observed in large language models. Both results indicate that performance in vision—whether for representation or generation—scales predictably with model size and data, validating investment in larger models.",
+    "gt_passages": [
+      {
+        "paper_id": "2103.00020",
+        "passage": "We study the scalability of CLIP by training a series of eight models spanning almost 2 orders of magnitude of compute and observe that transfer performance is a smoothly predictable function of compute."
+      },
+      {
+        "paper_id": "2404.02905",
+        "passage": "Scaling up V AR models exhibits clear power-law scaling laws similar to those observed in LLMs, with linear correlation coefficients near -0 . 998 as solid evidence."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_008",
+    "query": "How do DenseNet, SimCLR, and ConvNeXt collectively challenge the assumption that deeper or wider networks alone are sufficient to improve visual recognition performance?",
+    "query_type": "Synthesis",
+    "paper_ids": ["1608.06993", "2002.05709", "2201.03545"],
+    "gt_answer": "DenseNet challenges depth-alone scaling by showing that a 100-layer DenseNet with only 0.8M parameters achieves comparable accuracy to a 1001-layer pre-activation ResNet with over 10M parameters, attributing gains to feature reuse through dense connectivity rather than simply increasing depth. SimCLR shows that self-supervised contrastive learning benefits more from bigger models than supervised learning, but more importantly demonstrates that the composition of augmentations—not model size—is the critical factor for good representations. ConvNeXt demonstrates that a substantial portion of the performance gap between ResNets and vision Transformers is due to modernized training techniques and micro-design choices, showing a ResNet-50 improves from 76.1% to 78.8% simply by updating the training recipe, before any architectural changes.",
+    "gt_passages": [
+      {
+        "paper_id": "1608.06993",
+        "passage": "A possibly counter-intuitive effect of this dense connectivity pattern is that it requires fewer parameters than traditional convolutional networks, as there is no need to relearn redundant feature-maps."
+      },
+      {
+        "paper_id": "2002.05709",
+        "passage": "we find the gap between supervised models and linear classifiers trained on unsupervised models shrinks as the model size increases, suggesting that unsupervised learning benefits more from bigger models than its supervised counterpart."
+      },
+      {
+        "paper_id": "2201.03545",
+        "passage": "By itself, this enhanced training recipe increased the performance of the ResNet-50 model from 76.1% [1] to 78.8% (+2.7%), implying that a significant portion of the performance difference between traditional ConvNets and vision Transformers may be due to the training techniques."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_009",
+    "query": "SimCLR argues that stronger data augmentation hurts supervised learning while helping self-supervised learning, but CLIP uses minimal image augmentation during training. Does this create a contradiction about the role of augmentation in visual representation learning?",
+    "query_type": "Contradiction",
+    "paper_ids": ["2002.05709", "2103.00020"],
+    "gt_answer": "There is an apparent contradiction: SimCLR demonstrates that stronger color augmentation substantially improves self-supervised representation quality while hurting supervised model performance, concluding that contrastive learning benefits from augmentations that supervised learning does not need. However, CLIP uses a very minimal augmentation policy—only a random square crop from resized images during training—and yet achieves strong zero-shot transfer performance. The resolution is that CLIP's supervision signal comes from the diversity of 400 million internet image-text pairs, which provides sufficient variation to learn robust representations without relying on augmentation to create positive pairs. SimCLR, operating only on ImageNet, must manufacture view diversity through augmentation since it has no external signal. Thus the two approaches are not contradictory but reflect different sources of learning signal diversity.",
+    "gt_passages": [
+      {
+        "paper_id": "2002.05709",
+        "passage": "our experiments show that unsupervised contrastive learning benefits from stronger (color) data augmentation than supervised learning. Although previous work has reported that data augmentation is useful for self-supervised learning (Doersch et al., 2015; Bachman et al., 2019; Hénaff et al., 2019; Asano et al., 2019), we show that data augmentation that does not yield accuracy benefits for supervised learning can still help considerably with contrastive learning."
+      },
+      {
+        "paper_id": "2103.00020",
+        "passage": "A random square crop from resized images is the only data augmentation used during training."
+      }
+    ]
+  },
+  {
+    "query_id": "groupD_010",
+    "query": "ConvNeXt argues that the performance advantages of Transformers over CNNs are largely due to training techniques and design choices that can be replicated in pure ConvNets, but CLIP's ViT-L/14 visual encoder outperforms its ResNet counterparts. Does this contradict ConvNeXt's claims about CNN-Transformer parity?",
+    "query_type": "Contradiction",
+    "paper_ids": ["2103.00020", "2201.03545"],
+    "gt_answer": "There is a surface-level tension: ConvNeXt claims that a pure ConvNet (ConvNeXt-B) can match or outperform Swin Transformer of similar complexity on ImageNet and downstream tasks, suggesting CNN-Transformer parity when architectural design choices are equalized. However, CLIP uses ViT-L/14 as its best-performing image encoder, with the largest ResNet (RN50x64) requiring 18 days on 592 V100 GPUs while the best Vision Transformer took only 12 days on 256 V100 GPUs. The distinction is that ConvNeXt compares against hierarchical Transformers like Swin at matched FLOPs, whereas CLIP scales Vision Transformers to large capacity and pretraining data regimes where compute efficiency differences between architectures become apparent. Thus ConvNeXt's claim holds within matched-compute regimes; at extreme scale, Transformer architectures may still hold efficiency advantages.",
+    "gt_passages": [
+      {
+        "paper_id": "2201.03545",
+        "passage": "ConvNeXt also outperforms Swin Transformer of similar complexities across the board, sometimes with a substantial margin (e.g. 0.8% for ConvNeXt-T). Without specialized modules such as shifted windows or relative position bias, ConvNeXts also enjoy improved throughput compared to Swin Transformers."
+      },
+      {
+        "paper_id": "2103.00020",
+        "passage": "The largest ResNet model, RN50x64, took 18 days to train on 592 V100 GPUs while the largest Vision Transformer took 12 days on 256 V100 GPUs."
+      }
+    ]
+  }
+]
