@@ -1,3 +1,4 @@
+import pypdf
 import json
 import re
 import time
@@ -393,78 +394,55 @@ def download_paper_pdf(paper: Paper, dest_dir: Path) -> bool:
     return result is not None
 
 
-# ── marker PDF → markdown (updated to new API) ───────────────────────────────
+# ── Docling PDF → markdown ─────────────────────────────────────────────────────
 
-def paper2md(fname: Path, output_dir: Path, disable_ocr: bool = False) -> Path:
+def _get_pdf_page_count(pdf_path: Path) -> int:
+    with open(pdf_path, "rb") as f:
+        return len(pypdf.PdfReader(f).pages)
+
+
+def parse_pdf_with_docling(pdf_path: Path, output_dir: Path, converter) -> Path:
+    """Parse a PDF with Docling. Returns path to subfolder.
+
+    Cache hit (both .json and .md exist): returns immediately without re-parsing.
+    Cache miss: runs Docling, saves .json and .md.
+    PARTIAL_SUCCESS below threshold: returns empty subfolder (no .md written).
     """
-    Convert a PDF to markdown using marker (new API >= 1.0.0).
+    from docling.datamodel.base_models import ConversionStatus
+    from config import settings
 
-    Output layout:
-        output_dir/{fname.stem}/
-            {fname.stem}.md      — full markdown with tables & LaTeX
-            metadata.json        — table of contents + page stats
-            *.png / *.jpg        — extracted figures
-    """
-    from marker.converters.pdf import PdfConverter
-    from marker.models import create_model_dict
-    from marker.output import text_from_rendered
-    from marker.config.parser import ConfigParser
-    from marker.schema import BlockTypes
-
-    if disable_ocr:
-        config = ConfigParser({"skip_ocr_blocks": list(BlockTypes)})
-        converter = PdfConverter(
-            config=config.generate_config_dict(),
-            artifact_dict=create_model_dict(),
-        )
-    else:
-        converter = PdfConverter(artifact_dict=create_model_dict())
-    rendered = converter(fname.as_posix())
-    markdown_text, _, images = text_from_rendered(rendered)
-
-    subfolder = output_dir / fname.stem
+    subfolder = output_dir / pdf_path.stem
     subfolder.mkdir(parents=True, exist_ok=True)
+    json_path = subfolder / f"{pdf_path.stem}.json"
+    md_path = subfolder / f"{pdf_path.stem}.md"
 
-    (subfolder / f"{fname.stem}.md").write_text(markdown_text, encoding="utf-8")
+    if json_path.exists() and md_path.exists():
+        logging.info(f"Cache hit: already parsed '{pdf_path.name}'")
+        return subfolder
 
-    for img_name, img_pil in images.items():
-        img_pil.save(subfolder / img_name)
+    total_pages = _get_pdf_page_count(pdf_path)
+    result = converter.convert(str(pdf_path), max_num_pages=50)
 
-    (subfolder / "metadata.json").write_text(
-        json.dumps(rendered.metadata, indent=2, default=str), encoding="utf-8"
-    )
+    if result.status == ConversionStatus.PARTIAL_SUCCESS:
+        parsed_pages = len(result.document.pages)
+        success_rate = parsed_pages / total_pages if total_pages > 0 else 0.0
+        if success_rate < settings.DOCLING_MIN_SUCCESS_RATE:
+            logging.warning(
+                f"Docling PARTIAL_SUCCESS for '{pdf_path.name}': "
+                f"{parsed_pages}/{total_pages} pages ({success_rate:.0%}) — dropping"
+            )
+            return subfolder
 
-    logging.info(
-        f"marker: saved markdown + {len(images)} image(s) to '{subfolder}'"
-    )
+    result.document.save_as_json(json_path)
+    md_path.write_text(result.document.export_to_markdown(), encoding="utf-8")
+    logging.info(f"Docling: saved JSON cache + markdown to '{subfolder}'")
     return subfolder
 
 
-def parse_pdf(pdf_path: Path, force_reparse: bool = False, disable_ocr: bool = False) -> Path:
-    md_output_dir = pdf_path.parents[1] / "parsed_papers"
-
-    existing = list((md_output_dir / pdf_path.stem).glob("*.md"))
-    if existing and not force_reparse:
-        logging.info(
-            f"Markdown already exists for '{pdf_path.name}', skipping "
-            f"(use force_reparse=True to re-parse)"
-        )
-        return md_output_dir / pdf_path.stem
-
-    logging.info(f"Converting '{pdf_path.name}' to markdown via marker...")
-    return paper2md(pdf_path, md_output_dir, disable_ocr=disable_ocr)
-
-
-def parse_paper_pdfs(papers_dir: Path, force_reparse: bool = False, disable_ocr: bool = False):
+def parse_paper_pdfs(papers_dir: Path, converter) -> None:
     for f in papers_dir.rglob("*.pdf"):
-        summary_exists = (
-            f.parents[1] / "summaries" / f"{f.stem}_summary.md"
-        ).exists()
-        if summary_exists:
-            logging.info(f"Summary already exists for '{f.name}', skipping")
-            continue
         logging.info(f"Parsing '{f.name}'...")
-        parse_pdf(f, force_reparse, disable_ocr=disable_ocr)
+        parse_pdf_with_docling(f, f.parents[1] / "parsed_papers", converter)
 
 
 # ── CLI entry point ───────────────────────────────────────────────────────────

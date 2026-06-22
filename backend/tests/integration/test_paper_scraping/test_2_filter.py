@@ -138,7 +138,7 @@ class TestPaperRelevanceFilterIntegration:
         """Stage-1 similarity for ViT must exceed stock prediction paper for vision topic."""
         from services.model_factory import model_factory
         rf = PaperRelevanceFilter(
-            embed_model=model_factory.relevance_embed_model(),
+            embed_model=model_factory.embed_model(),
             llm=model_factory.fast_llm(temperature=0.0),
         )
         topic = "Vision Transformer image classification"

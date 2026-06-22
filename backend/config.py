@@ -1,9 +1,10 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     # ── Secrets ───────────────────────────────────────────────────────────────
-    TAVILY_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     GROQ_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
@@ -20,7 +21,6 @@ class Settings(BaseSettings):
     LLM_VISION_MODEL: str = "gemini/gemini-2.5-flash"
     DISABLE_OLLAMA_THINK: bool = False  # set true for Ollama models with think mode (e.g. qwen3)
     LLM_VISION_FALLBACK_MODEL: str = "openrouter/google/gemma-3-27b-it:free"
-    LLM_EMBED_MODEL: str = "gemini/gemini-embedding-001"
 
     MAX_TOKENS: int = 4096
 
@@ -45,20 +45,41 @@ class Settings(BaseSettings):
     PAPER_CANDIDATE_YEAR_WINDOW: int = 3     # publication recency window (years)
 
     # ── Relevance filter ──────────────────────────────────────────────────────
-    LLM_RELEVANCE_EMBED_MODEL: str = "ollama/nomic-embed-text"
-    # Embedding model used for Stage 1 relevance pre-screening.
-    # Must be the same model family used during threshold calibration.
-    # Run via local Ollama; isolated from the general-purpose embed model.
+    EMBED_MODEL: str = "ollama/nomic-embed-text"
+    # Shared embedding model for relevance filtering, RAG summarization, and Qdrant indexing.
+    # Must use the same model family as threshold calibration to keep cosine similarity scores valid.
+
+    # ── Docling PDF parsing ───────────────────────────────────────────────────
+    DOCLING_MIN_SUCCESS_RATE: float = 0.70
+    # Papers where Docling parses fewer than 70% of pages are dropped.
+
+    # ── Qdrant local vector store ─────────────────────────────────────────────
+    QDRANT_PATH: str = "./qdrant_storage"
+    # Local Qdrant Gridstore directory. No separate Qdrant server needed.
+    QDRANT_COLLECTION_NAME: str = "papers"
+
+    # ── In-memory RAG (summarization) ────────────────────────────────────────
+    RAG_CHUNK_SIZE: int = 512
+    # Token budget per chunk. Matches nomic-embed-text context window.
+    RAG_SIMILARITY_TOP_K: int = 5
+    # Chunks retrieved per query. 8 queries × 5 = up to 40 unique chunks.
+
+    # ── Shared cache ──────────────────────────────────────────────────────────
+    SHARED_CACHE_ROOT: str = "./shared_cache"
+    # Persists parsed docs and summaries across workflow runs, keyed by document_id.
+
+    # ── Chunk filter ─────────────────────────────────────────────────────────
+    CHUNK_FILTER_CONFIG_PATH: str = "backend/data/filter_config.json"
+
+    # ── Summarization strategy ────────────────────────────────────────────────
+    SUMMARY_STRATEGY: Literal["rag", "vlm"] = "rag"
+    # "rag" uses Docling HybridChunker pipeline (default).
+    # "vlm" retains the legacy VLM image-based path for baseline comparison.
 
     # ── Optional provider config ───────────────────────────────────────────────
     OPENALEX_API_KEY: str = ""
     OPENALEX_EMAIL: str = ""
 
-    # ── summary_gen_w_qe.py (vector/doc store, alternate workflow path) ───────
-    QDRANT_HOST: str = "localhost"
-    QDRANT_PORT: str = "6333"
-    REDIS_HOST: str = "localhost"
-    REDIS_PORT: int = 6379
 
     class Config:
         env_file = ".env"
