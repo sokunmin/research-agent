@@ -144,6 +144,7 @@ Only read source directories: `app/`, `components/`, `hooks/`, `lib/`, `public/`
 * Do NOT add co-author on git message
 * Do NOT create isolation worktree without user's confirmation
 * **ALWAYS ask user for confirmation before executing any git write operation** (`git add`, `git commit`, `git reset`, `git push`, `git rebase`, `git merge`). Show the proposed commit message and file list first, wait for explicit approval.
+* **ALWAYS ask user which branch to make changes on** before writing any file or executing any command, when the change could logically belong to either `dev` or an active feature branch. Even if the file path suggests a category (e.g. `poc/` → dev-only), the user may prefer to bundle it with a feature branch for cleaner squash-merge splitting. Do not decide unilaterally.
 * **NEVER commit `.env`** — it contains API keys and is gitignored. Only `.env.example` (no real keys) may be committed.
 
 #### Commit Message & PR Standard (FAANG)
