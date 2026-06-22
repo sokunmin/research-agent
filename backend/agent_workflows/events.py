@@ -16,14 +16,23 @@ class FilteredPaperEvent(Event):
     relevance: PaperRelevanceResult   # is_relevant: bool, similarity_score: float
 
 
+class DownloadPapersEvent(Event):
+    papers: list[dict]  # Paper objects serialized via model_dump(), needing-work only
+    paper_map: dict     # {document_id: {"document_id": str, "title": str}}, needing-work only
+
+
 class Paper2SummaryDispatcherEvent(Event):
     papers_path: str
+    paper_map: dict  # {document_id: {"document_id": str, "title": str}}
 
 
 class Paper2SummaryEvent(Event):
     pdf_path: Path
-    image_output_dir: Path
-    summary_path: Path
+    run_summary_path: Path   # per-run copy in {wid}/summaries/ for SlideGen
+    document_id: str         # ArXiv ID or OpenAlex ID
+    paper_title: str
+    needs_summarization: bool = True
+    needs_vector_indexing: bool = True
 
 
 class SummaryStoredEvent(Event):

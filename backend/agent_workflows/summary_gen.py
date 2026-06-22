@@ -1,11 +1,13 @@
 import asyncio
 import json
+import shutil
 import uuid
+from pathlib import Path
+from typing import ClassVar, Optional, Union
 
 import click
 
 from config import settings
-from llama_index.core import SimpleDirectoryReader
 from llama_index.core.llms import ChatMessage
 from llama_index.core.program import LLMTextCompletionProgram
 from llama_index.core.tools import FunctionTool
@@ -15,38 +17,92 @@ from llama_index.core.workflow import (
     StopEvent,
     step,
 )
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    PdfPipelineOptions,
+    TableFormerMode,
+    TableStructureOptions,
+)
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling_core.types.doc import DoclingDocument
 
-from utils.file_processing import pdf2images
 from agent_workflows.events import *
 from agent_workflows.hitl_workflow import HumanInTheLoopWorkflow, LOCAL_LLM_RETRY_POLICY
-from agent_workflows.schemas import SearchParams, PaperCandidate, IntentResult
 from agent_workflows.paper_scraping import (
-    download_paper_pdf,
-    fetch_candidate_papers,
     Paper,
     PaperRelevanceFilter,
     PaperRelevanceResult,
+    download_paper_pdf,
+    fetch_candidate_papers,
+    parse_pdf_with_docling,
 )
-from tools.paper_tools import PaperSearchToolSpec
+from agent_workflows.schemas import IntentResult, PaperCandidate, SearchParams
 from prompts.prompts import (
-    SUMMARIZE_PAPER_PMT,
-    SEARCH_PARAMS_EXTRACTION_PMT,
     CLASSIFY_INTENT_PMT,
     PAPER_QUESTION_PMT,
+    SEARCH_PARAMS_EXTRACTION_PMT,
+    SUMMARIZE_PAPER_PMT,
 )
+from services.docling_chunker import DoclingChunker
 from services.model_factory import model_factory
+from services.rag_index_builder import RAGIndexBuilder
+from services.vector_store import PaperVectorStore
+from tools.filter_tools import ChunkFilter
+from tools.paper_tools import PaperSearchToolSpec
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+
+_RETRIEVAL_QUERIES = [
+    "What problem does this paper address and what is the proposed solution?",
+    "What is the key approach, model architecture, or algorithm introduced?",
+    "What are the key components or steps in the method?",
+    "How was the model trained or finetuned, including loss functions and optimization?",
+    "What datasets were used, including size, type, source, and availability?",
+    "What evaluation methods, benchmarks, and metrics were used?",
+    "What are the conclusions, significance, limitations, and suggested future work?",
+    "Who are the authors and what is the publication year?",
+]
+
+
+def _get_paper_id(paper: Paper) -> str:
+    """Return document_id (and filename stem) for a paper.
+
+    Uses ArXiv ID when available — stable, matches PDF filename convention.
+    Falls back to OpenAlex ID for non-ArXiv papers.
+    """
+    arxiv_id = (paper.external_ids or {}).get("ArXiv")
+    if arxiv_id:
+        return arxiv_id
+    return paper.entry_id.rstrip("/").split("/")[-1]
+
+
+def _build_docling_converter() -> DocumentConverter:
+    """Build the Docling DocumentConverter singleton with M1-compatible options."""
+    opts = PdfPipelineOptions()
+    opts.do_ocr = False
+    opts.do_table_structure = True
+    opts.table_structure_options = TableStructureOptions(
+        mode=TableFormerMode.ACCURATE, do_cell_matching=True
+    )
+    opts.do_formula_enrichment = True
+    opts.do_code_enrichment = True
+    opts.do_picture_classification = True
+    opts.generate_picture_images = True
+    opts.images_scale = 2.0
+    opts.do_picture_description = False
+    return DocumentConverter(
+        format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}
+    )
 
 
 class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
     wid: Optional[uuid.UUID] = uuid.uuid4()
     num_max_final_papers: int = settings.NUM_MAX_FINAL_PAPERS
 
-    _PAPERS_SUBDIR = "papers"
-    _IMAGES_SUBDIR = "papers_images"
+    _PAPERS_SUBDIR: ClassVar[str] = "papers"
+    _SUMMARIES_SUBDIR: ClassVar[str] = "summaries"
 
     def __init__(self, wid: Optional[uuid.UUID] = uuid.uuid4(), *args, **kwargs):
         self.wid = wid
@@ -58,17 +114,30 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         )
         self.papers_download_path = self.workflow_artifacts_path / self._PAPERS_SUBDIR
         self.papers_download_path.mkdir(parents=True, exist_ok=True)
-        self.papers_images_path = self.workflow_artifacts_path / self._IMAGES_SUBDIR
-        self.papers_images_path.mkdir(parents=True, exist_ok=True)
-        self.paper_summary_path = self.papers_images_path
+        self.paper_summary_path = self.workflow_artifacts_path / self._SUMMARIES_SUBDIR
         self.paper_summary_path.mkdir(parents=True, exist_ok=True)
+
+        shared_cache_root = Path(settings.SHARED_CACHE_ROOT)
+        self._shared_parsed_papers_dir = shared_cache_root / "parsed_papers"
+        self._shared_summaries_dir = shared_cache_root / "summaries"
+        self._shared_parsed_papers_dir.mkdir(parents=True, exist_ok=True)
+        self._shared_summaries_dir.mkdir(parents=True, exist_ok=True)
+
         self._fast_llm = model_factory.fast_llm(temperature=0.0)
         self._smart_llm = model_factory.smart_llm(temperature=0.0)
         self._vlm = model_factory.vision_llm()
+
+        self._embed_model = model_factory.embed_model()
         self._relevance_filter = PaperRelevanceFilter(
-            embed_model=model_factory.relevance_embed_model(),
+            embed_model=self._embed_model,
             llm=self._fast_llm,
         )
+
+        chunk_filter = ChunkFilter(config_path=Path(settings.CHUNK_FILTER_CONFIG_PATH))
+        chunker = DoclingChunker(max_tokens=settings.RAG_CHUNK_SIZE)
+        self._summarization_index_builder = RAGIndexBuilder(chunker, chunk_filter)
+        self._paper_vector_store = PaperVectorStore(chunker, chunk_filter, self._embed_model)
+        self._docling_converter = _build_docling_converter()
         self.paper_search_spec = PaperSearchToolSpec()
         # fetch_candidate_papers is called directly by supervisor_search step;
         # paper_search_spec.to_tool_list() is available if a future agent needs search.
@@ -276,40 +345,94 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
             return StopEvent(result=None)
 
     @step
-    async def download_papers(
+    async def check_paper_status(
         self, ctx: Context, ev: SelectedPapersEvent
+    ) -> Optional[DownloadPapersEvent]:
+        papers = [Paper(**p) for p in ev.papers]
+        n_total = len(papers)
+
+        async with ctx.store.edit_state() as state:
+            state["n_pdfs"] = n_total
+
+        paper_map: dict[str, dict] = {}
+        papers_needing_work: list[Paper] = []
+
+        for paper in papers:
+            document_id = _get_paper_id(paper)
+            paper_map[document_id] = {"document_id": document_id, "title": paper.title}
+
+            shared_summary = self._shared_summaries_dir / f"{document_id}.md"
+            run_summary_path = self.paper_summary_path / f"{document_id}.md"
+
+            if self._paper_vector_store.is_indexed(document_id) and shared_summary.exists():
+                shutil.copy2(shared_summary, run_summary_path)
+                logger.info(f"Already fully processed, fast-path: document_id={document_id}")
+                ctx.send_event(SummaryStoredEvent(fpath=run_summary_path))
+            else:
+                papers_needing_work.append(paper)
+
+        if not papers_needing_work:
+            return None
+
+        self._emit_message(
+            ctx, "check_paper_status",
+            message=f"{len(papers_needing_work)} of {n_total} papers need processing."
+        )
+        return DownloadPapersEvent(
+            papers=[p.model_dump() for p in papers_needing_work],
+            paper_map=paper_map,
+        )
+
+    @step
+    async def download_papers(
+        self, ctx: Context, ev: DownloadPapersEvent
     ) -> Paper2SummaryDispatcherEvent:
-        selected_papers = [Paper(**p) for p in ev.papers]
+        papers = [Paper(**p) for p in ev.papers]
 
         self._emit_message(
             ctx, "download_papers",
-            message=f"Downloading {len(selected_papers)} selected papers..."
+            message=f"Downloading up to {len(papers)} papers..."
         )
-        for paper in selected_papers:
+        for paper in papers:
+            document_id = _get_paper_id(paper)
+            json_path = self._shared_parsed_papers_dir / document_id / f"{document_id}.json"
+            if json_path.exists():
+                logger.info(f"JSON cache exists, skipping download: {paper.title}")
+                continue
             success = download_paper_pdf(paper, self.papers_download_path)
-            msg = f"✓ Downloaded: {paper.title}" if success else f"⚠ Skipped (no open access PDF): {paper.title}"
+            msg = (
+                f"✓ Downloaded: {paper.title}"
+                if success
+                else f"⚠ Skipped (no open access PDF): {paper.title}"
+            )
             self._emit_message(ctx, "download_papers", message=msg)
+
         return Paper2SummaryDispatcherEvent(
-            papers_path=self.papers_download_path.as_posix()
+            papers_path=self.papers_download_path.as_posix(),
+            paper_map=ev.paper_map,
         )
 
     @step
     async def paper2summary_dispatcher(
         self, ctx: Context, ev: Paper2SummaryDispatcherEvent
-    ) -> Paper2SummaryEvent:
-        pdf_files = list(Path(ev.papers_path).glob("*.pdf"))
-        async with ctx.store.edit_state() as state:
-            state["n_pdfs"] = len(pdf_files)
-        for pdf_path in pdf_files:
-            img_output_dir = self.papers_images_path / pdf_path.stem
-            img_output_dir.mkdir(exist_ok=True, parents=True)
-            ctx.send_event(
-                Paper2SummaryEvent(
-                    pdf_path=pdf_path,
-                    image_output_dir=img_output_dir,
-                    summary_path=self.paper_summary_path / f"{pdf_path.stem}.md",
-                )
-            )
+    ) -> Union[Paper2SummaryEvent, None]:
+        for document_id, info in ev.paper_map.items():
+            paper_title = info["title"]
+            run_summary_path = self.paper_summary_path / f"{document_id}.md"
+            shared_summary = self._shared_summaries_dir / f"{document_id}.md"
+            pdf_path = Path(ev.papers_path) / f"{document_id}.pdf"
+
+            is_indexed = self._paper_vector_store.is_indexed(document_id)
+            has_shared_summary = shared_summary.exists()
+
+            ctx.send_event(Paper2SummaryEvent(
+                pdf_path=pdf_path,
+                run_summary_path=run_summary_path,
+                document_id=document_id,
+                paper_title=paper_title,
+                needs_summarization=not has_shared_summary,
+                needs_vector_indexing=not is_indexed,
+            ))
 
     @step(num_workers=settings.NUM_WORKERS_VISION)
     async def paper2summary(
@@ -317,22 +440,70 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
     ) -> SummaryStoredEvent:
         await asyncio.sleep(settings.DELAY_SECONDS_VISION)
         self._emit_message(ctx, "paper2summary", message=f"Summarizing: {ev.pdf_path.name}")
-        pdf2images(ev.pdf_path, ev.image_output_dir)
-        # Summarize paper page images using VLM
-        image_documents = SimpleDirectoryReader(ev.image_output_dir).load_data()
+
+        json_path = self._shared_parsed_papers_dir / ev.document_id / f"{ev.document_id}.json"
+        if not json_path.exists():
+            parse_pdf_with_docling(
+                ev.pdf_path, self._shared_parsed_papers_dir, self._docling_converter
+            )
+
+        if ev.needs_summarization:
+            if settings.SUMMARY_STRATEGY == "rag":
+                summary_txt = await self._summarize_with_rag(json_path)
+            else:
+                summary_txt = await self._summarize_with_vlm(ev.pdf_path)
+            ev.run_summary_path.write_text(summary_txt, encoding="utf-8")
+            (self._shared_summaries_dir / f"{ev.document_id}.md").write_text(
+                summary_txt, encoding="utf-8"
+            )
+            logger.info(f"Summary saved to {ev.run_summary_path}")
+
+        if ev.needs_vector_indexing:
+            doc = DoclingDocument.model_validate(
+                json.loads(json_path.read_text())
+            )
+            await self._paper_vector_store.index_document_async(
+                doc, ev.document_id, ev.paper_title
+            )
+
+        return SummaryStoredEvent(fpath=ev.run_summary_path)
+
+    async def _summarize_with_rag(self, json_path: Path) -> str:
+        doc = DoclingDocument.model_validate(json.loads(json_path.read_text()))
+        index = self._summarization_index_builder.build(doc, self._embed_model)
+        retriever = index.as_retriever(similarity_top_k=settings.RAG_SIMILARITY_TOP_K)
+
+        seen_ids: set[str] = set()
+        context_chunks: list[str] = []
+        for query in _RETRIEVAL_QUERIES:
+            for node in retriever.retrieve(query):
+                if node.node_id not in seen_ids:
+                    seen_ids.add(node.node_id)
+                    context_chunks.append(node.text)
+
+        context = "\n\n---\n\n".join(context_chunks)
+        response = await self._smart_llm.acomplete(
+            SUMMARIZE_PAPER_PMT + f"\n\n{context}",
+            strip_fences="markdown",
+        )
+        return response.text
+
+    async def _summarize_with_vlm(self, pdf_path: Path) -> str:
+        # Legacy VLM image-based path; retained for baseline comparison.
+        import tempfile
+        from llama_index.core import SimpleDirectoryReader
+        from utils.file_processing import pdf2images
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            image_output_dir = Path(tmp_dir)
+            pdf2images(pdf_path, image_output_dir)
+            image_documents = SimpleDirectoryReader(str(image_output_dir)).load_data()
         response = await self._vlm.acomplete(
             prompt=SUMMARIZE_PAPER_PMT,
             image_documents=image_documents,
+            strip_fences="markdown",
         )
-        # removeprefix/removesuffix strips substring (str.strip() strips individual chars — bug)
-        text = response.text.strip()
-        text = text.removeprefix("```markdown").removeprefix("```")
-        summary_txt = text.removesuffix("```").strip()
-        # Persist summary as markdown
-        with open(ev.summary_path, "w") as f:
-            f.write(summary_txt)
-        logger.info(f"Summary saved to {ev.summary_path}")
-        return SummaryStoredEvent(fpath=ev.summary_path)
+        return response.text
 
     @step
     async def finish(self, ctx: Context, ev: SummaryStoredEvent) -> StopEvent:
@@ -401,7 +572,7 @@ class SummaryGenerationDummyWorkflow(HumanInTheLoopWorkflow):
     @step
     async def dummy_stop_step(self, ev: DummyEvent) -> StopEvent:
         return StopEvent(
-            result="workflow_artifacts/SummaryGenerationWorkflow/dummy-id/papers_images"
+            result="workflow_artifacts/SummaryGenerationWorkflow/dummy-id/summaries"
         )
 
 

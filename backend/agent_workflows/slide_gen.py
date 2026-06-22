@@ -496,15 +496,8 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     ),
                 )
             ]
-            response = await self._fast_llm.achat(messages)
-            try:
-                outlines[issue.slide_idx]["content"] = json.loads(
-                    response.message.content.strip()
-                )
-            except json.JSONDecodeError:
-                logger.warning(
-                    f"content_fix: JSON parse failed for slide {issue.slide_idx}, keeping original"
-                )
+            response = await self._smart_llm.achat(messages, strip_fences="json")
+            outlines[issue.slide_idx]["content"] = json.loads(response.message.content)
             self._emit_message(
                 ctx, "content_fix",
                 message=f"Trimmed content for slide {issue.slide_idx}",

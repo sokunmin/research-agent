@@ -14,8 +14,8 @@ import os
 import litellm
 
 from llama_index.core.callbacks import CallbackManager
-from llama_index.llms.litellm import LiteLLM
 from llama_index.embeddings.litellm import LiteLLMEmbedding
+from services.smart_llm import SmartLiteLLM
 from pydantic import BaseModel, ConfigDict
 from services.multimodal import LiteLLMMultiModal
 
@@ -27,8 +27,7 @@ class ModelConfig(BaseModel):
     fast_model: str            # fast/cheap LLM (was: gpt-4o-mini role)
     vision_model: str          # VLM
     vision_fallback_model: str # VLM fallback on 429 (empty string = disabled)
-    embed_model: str           # embedding model
-    relevance_embed_model: str # embedding model for paper relevance pre-screening
+    embed_model: str           # embedding model for relevance filtering, RAG, and Qdrant
     max_tokens: int = 4096
     disable_ollama_think: bool = False  # pass extra_body={"think": False} (Ollama think-mode models)
 
@@ -40,30 +39,24 @@ class ModelFactory:
         self._config = config
 
     def smart_llm(self, temperature: float = 0.0,
-                  callback_manager: Optional[CallbackManager] = None) -> LiteLLM:
+                  callback_manager: Optional[CallbackManager] = None) -> SmartLiteLLM:
         kw = dict(model=self._config.smart_model, temperature=temperature,
                   max_tokens=self._config.max_tokens)
         if self._config.disable_ollama_think:
             kw["additional_kwargs"] = {"extra_body": {"think": False}}
         if callback_manager:
             kw["callback_manager"] = callback_manager
-        return LiteLLM(**kw)
+        return SmartLiteLLM(**kw)
 
-    def fast_llm(self, temperature: float = 0.0) -> LiteLLM:
+    def fast_llm(self, temperature: float = 0.0) -> SmartLiteLLM:
         kw = dict(model=self._config.fast_model, temperature=temperature)
         if self._config.disable_ollama_think:
             kw["additional_kwargs"] = {"extra_body": {"think": False}}
-        return LiteLLM(**kw)
+        return SmartLiteLLM(**kw)
 
     def embed_model(self) -> LiteLLMEmbedding:
-        # NOTE: LiteLLMEmbedding uses `model_name`, not `model`
+        """Embedding model for relevance filtering, RAG summarization, and Qdrant indexing."""
         return LiteLLMEmbedding(model_name=self._config.embed_model)
-
-    def relevance_embed_model(self) -> LiteLLMEmbedding:
-        """Embedding model for Stage-1 paper relevance pre-screening.
-        Isolated from the general embed_model to allow independent calibration.
-        """
-        return LiteLLMEmbedding(model_name=self._config.relevance_embed_model)
 
     def vision_llm(
         self,
@@ -124,8 +117,7 @@ def _build() -> ModelFactory:
         fast_model=settings.LLM_FAST_MODEL,
         vision_model=settings.LLM_VISION_MODEL,
         vision_fallback_model=settings.LLM_VISION_FALLBACK_MODEL,
-        embed_model=settings.LLM_EMBED_MODEL,
-        relevance_embed_model=settings.LLM_RELEVANCE_EMBED_MODEL,
+        embed_model=settings.EMBED_MODEL,
         max_tokens=settings.MAX_TOKENS,
         disable_ollama_think=settings.DISABLE_OLLAMA_THINK,
     )
