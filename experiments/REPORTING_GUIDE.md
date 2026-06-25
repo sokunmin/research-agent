@@ -68,8 +68,8 @@ The first line of every experiment MD file must follow this exact format:
 ```
 
 - `N` is the experiment number matching the README entry (`#### Experiment N — ...`)
-- The descriptive title explains *what was studied and what the key finding was* — not just the component name. The MD title carries more weight than the README entry title, which summarises the outcome in the *Result:* line.
-- Example: `# Experiment 9 — ReAct Agent: How a Prompt Example Key Breaks Tool Dispatch in 4B Models`
+- The descriptive title explains *what was studied* — not the finding. The finding belongs in Summary → Result. Keep the title short enough to scan.
+- Example: `# Experiment 9 — ReAct Agent: Prompt Example Key and Tool Dispatch in 4B Models`
 
 ---
 
@@ -79,36 +79,12 @@ The first line of every experiment MD file must follow this exact format:
 
 **What to include:**
 - A reference sentence identifying which numbered step in README → System Architecture this experiment targets
-- Two-level ASCII diagrams (see below)
-- A brief explanation of what breaks if this step fails
+- A detail diagram showing the internal flow of that step (see below)
 - Define any non-obvious variable names referenced later in the report (e.g. prompt names, schema names)
 
-**Two-level diagram structure:**
+**Step detail diagram:**
 
-**Level 1 — System Architecture placement (from README):**
-
-One sentence naming the step, then reproduce the step's box from the README System Architecture diagram. Show only the input arriving at that step and the output leaving it — do not draw the neighboring steps.
-
-```
-This experiment targets Step N — <Step Name> (README → System Architecture).
-
-Input: <what arrives>        ← Step N-1: <name>
-      │
-      ▼
-┌── N. STEP NAME ─────────────────────────────────────────────────────┐
-├─── Original (lz-chen) ───────────┬─── My Implementation ────────────┤
-│ ...                              │ ...                              │
-└──────────────────────────────────┴──────────────────────────────────┘
-      │
-      ▼
-Output: <what leaves>                → Step N+1: <name>
-```
-
-The separator row must use `Original (lz-chen)` and `My Implementation` as column headers — not a plain horizontal line. This tells the interviewer at a glance which side is the forked baseline and which side is the contribution being reported.
-
-**Level 2 — Step-internal detail:**
-
-One sentence introducing the experiment target within the step. Draw the internal flow of Step N only — from the step's input down to its output. Use an EXPERIMENT TARGET box to highlight the specific sub-step under investigation. Do not include steps outside of Step N.
+One sentence introducing the experiment target within the step. Draw the internal flow of that step only — from its input down to its output. Use an EXPERIMENT TARGET box to highlight the specific sub-step under investigation. Do not include steps outside of this step.
 
 ```
 Step N — <Step Name> (detail)
@@ -130,6 +106,25 @@ Step N — <Step Name> (detail)
  <step output>    → Step N+1: <name>
 ```
 
+**Multi-part experiments (Part A → Part B):**
+
+When an experiment has sequential sub-experiments where Part A's output becomes Part B's fixed input, show multiple EXPERIMENT TARGET boxes connected by an arrow. Label each box with the part name. Annotate the connecting arrow with what Part A fixes for Part B.
+
+```
+ ┌─── EXPERIMENT TARGET: Part A ──────────────────────────────────┐
+ │ <Part A name>                                                   │
+ │   Input:  ...                                                   │
+ │   Output: <value fixed for Part B>                             │
+ └─────────────────────────────────────────────────────────────────┘
+       │  <fixed value> fixed
+       ▼
+ ┌─── EXPERIMENT TARGET: Part B ──────────────────────────────────┐
+ │ <Part B name>                                                   │
+ │   Input:  ...                                                   │
+ │   Output: ...                                                   │
+ └─────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ### Summary (3-Point Style)
@@ -138,20 +133,18 @@ Step N — <Step Name> (detail)
 
 **Format:**
 
-Each of the three bullets follows the same two-level structure — a short 1-sentence claim on the main bullet, then 2–3 indented sub-bullets (`  - `) with the concrete details:
+Each bullet is a single short sentence — the claim stated directly. Sub-bullets are used only when necessary:
 
 ```markdown
-- **Problem:** [1-sentence claim — what broke and where]
-  - [concrete symptom: metric value, error type, observed behaviour]
-  - [root cause: what produced the symptom]
+- **Problem:** [1-sentence claim — what was missing or unevaluated]
 - **Solution:** [1-sentence claim — method and what it isolates]
-  - [scale: number of variants / models / runs]
-  - [key methodological detail: what was held constant, what was varied]
-- **Result:** [1-sentence claim — what was chosen and the headline metric]
-  - [non-obvious secondary finding that the headline number alone does not convey]
+  - [sub-bullet only when Solution covers multiple parallel sub-experiments, e.g. Part A / Part B]
+- **Result:** [1-sentence claim — winner and headline metric, stated as absolute improvement]
 ```
 
-The main bullet must be short enough to read in one breath. Push all specifics (numbers, model names, file names) into sub-bullets.
+Do not add sub-bullets to Problem or Result — the details are already in Full Experimental Results. Sub-bullets on Solution are only needed when the experiment has multiple parallel sub-experiments that cannot be described in one sentence.
+
+The main bullet must be short enough to read in one breath.
 
 **Rules:**
 - Do not use internal experiment codes (E14, Path B, METHOD_A) in the Summary — use descriptive names
@@ -164,22 +157,26 @@ The main bullet must be short enough to read in one breath. Push all specifics (
 
 **Purpose:** Define all variables so the reader can interpret the results tables without scrolling back.
 
-**What to include:**
-- **Objective** — three bullet points, each on its own line:
-  - **Problem:** the specific failure or gap that motivated the experiment, with a concrete symptom (e.g. metric value, error type)
-  - **Goal:** the question the experiment answers — what is being compared and under what conditions
-  - **Pass condition:** the criterion a result must meet to be considered acceptable — not a judgment of success, just the defined threshold
-- A methods comparison table
-- A prompt/config variants table
-- **Metrics** — define every metric used in the Results tables. State which metric is the primary indicator and what its values mean (e.g. 0 = failure, 1 = efficient, >1 = self-debugging). Do not just list metric names.
-- **Components or tools under test** — if the experiment measures agent tools, API calls, or system components, include a brief table explaining what each one does. An interviewer without pipeline context must understand why these are being measured.
-- Other parameters (models, runs, execution mode, total calls)
+**Principle: group same-type information into one table.**
+
+Organize by what the experiment actually varies. Read the Python script to identify which parameters are fixed (same across all conditions) and which form the comparison axis (what changes between conditions). Create sub-section names that match the content — do not apply a fixed template.
+
+- Parameters shared across all conditions belong in one block. Name the sub-section based on what those parameters describe — e.g. "Shared Model Config", "Common Pipeline Parameters", "Evaluation Setup" — not a generic label like "Fixed Conditions". Only list parameters that are active and have a value — omit absent or unused parameters.
+- **The comparison axis** (what was varied) belongs in a separate block, one table per axis.
+- **The only required sub-section is Metrics** — define every metric used in Results tables, state which is primary, and explain what each measures.
+
+Each sub-section covers one type of information only. Do not include rows already covered by another nearby table.
+
+Do not add an Objective sub-section — this repeats what Summary already states.
+
+**Format consistency:** All sections within Experiment Setup that present structured data must use the same format. If the experiment's Setup uses tables as the primary format, all data sections (Metrics, Strategies, Parameters) must also use tables — do not mix prose paragraphs with tables in the same Setup section. Each table column carries one type of information only.
 
 **What to omit:**
 - Do not include a Hardware sub-section — the README documents the M1 hardware environment for all experiments. Repeating it in each report adds noise without value.
+- **Only list what is active and has a value.** Omit any row or item where the value is absent, unused, or None — absence is not worth documenting. This applies to all Setup tables and any configuration table.
 
 **✅ Convention:**
-Add `✅ = currently used in the pipeline` at the top of this section. Mark `✅` on every row and column header that represents the current pipeline configuration — in both the Setup tables and all Results tables. If the pipeline configuration was superseded by a follow-up experiment, do not mark `✅`; instead add a note explaining that further experiments were done.
+Add `✅ = currently used in the pipeline` at the top of this section. ✅ marks one thing only: whether a config, strategy, or model is currently applied in the pipeline. Do not use it for any other purpose. If the pipeline configuration was superseded by a follow-up experiment, do not mark `✅`; instead add a note explaining that further experiments were done.
 
 ---
 
@@ -228,115 +225,24 @@ The `**Conclusion:**` line covers the standard case. Add additional post-table n
 
 ### Observations
 
-**Purpose:** Explain what the numbers mean — specifically, what is non-obvious or surprising. This is where engineering depth is demonstrated.
+**Purpose:** Explain what the numbers mean — specifically, what is non-obvious or surprising.
 
-**Structure — causal narrative, not parallel bullets:**
-
-Start from the root cause or bug, then follow the chain of findings. Each finding should lead into the next. Use an ASCII causal chain diagram as the primary structure, then use short text paragraphs to fill in details the diagram cannot hold.
-
-**When to use `###` sub-headings within Observations:**
-
-- Use `###` sub-headings when the Observations cover multiple independent root causes or distinct finding clusters — readers should be able to jump directly to the problem they care about.
-- Keep a single causal chain (no sub-headings) when all findings are truly sequential: one root cause leads to the next finding, which leads to the next.
-- Each sub-heading gets its own mini causal chain and text paragraphs.
+**Structure:** Each `###` sub-heading is a question. The lead-in answers it in one sentence — stating both the finding and its reason, connected with an em dash if needed. Bullets follow with data only.
 
 ```markdown
-## Observations
+### Why Does X Happen?
 
-### Finding cluster A
-[mini causal chain + text paragraphs]
+One sentence: what happened and why — connected with an em dash if needed.
 
-### Finding cluster B
-[mini causal chain + text paragraphs]
+- Metric or data point that proves the lead-in (numbers required).
+- Second bullet only when it adds a number not captured in the lead-in.
 ```
 
-**ASCII diagram type — causal chain:**
-```
-Root problem
-      │
-      ▼
-Finding 1 (root cause)
-      │  explanation
-      │
-      ▼
-Finding 2 (new trap or constraint)
-      │
-      ├─ case A ──── result ✗
-      │    · reason
-      │
-      └─ case B ──── result ✓
-```
+**Bullets = numbers only.** Every bullet must contain at least one concrete number or measurement. Bullets with no number are deleted. Bullets that contain both a number and a mechanism explanation — delete the mechanism clause, keep the number. No concluding clauses ("confirming...", "not better", "the lowest of all strategies" without a number). Aim for 1–2 bullets; delete any bullet that doesn't directly prove the lead-in.
 
-**Text after the diagram — bold conclusion + bullet points:**
+No ASCII diagrams. No `**Conclusion:**` labels. When rewriting an existing report that contains ASCII diagrams in this section, remove the diagram and promote the `**Conclusion:**` text that followed it into the lead-in sentence.
 
-After each ASCII diagram, write a bold 1-line conclusion (`**Conclusion:**`), then support it with either short blog-style prose paragraphs (2–3 sentences each) or bullet points — whichever communicates the finding more clearly. Avoid long academic paragraphs. Each sentence must follow tech blog sentence style (see Writing Style → General rules).
-
-```markdown
-**Bold one-line conclusion:**
-- specific data point or metric that supports the conclusion
-- mechanism or reason (what caused this result)
-- implication or constraint for the pipeline (what this means downstream)
-```
-
-Use multiple bold-conclusion + bullet-list blocks when a single `###` section contains more than one distinct finding (e.g., CoT effect AND extended metadata effect are two separate findings within the same sub-heading).
-
-Rules for bullet content:
-- Lead each bullet with the fact, not the interpretation
-- Include the exact numbers (e.g. "FN rises 19 → 31" not "recall dropped significantly")
-- Explain the origin of non-obvious items (e.g. why a variable has an unexpected value, where a string came from)
-- Do not repeat what the diagram already shows
-
-**When to add a comparison tree in Observations:**
-
-If the experiment compared multiple variants (prompts, configs) of a single chosen method, add a comparison tree after the text paragraphs. Start from the variable being compared, show each variant's per-model outcome, and note any trade-offs. Use this to explain which variant was kept and why — without opening a separate section.
-
-**Symbol legend for comparison trees:**
-
-| Symbol | Meaning |
-|---|---|
-| ✓ | Meets the target (tied best or clearly correct) |
-| △ | Partial — works but worse than the chosen variant (trade-off or accuracy drop) |
-| ✗ | Failed — unacceptable result or invalid output |
-
-Always define the reference point in the tree header so the symbols are unambiguous, e.g. `sorted by accuracy high → low  [✓ = tied P1 ✅  △ = worse than P1  ✗ = failed]`.
-
-**ASCII diagram type — comparison tree:**
-```
-Variable being compared (sorted by accuracy high → low)
-[✓ = tied best  △ = worse than chosen  ✗ = failed]
-      │
-      ├─ Variant A ── 100% ✓
-      │    Trade-off: requires prompt change
-      │
-      ├─ Variant B ── 100% ✓  ← chosen
-      │    No trade-offs
-      │
-      ├─ Variant C ── 92%  △
-      │    −8pp vs Variant B, no accuracy gain
-      │
-      └─ Variant D ── 0%   ✗
-           Produces invalid output names
-```
-
-Follow with 1–2 sentences: which variant was kept and the fallback if the primary model changes.
-
-**When a finding requires external API or data structure knowledge:**
-
-If a finding depends on knowledge of a specific API, data format, or external system, provide a minimal concrete example before the causal chain diagram — enough for a context-free reader to understand what the system returns. Do not write a full API tutorial — just enough context for the diagram to be self-explanatory.
-
-Format: one sentence introducing what the system returns, followed by a short code block (4–8 lines) showing a representative input or output, then the causal chain.
-
-Example:
-```markdown
-OpenAlex returns paper metadata as a JSON dict. The `ids` field
-contains DOI, MAG, PMID — but no ArXiv entry:
-
-​```json
-"ids": {"doi": "https://doi.org/10.48550/...", "mag": "2741809807"}
-​```
-
-The ArXiv URL appears only in a nested `locations` array...
-```
+Use `###` sub-headings when the section covers multiple independent findings. Each sub-heading must be phrased as a question, not a statement.
 
 **What belongs here vs. in Decision:**
 - Observations = what the data reveals
@@ -346,69 +252,26 @@ The ArXiv URL appears only in a nested `locations` array...
 
 ### Decision
 
-**Purpose:** Show engineering judgment — what was chosen, why one option was rejected over another.
+**Purpose:** Show engineering judgment — what was chosen and why.
 
-**Structure — trade-off diagram + minimal text:**
-
-Start directly from the decision question. Use an ASCII trade-off diagram to show options and their key properties. Follow with 1–2 sentences covering fallback scenarios or caveats the diagram cannot express.
-
-**ASCII diagram type — decision tree:**
-```
-Decision question
-      │
-      ├── Option A
-      │     ✓ advantage
-      │     ✗ constraint that ruled it out
-      │     → REJECTED
-      │
-      └── Option B ✅
-            ✓ advantage
-            △ trade-off
-            → CHOSEN: reason
-```
-
-**When to use `###` sub-headings within Decision:**
-
-Use `###` sub-headings when the Decision section answers multiple independent questions. A question is independent if it can be answered without first resolving the other questions.
-
-Two common patterns:
-- **Sequential dependency** (one question unlocks the next): "Which architecture?" → then "Within the chosen architecture, which configuration?" — these are two independent questions even though the second is scoped by the first. Use two `###` sub-headings.
-- **Parallel options** (same level, unrelated): "Which suffix for the normal path?" vs "Which suffix for the error path?" — clearly independent. Use two `###` sub-headings.
-
-**One `###` sub-heading = one code block.** Never combine two independent decision questions into the same code block. Each `###` heading introduces exactly one decision tree in its own fenced code block.
-
-**Multi-dimensional decision trees:**
-
-When a decision question spans multiple independent dimensions (e.g. Stage-1 model AND Stage-2 prompt AND input fields), use one `###` sub-heading per dimension, each with its own code block. Never flatten multi-dimensional options into a single same-level tree — branches at the same level must be genuine alternatives to each other, not alternatives across different dimensions.
-
-**Branch ordering:**
-
-Order decision branches by pipeline execution flow when the decision spans multiple pipeline components: input → processing → output. Do not order by experiment axis number or alphabetically.
+**Structure:** Same as Observations. The lead-in states the winner and the reason in one sentence. Bullets add decision-critical data not captured in the lead-in — key trade-offs or constraints. Alternatives' metrics are in Results tables; do not repeat them here.
 
 ```markdown
-### Which architecture?
+### Which X?
 
-```
-Decision question A
-      │
-      ├── Option 1 → REJECTED
-      └── Option 2 ✅ → CHOSEN
+`winner` is selected — one sentence stating why.
+
+- Winner metric: value.
 ```
 
-### Within the chosen architecture: which configuration?
+Use `###` sub-headings when the section answers multiple independent questions. Each sub-heading must be phrased as a question.
 
-```
-Decision question B
-      │
-      ├── Sub-option X → REJECTED
-      └── Sub-option Y ✅ → CHOSEN
-```
-```
+**Bullets = numbers only.** The same rule applies here as in Observations: every bullet must contain at least one concrete number or measurement. Delete bullets with no number. Delete mechanism clauses from bullets that already have a number.
 
 **Rules:**
+- No ASCII diagrams or decision trees
 - Do not repeat pipeline background here — that belongs in Task Context
 - Do not repeat findings from Observations — reference them, don't restate
-- End with a brief fallback note if relevant
 
 ---
 
@@ -444,7 +307,7 @@ Recommended sub-heading sets by status:
 
 | Status | Recommended `###` sub-headings |
 |---|---|
-| **✅ INTEGRATED** | 1 sentence: what was swapped out and what replaced it + file reference · `### Impact` (2–3 bullet numbers) |
+| **✅ INTEGRATED** | 1 sentence: what was swapped out and what replaced it + file reference · `### Impact` (optional — only add if key metrics are not already stated in Observations and Decision) |
 | **🚫 SUPERSEDED** | `### What replaced it` · `### Why the decision was made` · `### Transferable findings` |
 | **⏳ NOT INTEGRATED** | `### Current state` · `### What is blocking` |
 | **🔬 PROPOSED** | `### Supporting data` · `### Validation needed` |
@@ -454,7 +317,7 @@ Content rules by status:
 - **✅ INTEGRATED:** Do not include a "What triggered" section — the trigger is already covered by Observations and Decision. "What changed" is 1 conceptual sentence (no API syntax, no filter parameter values); include file name and function name as a brief reference. Sub-headings use `###` not `####`.
 - **🚫 SUPERSEDED:** Do not include "What triggered" — same reason. State what replaced it and why, then list transferable findings explicitly.
 
-Example for ✅ INTEGRATED:
+Example for ✅ INTEGRATED (with Impact — use only when key metrics are not already in Observations/Decision):
 
 ```markdown
 ## Pipeline Integration Status ✅ INTEGRATED
@@ -464,8 +327,16 @@ Tavily citation-expansion replaced by direct OpenAlex BM25 search with quality f
 ### Impact
 
 - Zero-candidate failure eliminated across all five tested domains.
-- Total relevant papers: 53 → 64 (+20.8%).
+- Total relevant papers: 53 → 64 (+21 papers).
 - Pipeline is now fully deterministic; no paid external API required.
+```
+
+Example for ✅ INTEGRATED (without Impact — when Observations and Decision already state the key metrics):
+
+```markdown
+## Pipeline Integration Status ✅ INTEGRATED
+
+Hybrid BM25 retrieval with query expansion replaced dense-only retrieval in `paper_tools.py`. The `QueryFusionRetriever` in `summary_generation.py` generates 4 query variants, merges results using Reciprocal Rank Fusion (RRF), and passes the final top-5 chunks to the summarization LLM.
 ```
 
 Example for 🚫 SUPERSEDED:
@@ -505,7 +376,7 @@ All text in the report uses blog-style. Tables and code blocks are data-only —
 | Results tables | Data only — no prose |
 | Sub-experiment context (Purpose / Expected) | Each line is one short statement — no multi-clause sentences |
 | Post-table Conclusion | 1 sentence — pipeline consequence + non-obvious insight; no API syntax; no number restatement |
-| Observations | Conclusion-first paragraphs; causal chain diagram as primary structure |
+| Observations | Question heading → one-sentence lead-in (finding + reason) → data-only bullets |
 | Decision | Start directly from the decision question; no pipeline background |
 | Pipeline Integration Status | State what happened and what the data shows — no recommendations |
 
@@ -516,12 +387,40 @@ All text in the report uses blog-style. Tables and code blocks are data-only —
 - Contractions are fine (it's, don't, can't)
 - Do not restate what a diagram already shows
 - No internal experiment codes in narrative (Round 1, Method A, E14) — use descriptive names
+- **Jargon rule — standard IR/NLP terms vs non-standard phrasing:**
+  - Standard IR/NLP terminology is expected by the target audience (GenAI & RAG practitioners) and requires no definition: IDF, BM25, RRF, embedding, Recall@k, nDCG, cross-encoder reranker, sparse retrieval, dense retrieval, top-k, query expansion, hybrid search, RAGAS.
+  - Non-standard academic phrasing must be replaced with direct language. Common violations and their replacements:
+
+  | Avoid | Use instead |
+  |---|---|
+  | "discriminating signal" | "strong match signal" or "high weight" |
+  | "semantic averaging" | "general semantic similarity score" |
+  | "semantically adjacent" | "topically nearby but not exact" |
+  | "stabilizes the retrieval pool" | "always retrieves chunks with the exact keywords first" |
+  | "confabulated claims" | "invented facts" or "made-up information" |
+  | "surface chunks" | "retrieve chunks" or "bring in new chunks" |
+  | "the full stack" (as shorthand) | spell out the config name on first use |
+
+  - Undefined abbreviations: any abbreviation that is not in the standard IR/NLP list above must be spelled out on first use with the abbreviation in parentheses, e.g. "Reciprocal Rank Fusion (RRF)".
+
 - **American English spelling** — use American spelling throughout. Common British→American pairs: artifact (not artefact), behavior (not behaviour), favor (not favour), characterize (not characterise), stabilize (not stabilise), generalize (not generalise), realize (not realise), optimize (not optimise), normalize (not normalise), serialize (not serialise), summarize (not summarise), recognize (not recognise).
 - **Tech blog sentence style — one idea per sentence:** applies to every sentence in all body text (bullets, prose, captions, post-table conclusions). Exempt: headings and sub-headings, which are descriptive labels, not sentences. Rule: if a sentence contains a subordinate clause (`which`, `where`, `even though`, `because`) that can be split into a separate sentence, split it. The goal is that each sentence is immediately understood on first read — no re-reading required.
 
   | ❌ Paper-style | ✅ Tech blog |
   |---|---|
   | "When the only code example in the prompt is the layout lookup block (which has no null guards), gemma3:4b treats the absence of null guards as a style signal and omits them — even when the text instruction says to guard against None." | "gemma3:4b copies the style of the code example — including what's missing. The layout example has no null guard. So the model omits null guards too, even when the text says otherwise." |
+
+- **One topic per paragraph:** If a paragraph contains more than one distinct idea or topic, split it into bullet points. Each paragraph covers one topic only. Do not group different ideas into a single paragraph.
+
+- **Number representation for improvements:**
+  - Metric improvements (Recall@5, nDCG, F1, etc.): use **absolute values** — write "+0.195 Recall@5", not "+47%". Percentages make small absolute gains look large when the baseline is low.
+  - Latency comparisons between methods: use **multipliers** — write "15× faster than miniCOIL". Raw numbers in parentheses are required alongside the multiplier (e.g. "15× faster (13.5s vs 204s)").
+  - Latency overhead of adding a component: use **absolute time** — write "+1,057s over 100 samples (+10.6s per query)", not "+20%".
+  - Never use percentages for metric improvements in experiment reports.
+
+- **Table bolding — ML paper convention:** In every results table, bold the best value in each column. For metrics where higher is better (Recall, nDCG, Faithfulness, etc.), bold the maximum. For latency, bold the minimum (fastest). When two or more configs tie for the best value, bold all tied values.
+
+- **Cross-experiment number references:** When two experiments use different evaluation setups (different collection strategies, different sample sizes, different code paths), do not cite a metric value from one experiment as the baseline in the other. Reference the config name or method name instead (e.g. "the `dense_only` baseline config from Experiment 11", not "Recall@5 = 0.61 from Experiment 11"). The same config can produce different numbers under different setups.
 
 ### Objectivity rules (strictly enforced)
 
@@ -537,6 +436,7 @@ Reports are factual records of what happened and what the data shows. Any claim 
 - Prescriptive forward-looking claims: ❌ "recommended" ❌ "should adopt" ❌ "expected to generalize"
 - Inferences that exceed what the data shows: ❌ "This proves the approach is fundamentally flawed" — instead: "Three independent failure modes remained unresolved after N prompt variants"
 - Causal claims without a controlled test: ❌ "Larger prompts cause attention dilution" — unless that hypothesis was tested and measured
+- **Hypothetical future scenarios:** ❌ "If the downstream task changes to X, then Y would apply" ❌ "Should the pipeline evolve to support Z, this approach should be reconsidered." Reports document what was measured. Scenarios not tested in this experiment do not belong in any section.
 
 **The test before writing any claim:**
 > *Can this sentence be verified by reading the experiment's data tables, logs, or commit messages?*
@@ -562,8 +462,6 @@ Reports are factual records of what happened and what the data shows. Any claim 
 | Location | Diagram type | Starting point | Purpose |
 |---|---|---|---|
 | Task Context | Pipeline flow | Pipeline requirements | Orient reader to where the step fits |
-| Observations | Causal chain | Root problem / bug | Show how findings connect |
-| Decision | Decision tree | Decision question | Show trade-off and chosen option |
 | Observations (prompt/config) | Comparison tree | Variable being compared | Show per-case outcomes |
 
 ---
@@ -695,9 +593,12 @@ Before finalizing any experiment report, go through every section explicitly in 
 | **Summary** | Tech blog sentence style per sentence? No internal experiment codes (Path B, E14, Method A)? Problem bullet is pipeline-level (no API details)? |
 | **Experiment Setup** | Hardware sub-section removed? `✅` marked on all current-pipeline rows and columns? All metrics defined? |
 | **Full Experimental Results** | `Conclusion` removed from Purpose/Expected block? `**Conclusion:**` present after every sub-experiment table? Tech blog sentence style in Conclusion line? |
-| **Observations** | `###` sub-headings (not `####`)? Tech blog sentence style in all body text? Bold conclusion uses `**Conclusion:**` (colon, not period)? |
-| **Decision** | `###` sub-headings where needed? No pipeline background restated (belongs in Task Context)? No findings from Observations restated? |
+| **Observations** | `###` sub-headings (not `####`)? Each sub-heading is a question? Lead-in is one sentence only (em dash if two clauses needed)? Lead-in states the mechanism — bullets carry data only, not re-explanation of lead-in? Second bullet only if it covers a genuinely different case? No comparison tree when results are already in a Full Experimental Results table? No future speculation? Tech blog sentence style in all body text? Standard IR/NLP terms used freely; non-standard academic phrasing replaced? |
+| **Decision** | `###` sub-headings where needed? Each sub-heading is a question? Lead-in sentence states the winner directly? Bullets add decision-critical data not already in the lead-in? No alternative metrics repeated from Results tables? No pipeline background restated (belongs in Task Context)? No findings from Observations restated? No future speculation? |
+| **Numbers** | Metric improvements expressed as absolute values (+0.195), not percentages (+47%)? Latency comparisons use multipliers (15×) with raw numbers in parentheses? Best value in each table column is bolded? Cross-experiment number references use config name, not metric value? |
 | **Pipeline Integration Status** | Badge inline in heading (`## Pipeline Integration Status ✅ INTEGRATED`)? `###` sub-headings (not `####`)? No "What triggered" section? "What changed" is 1 conceptual sentence with no API syntax? |
+| **Experiment scope** | Does every metric, comparison, and conclusion mentioned anywhere in the report have corresponding data in Full Experimental Results? If log or script evidence is missing for any item, omit it from the report and list the omitted items in the completion summary for the user to verify. |
+| **Paragraph content** | Does any paragraph contain more than one distinct idea or topic? If yes, split into bullet points. Each paragraph covers one topic only. |
 | **Entire file** | No `**Conclusion.**` (period) — must be `**Conclusion:**` (colon)? No "production" — must be "pipeline"? American English spelling throughout? No heading level skipped (`##` → `####` not allowed)? |
 
 **Rule:** Every row must be verified. Skipping a section because it was not part of the current discussion is not acceptable.
