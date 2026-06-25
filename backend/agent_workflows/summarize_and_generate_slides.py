@@ -53,13 +53,13 @@ class SummaryAndSlideGenerationWorkflow(Workflow):
         sub_wf.user_input_future = self.user_input_future
         sub_wf.parent_workflow = self
         # Set loop manually: HumanInTheLoopWorkflow.run() normally sets self.loop,
-        # but we bypass it below. SlideGenerationWorkflow's HITL step calls
+        # but this is bypassed below. SlideGenerationWorkflow's HITL step calls
         # self.loop.create_future(), so this must be set before execution.
         sub_wf.loop = asyncio.get_running_loop()
 
         # llama-index-core 0.14.x: Workflow.run() returns a Handler synchronously;
         # stream_events() lives on the Handler, not on the Workflow instance.
-        # We call the base Workflow.run() directly to obtain the Handler.
+        # Call the base Workflow.run() directly to obtain the Handler.
         # HumanInTheLoopWorkflow.run() is async def and internally awaits the Handler,
         # which consumes it and makes stream_events() unreachable.
         # Trade-off: sub-workflow MLflow runs are not created as nested runs;
