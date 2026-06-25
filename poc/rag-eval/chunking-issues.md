@@ -89,7 +89,7 @@ Measured on paper 2109.07958 (BIG-Bench), node 17:
 
 **Layer 2: HuggingFace BERT tokenizer vs Ollama GGUF tokenizer drift**
 
-We added a HuggingFace BERT tokenizer pre-check (truncate to 2046 BERT tokens before sending to Ollama). The truncation fired correctly — but Ollama still returned 400.
+A HuggingFace BERT tokenizer pre-check was added (truncate to 2046 BERT tokens before sending to Ollama). The truncation fired correctly — but Ollama still returned 400.
 
 Why: HuggingFace `bert-base-uncased` and Ollama's GGUF build of nomic-embed-text tokenize certain Unicode characters differently:
 

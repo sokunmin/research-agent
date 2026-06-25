@@ -134,7 +134,7 @@ def extract_arxiv(work: dict) -> tuple[Optional[str], Optional[str]]:
 
     Version stripping:
     OpenAlex locations may carry versioned URLs (e.g. arxiv.org/abs/1706.03762v5
-    or arxiv.org/pdf/1706.03762v5).  We always strip the version suffix so that
+    or arxiv.org/pdf/1706.03762v5).  The version suffix is always stripped so that
     the pdf_url points to the unversioned endpoint, which ArXiv redirects to the
     latest version automatically.
 
@@ -217,7 +217,7 @@ def _strategy_arxiv_api(paper: PaperIDs, dest: Path) -> DownloadResult:
     """Strategy 1: arxiv Python library → result.pdf_url → requests.get().
 
     Uses the official arxiv library to look up the paper and get its canonical
-    pdf_url.  download_pdf() is deprecated upstream; we call requests.get()
+    pdf_url.  download_pdf() is deprecated upstream; the code calls requests.get()
     on result.pdf_url directly for future-proofing.
 
     Requires: paper.arxiv_id
@@ -448,7 +448,7 @@ def fetch_work_by_title(title: str) -> Optional[dict]:
     one for the publisher version (e.g. AAAI) and one for the ArXiv preprint.
     The publisher version typically ranks first (higher cited_by_count), but
     its locations list contains no arxiv.org entry.  The preprint record,
-    ranked lower, holds the ArXiv location we need.
+    ranked lower, holds the required ArXiv location.
 
     Example — Informer:
       #1 W3177318507  DOI: 10.1609/aaai.v35i12.17325  locations: [AAAI only]

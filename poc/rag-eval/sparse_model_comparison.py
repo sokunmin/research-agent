@@ -143,7 +143,7 @@ def main():
         print(f"\n[PHASE] Evaluating config={cfg_name} sparse_model={sparse_model}")
         t_cfg_start = time.perf_counter()
 
-        # Group GT samples by paper so we build the index once per paper per config
+        # Group GT samples by paper to build the index once per paper per config
         samples_by_paper: dict[str, list[dict]] = defaultdict(list)
         for sample in gt_samples:
             samples_by_paper[sample["paper_id"]].append(sample)

@@ -29,7 +29,7 @@ mechanism for an ML paper summarization pipeline. The pipeline takes PDF papers,
 chunks them into text segments, stores them in a vector database (Qdrant), and
 retrieves relevant segments to answer queries or generate summaries.
 
-WHAT WE ARE COMPARING
+WHAT THIS EXPERIMENT COMPARES
 
 Six retrieval configurations are evaluated. Each differs in one or more of three
 independently togglable mechanisms:

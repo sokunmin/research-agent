@@ -634,7 +634,7 @@ from transformers import AutoTokenizer
 _BERT_TOKENIZER = AutoTokenizer.from_pretrained("bert-base-uncased")
 
 # nomic-embed-text has a 2048 BERT token hard limit (including 2 special tokens CLS/SEP).
-# We use 1900 (not 2046) as the safe limit for two reasons:
+# 1900 (not 2046) is used as the safe limit for two reasons:
 #   1. Ollama's GGUF tokenizer diverges from HuggingFace for some Unicode characters
 #      (e.g. "…" U+2026 counts as 1 token in HuggingFace but 2 in Ollama's llama.cpp).
 #      NFKC normalization eliminates most such characters, but the 7% buffer handles residual drift.
@@ -1104,7 +1104,7 @@ class RAGASEvaluator:
 
         Note on result indexing: ragas evaluate() returns List[float] per metric even
         for a single sample (e.g. result["faithfulness"] == [0.85], not 0.85).
-        We index [0] to return a plain float.
+        Index [0] extracts a plain float from the list.
         """
         faithfulness, context_recall, context_precision = self._metrics
         return {

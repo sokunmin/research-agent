@@ -12,9 +12,9 @@ Execution: SEQUENTIAL ONLY — no asyncio.gather (Ollama does not support parall
 
 NOTE ON gemma3:4b RESULTS:
   If layout_name_test_results.json exists and its slide test cases match exactly
-  (same labels, same expected layouts), we load gemma3:4b results from that file
+  (same labels, same expected layouts), gemma3:4b results are loaded from that file
   instead of re-running to save time. The check is strict: label set and expected
-  layout sets must both match. If any mismatch, we re-run.
+  layout sets must both match. If any mismatch, the test re-runs.
 
 NOTE ON CLOUD MODEL CONFIG:
   Model names and additional_kwargs are taken EXACTLY from test_cloud_models.py.
@@ -48,7 +48,7 @@ TEMPLATE_PATH = str(
 #     (cloud models also use this prefix; Ollama proxies to upstream cloud)
 #   - additional_kwargs: empty dict means no extra_body / think suppression
 #     (for gpt-oss:20b-cloud, think=False is ignored per test_cloud_models.md,
-#     so we do not attempt to suppress thinking — accept always-on think mode)
+#     so thinking suppression is not attempted — always-on think mode is accepted)
 MODELS = [
     {
         "name": "ollama/gemma3:4b",

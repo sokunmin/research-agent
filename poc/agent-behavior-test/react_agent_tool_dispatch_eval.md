@@ -283,7 +283,7 @@ Simulates an environment where python-pptx is not installed. Behaviour:
 **Why `TOOL_DESC_NO_PPTX_CLAIM` is used:**  
 The standard `TOOL_DESC` contains the phrase "python-pptx is pre-installed." This makes Scenario B unrealistic — the model would have no reason to attempt pip install if the tool description asserts the library is already present. `TOOL_DESC_NO_PPTX_CLAIM` removes that claim, so the model must infer the need for installation from the `ModuleNotFoundError` alone.
 
-**What we are measuring:**  
+**What this experiment measures:**  
 - Does the model correctly diagnose `ModuleNotFoundError` and generate a pip install command?
 - Does it use the correct pip syntax (subprocess or bare `pip install`) vs the wrong Jupyter `!pip` syntax?
 - After installing, does it successfully complete the slide generation task?

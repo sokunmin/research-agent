@@ -89,7 +89,7 @@ def parse_log(text: str) -> list:
                 paper["concepts"] = parse_list_field(m.group(1).strip())
                 continue
 
-        # Only add if we got an ID (otherwise it's a non-paper block)
+        # Only add if an ID was found (otherwise it's a non-paper block)
         if paper["id"]:
             return paper
         return None

@@ -248,7 +248,7 @@ ContextualDoclingNodeParser(
 
 **What it is:** Same as `docling_hybrid_chunker_512` but with separate text paths for storage and embedding. The full heading + prose is stored in Qdrant as `node.text` (available to the LLM for answer generation). The embedding is computed from prose only.
 
-**Why it was added:** This is the "Method B" test of the same heading-distortion hypothesis as strategy #5 (`no_context`). It asks: can we keep the heading for the LLM while using clean prose vectors for retrieval?
+**Why it was added:** This is the "Method B" test of the same heading-distortion hypothesis as strategy #5 (`no_context`). It asks: can the heading be preserved for the LLM while using clean prose vectors for retrieval?
 
 ```
 node.text (stored, LLM reads this):      "3. Method\n  We trained with SGD ..."

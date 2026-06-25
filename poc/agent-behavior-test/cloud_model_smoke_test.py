@@ -6,7 +6,7 @@ NOTE on qwen3.5:cloud architecture:
   The model returns thinking tokens in a SEPARATE 'thinking' field (not inline <think> tags).
   litellm uses /api/generate endpoint and reads only the 'response' field.
   When max_tokens is small, the model may exhaust all tokens on thinking,
-  leaving response=''. We use max_tokens=500 for Test 1 to avoid this.
+  leaving response=''. max_tokens=500 is used for Test 1 to avoid this.
   think=False suppresses the thinking field entirely (verified via /api/generate).
 """
 

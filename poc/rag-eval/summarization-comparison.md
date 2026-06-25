@@ -81,7 +81,7 @@ The VLM path was the original production approach. Its drawbacks on an Apple M1 
 
 A RAG (Retrieval-Augmented Generation) path was built as a potential replacement. RAG extracts text upfront, then retrieves only the most relevant text chunks per query, feeding far fewer tokens to the LLM. However, as of this experiment the RAG path had never been formally evaluated for summarization quality. It was unvalidated.
 
-This experiment is the validation gate: before replacing the VLM path with the RAG path in production, we must verify that RAG produces summaries of equal or better factual quality.
+This experiment is the validation gate: before replacing the VLM path with the RAG path in production, RAG must be verified to produce summaries of equal or better factual quality.
 
 ### 1.3 Experiment Goal
 
@@ -627,11 +627,11 @@ This experiment compared four summarization approaches on 8 ML papers across 4 p
 
 Both the VLM path and the RAG path use `ollama/gemma4:31b-cloud` for summary generation. The more natural setup would be to use a dedicated text LLM for the RAG synthesis step and reserve the vision model only for the VLM path — vision models are generally slower and more resource-intensive than text-only LLMs.
 
-The reason for using the same model: if the two paths use different models, any measured difference in factuality or specificity is a confound. We cannot tell whether RAG outperforms VLM because text-chunk input is a better format, or because its LLM happens to be stronger on this summarization task. Using the same model ensures that input modality is the only variable that differs between paths.
+The reason for using the same model: if the two paths use different models, any measured difference in factuality or specificity is a confound. Without this control, it is impossible to tell whether RAG outperforms VLM because text-chunk input is a better format, or because its LLM happens to be stronger on this summarization task. Using the same model ensures that input modality is the only variable that differs between paths.
 
 The same constraint applies to the prompt: both paths use the identical `SUMMARIZE_PAPER_PMT` (an 8-section structured summary prompt written for text-mode LLMs). A prompt written specifically for image input might improve VLM scores but would introduce a second confounding variable. This is acknowledged as a limitation in Section 6 — the VLM path may be slightly disadvantaged by a prompt not optimized for visual reading.
 
-**Trade-off accepted:** `gemma4:31b-cloud` is overspecified for text-only summarization — a smaller text LLM would be faster and cheaper. This added latency to the RAG path. We accepted this cost to keep the comparison valid.
+**Trade-off accepted:** `gemma4:31b-cloud` is overspecified for text-only summarization — a smaller text LLM would be faster and cheaper. This added latency to the RAG path. This cost was accepted to keep the comparison valid.
 
 ---
 
@@ -683,7 +683,7 @@ factuality = supported / (supported + contradicted + unverifiable)
 
 An alternative formula would be `supported / (supported + contradicted)` — treating unverifiable claims as neither correct nor incorrect and excluding them from the denominator.
 
-We rejected that alternative because, from a user's perspective, an unverifiable claim in a paper summary is a quality failure. The user reads a summary claim, tries to verify it against the paper, and cannot find any supporting text. Whether the LLM generated it from its training data (parametric knowledge) or retrieved it from a References section, the result is the same: a summary that cannot be fully trusted. Excluding unverifiable claims from the denominator would artificially inflate factuality scores for configs that produce more parametric or citation-sourced content.
+That alternative was rejected because, from a user's perspective, an unverifiable claim in a paper summary is a quality failure. The user reads a summary claim, tries to verify it against the paper, and cannot find any supporting text. Whether the LLM generated it from its training data (parametric knowledge) or retrieved it from a References section, the result is the same: a summary that cannot be fully trusted. Excluding unverifiable claims from the denominator would artificially inflate factuality scores for configs that produce more parametric or citation-sourced content.
 
 Treating unverifiable claims as a failure mode (reducing factuality) also makes the ChunkFilter effect measurable: `rag_winner_no_filter` (ChunkFilter OFF) has unverifiable_rate=0.055 vs `rag_fixed_queries` (ChunkFilter ON) at 0.019, which directly lowers the no-filter config's factuality score.
 
@@ -700,7 +700,7 @@ The two failure modes have different root causes and different remedies:
 | CONTRADICTED (hallucination) | LLM misread numbers, flipped comparisons, or confused one paper with another | Better retrieval quality, smaller chunks, re-ranking |
 | UNVERIFIABLE (citation noise) | LLM retrieved content from References or Acknowledgements sections, or drew on parametric knowledge | ChunkFilter to strip References before indexing |
 
-The ChunkFilter ablation in this experiment (Section 5.4) demonstrates why separation matters. When ChunkFilter is removed (`rag_winner_no_filter`), unverifiable_rate increases from 0.019 to 0.055 (+189%) while hallucination_rate barely changes (0.036 to 0.020). If these were collapsed into one error rate, the ChunkFilter's specific effect on citation noise would be invisible — we would see a small net change and incorrectly conclude that ChunkFilter has marginal impact.
+The ChunkFilter ablation in this experiment (Section 5.4) demonstrates why separation matters. When ChunkFilter is removed (`rag_winner_no_filter`), unverifiable_rate increases from 0.019 to 0.055 (+189%) while hallucination_rate barely changes (0.036 to 0.020). If these were collapsed into one error rate, the ChunkFilter's specific effect on citation noise would be invisible — the result would be a small net change, incorrectly suggesting that ChunkFilter has marginal impact.
 
 Separate metrics give developers a diagnostic signal: a high hallucination_rate points to retrieval quality problems; a high unverifiable_rate points to insufficient boilerplate filtering.
 
@@ -737,7 +737,7 @@ The problem with a composite score is that the weight coefficient λ has no prin
 
 Any composite would let the weight determine the outcome, giving the appearance of an objective ranking while concealing a subjective design choice. With only 32 data points (4 configs × 8 papers), a single number would also mask variance within each config.
 
-The 2D scatter plot makes the trade-off explicit: a reader who prioritizes factuality (accuracy) chooses `rag_fixed_queries`; a reader who prioritizes specificity (information density) might choose `rag_with_expansion`. We declare the winner based on an explicit stated priority — factuality — rather than embedding that priority inside a formula.
+The 2D scatter plot makes the trade-off explicit: a reader who prioritizes factuality (accuracy) chooses `rag_fixed_queries`; a reader who prioritizes specificity (information density) might choose `rag_with_expansion`. The winner is declared based on an explicitly stated priority — factuality — rather than embedding that priority inside a formula.
 
 ---
 
@@ -753,7 +753,7 @@ Euclidean distance to top-right corner (21.2, 0.97):
   rag_with_expansion: √((21.2−20.1)² + (0.97−0.889)²) ≈ 1.10  ← closer in pixels
 ```
 
-"Geometrically closest to the corner" implies that the two axes carry equal importance — which is not the case here. We explicitly decided that factuality is the primary metric. A summary that is wrong 11.1% of the time (`rag_with_expansion` hallucination_rate + unverifiable_rate combined) is a greater practical failure than a summary that is slightly less information-dense. The scatter plot visualizes the trade-off; the winner is determined by the researcher's stated priorities, not by pixel distance to the corner.
+"Geometrically closest to the corner" implies that the two axes carry equal importance — which is not the case here. Factuality is the explicitly chosen primary metric. A summary that is wrong 11.1% of the time (`rag_with_expansion` hallucination_rate + unverifiable_rate combined) is a greater practical failure than a summary that is slightly less information-dense. The scatter plot visualizes the trade-off; the winner is determined by the researcher's stated priorities, not by pixel distance to the corner.
 
 ---
 

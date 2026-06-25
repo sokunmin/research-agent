@@ -221,7 +221,7 @@ Note: `work.get("abstract")` always returns `None` in pyalex — abstract is rec
 3. Compute cosine similarity between query vector and each paper vector
 4. Average the 20 similarity scores → mean_sim@20
 
-Key point: the embedding always uses the **original raw query**, not the reformulated `clean_topic`. This ensures we measure whether *the retrieved papers match what the user actually wanted*, not whether the LLM rephrased the query correctly.
+Key point: the embedding always uses the **original raw query**, not the reformulated `clean_topic`. This ensures the evaluation measures whether *the retrieved papers match what the user actually wanted*, not whether the LLM rephrased the query correctly.
 
 **precision@5** measures whether the top-5 papers are actually relevant, judged by an LLM:
 

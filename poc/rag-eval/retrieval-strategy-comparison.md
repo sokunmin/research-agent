@@ -991,8 +991,8 @@ reproducible across runs.
 The final two candidate configurations tied on Recall@5:
 
 ```
-hybrid_bm25_with_query_expansion:          Recall@5=0.615, nDCG@5=0.563
-hybrid_bm25_query_expansion_and_reranker:  Recall@5=0.603, nDCG@5=0.585
+hybrid_bm25_with_query_expansion:          Recall@5=0.6083, nDCG@5=0.563
+hybrid_bm25_query_expansion_and_reranker:  Recall@5=0.6083, nDCG@5=0.585
 ```
 
 The reranker improves nDCG@5 (ranking quality: +0.022) but leaves Recall@5 unchanged.
@@ -1028,7 +1028,7 @@ chunk might split the answer to a semantic question across two chunks, so no sin
 fully contains the ground-truth passage. Larger 1024-token chunks (produced by
 SentenceSplitter) would be less likely to split prose answers across boundaries.
 
-The result (Recall@5 = 0.537 for the sentence splitter sub-experiment vs 0.615 for the
+The result (Recall@5 = 0.5178 for the sentence splitter sub-experiment vs 0.6083 for the
 Docling hybrid winner) rejected the hypothesis. While sentence splitter chunks produced
 higher Semantic Recall (0.503 vs 0.444), the overall Recall@5 was lower. The Docling
 hybrid chunker's structural term signal — section headings prepended to each chunk,

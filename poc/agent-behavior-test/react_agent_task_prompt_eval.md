@@ -21,7 +21,7 @@ repeatedly guess the python-pptx API incorrectly:
 | `prs.save()` to wrong path | Prompt gives filename only, no `/sandbox/` prefix |
 
 **This experiment isolates the LLM uncertainty component:**  
-Instead of running the full ReAct loop with sandbox execution, we ask the LLM to generate
+Instead of running the full ReAct loop with sandbox execution, the LLM is prompted to generate
 python-pptx code directly and evaluate it statically (regex-based). This measures:
 > *Does adding explicit code patterns to the prompt reduce LLM guessing?*
 
