@@ -8,15 +8,16 @@ support and real-time streaming via Server-Sent Events.
 This repository is a fork of
 [lz-chen/research-agent](https://github.com/lz-chen/research-agent) (last updated May 2025). Original author's articles: [Part 1](https://medium.com/data-science/how-i-streamline-my-research-and-presentation-with-llamaindex-workflows-3d75a9a10564) · [Part 2](https://medium.com/data-science/building-an-interactive-ui-for-llamaindex-workflows-842dd7abedde).
 
-## 📺 Demo Video
+## 📺 YouTube Demo Video
 [![Research Agent Demo](https://img.youtube.com/vi/FSkvngrjDIQ/maxresdefault.jpg)](https://youtu.be/FSkvngrjDIQ)
-> *Watch the Research Agent in action: from topic input to final slide generation.*
+> *Click the image to [watch on YouTube](https://youtu.be/FSkvngrjDIQ) — end-to-end: topic input to final slide generation.*
 
 ## 🔍 Table of Contents
 - [System Architecture](#system-architecture)
 - [Experiments](#experiments)
   - [Paper Discovery Pipeline](#experiments--paper-discovery-pipeline)
   - [Slide Generation Pipeline](#experiments--slide-generation-pipeline)
+  - [RAG Summarization Pipeline](#experiments--rag-summarization-pipeline)
 - [Setup](#setup)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
@@ -42,19 +43,21 @@ This repository is a fork of
 │                                     │                                       │
 │                                     ▼                                       │
 │  ┌── 1. PAPER RETRIEVAL ────────────────────────────────────────────────┐   │
+│  │                                              Validated by: Exp 1, 5  │   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
 │  │ Tavily Search                    │ ① Query Transformation           │   │
 │  │ → Semantic Scholar Discovery     │   clean_topic + year/citation     │   │
 │  │   (Two-stage Discovery)          │   constraints extracted           │   │
-│  │   Non-deterministic              │───────────────────────────────────│   │
+│  │   Non-deterministic              ├───────────────────────────────────┤   │
 │  │                                  │ ② OpenAlex Retrieval (BM25)      │   │
 │  │                                  │   + Metadata Quality Filters      │   │
 │  │                                  │   Deterministic                   │   │
 │  └──────────────────────────────────┴───────────────────────────────────┘   │
 │                                     │                                       │
 │                                     ▼                                       │
-│  ┌── 2. RE-RANKING & VERIFICATION ─────────────────────────────────────┐    │
-│  ├──────────────────────────────────┬──────────────────────────────────┤    │
+│  ┌── 2. RE-RANKING & VERIFICATION ──────────────────────────────────────┐   │
+│  │                                              Validated by: Exp 2, 3  │   │
+│  ├──────────────────────────────────┬───────────────────────────────────┤   │
 │  │ GPT-4o scores every candidate    │ ① Local Embedding Re-scoring     │   │
 │  │ (single LLM, no pre-filter)      │ ② LLM Verification (Strict)      │   │
 │  │                                  │                                   │   │
@@ -64,17 +67,20 @@ This repository is a fork of
 │                                     │                                       │
 │                                     ▼                                       │
 │  ┌── 3. PDF ACQUISITION & PARSING ──────────────────────────────────────┐   │
+│  │                                                 Validated by: Exp 4  │   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
 │  │ arxiv library (ArXiv ID          │ Download: 4-strategy fallback     │   │
 │  │ required; no fallback)           │ (ArXiv → URL → pyalex → OA)       │   │
-│  │ Parsing: marker-pdf              │ Parsing: Docling (local, planned) │   │
+│  │ Parsing: marker-pdf              │ Parsing: Docling                  │   │
 │  └──────────────────────────────────┴───────────────────────────────────┘   │
 │                                     │                                       │
 │                                     ▼                                       │
 │  ┌── 4. SUMMARIZATION ──────────────────────────────────────────────────┐   │
+│  │                                       Validated by: Exp 11, 12, 13   │   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
-│  │ GPT-4o (Azure OpenAI)            │ Any LLM via LiteLLM               │   │
-│  │                                  │ Extracts: content · authors · year│   │
+│  │ GPT-4o (Azure OpenAI)            │ Docling → HybridChunker           │   │
+│  │                                  │ + ChunkFilter → Qdrant BM25       │   │
+│  │                                  │ 9 fixed queries → LLM summary     │   │
 │  └──────────────────────────────────┴───────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
@@ -82,6 +88,7 @@ This repository is a fork of
 ┌─────────────────────────── SLIDE GENERATION ─────────────────────────────-──┐
 │                                                                             │
 │  ┌── 5. SLIDE OUTLINE + HUMAN-IN-THE-LOOP ──────────────────────────────┐   │
+│  │                                              Validated by: Exp 6, 7  │   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
 │  │ GPT-4o: 1 outline per paper      │ Local LLM: 1 title slide          │   │
 │  │ FunctionCallingProgram           │           + 4 content slides      │   │
@@ -92,6 +99,7 @@ This repository is a fork of
 │                                     │                                       │
 │                                     ▼                                       │
 │  ┌── 6. PPTX RENDERING ─────────────────-───────────────────────────────┐   │
+│  │                                          Validated by: Exp 8, 9, 10  │   │
 │  ├──────────────────────────────────┬───────────────────────────────────┤   │
 │  │ ReActAgent (GPT-4o)              │ LLM → schema-validated JSON       │   │
 │  │ → writes python-pptx code        │ Deterministic renderer            │   │
@@ -128,6 +136,23 @@ This repository is a fork of
 
 
 ## Experiments
+
+- [Paper Discovery Pipeline](#experiments--paper-discovery-pipeline)
+  - [Exp 1 — Retrieval Method Comparison & Tavily Replacement](#experiment-1--retrieval-method-comparison--tavily-replacement---2026-03-16)
+  - [Exp 2 — Re-ranking & Verification Pipeline](#experiment-2--re-ranking--verification-pipeline---2026-03-17)
+  - [Exp 3 — Threshold Analysis for System Routing](#experiment-3--threshold-analysis-for-system-routing---2026-03-17)
+  - [Exp 4 — PDF Download Reliability](#experiment-4--pdf-download-reliability---2026-03-18)
+  - [Exp 5 — Query Transformation for BM25 Retrieval](#experiment-5--query-transformation-for-bm25-retrieval---2026-05-14)
+- [Slide Generation Pipeline](#experiments--slide-generation-pipeline)
+  - [Exp 6 — Structured Output Method Comparison](#experiment-6--structured-output-method-comparison---2026-03-28)
+  - [Exp 7 — Slide Layout Selection](#experiment-7--slide-layout-selection---2026-04-02)
+  - [Exp 8 — ReAct Agent: Model & Prompt Evaluation](#experiment-8--react-agent-model--prompt-evaluation---2026-03-27)
+  - [Exp 9 — ReAct Agent: Task Prompt Engineering for PPTX Code Generation](#experiment-9--react-agent-task-prompt-engineering-for-pptx-code-generation---2026-04-05)
+  - [Exp 10 — ReAct Agent: How a Prompt Example Key Breaks Tool Dispatch in 4B Models](#experiment-10--react-agent-how-a-prompt-example-key-breaks-tool-dispatch-in-4b-models---2026-04-07)
+- [RAG Summarization Pipeline](#experiments--rag-summarization-pipeline)
+  - [Exp 11 — PDF Chunking and Boilerplate Filtering](#experiment-11--pdf-chunking-and-boilerplate-filtering---2026-06-11)
+  - [Exp 12 — Retrieval Strategy Comparison](#experiment-12--retrieval-strategy-comparison---2026-06-17)
+  - [Exp 13 — VLM vs RAG Summarization](#experiment-13--vlm-vs-rag-summarization---2026-06-22)
 
 ---
 
@@ -309,14 +334,20 @@ The experiments below are the systematic evaluation that led to replacing LLM co
 ⚠️ **Experiments 8–10 form a sequential diagnostic chain** — each experiment fixed one failure layer of the ReActAgent approach, and together they produced the evidence for replacing it with deterministic rendering.
 
 ```
-Exp 8 — Which local model works for the ReActAgent?
-      │  gemma3:4b selected — but agent writes invalid python-pptx code (8.3%)
+Slide outline (from Step 5 HITL)
+      │
       ▼
-Exp 9 — Does fixing the task prompt fix code quality?
-      │  P2 achieves 100% — but tool dispatch is still broken
+ [Exp 8] Which local model works for the ReActAgent?
+ gemma3:4b completes task but generates invalid python-pptx code 8.3% of the time
+      │  1 tool call vs 16 for qwen3.5:4b
       ▼
-Exp 10 — Does fixing the tool dispatch suffix fix agent reliability?
-      │  P4 achieves 100% — but error path still hallucinates failures
+ [Exp 9] Does fixing the task prompt fix code quality?
+ P2 (layout lookup + null guard patterns) achieves 100% code correctness
+      │  tool dispatch still broken
+      ▼
+ [Exp 10] Does fixing the tool dispatch suffix fix agent reliability?
+ P4 achieves 100% task completion — but python-pptx lacks markdown support
+      │  0% → 100% task completion, avg turns 9.0 → 3.0
       ▼
 Architectural finding (2026-04-15): python-pptx has no markdown parser —
 LLM-generated content collapsed all bullets into one paragraph, `*` appeared
@@ -389,6 +420,106 @@ Decision: LLM → List[ParagraphItem] JSON → PptxRenderer (deterministic)
 
 ---
 
+### Experiments — RAG Summarization Pipeline
+
+Experiments 11–13 evaluated and replaced the VLM-based summarization path
+(PDF pages → images → vision model) with a text-based RAG pipeline:
+
+```
+PDF file
+      │
+      ▼
+ [Exp 11] Which chunking strategy and boilerplate filter?
+ HybridChunker 512-token wins; ChunkFilter removes 20.9% of chunks with 0 false positives
+      │  Recall@5 = 0.61
+      ▼
+ [Exp 12] Which retrieval strategy?
+ BM25 hybrid + query expansion wins over dense-only
+      │  Recall@5 = 0.608
+      ▼
+ [Exp 13] RAG vs VLM summarization quality?
+ RAG factuality 0.945 vs VLM 0.787; 16.5× faster
+      │
+      ▼
+  Paper summary → Slide Outline + HITL
+```
+
+---
+
+#### Experiment 11 — PDF Chunking and Boilerplate Filtering   (2026-06-11)
+
+**System Architecture:** Step 4 — Summarization (corpus preparation)
+
+| Strategy | Recall@5 | nDCG@5 | Avg chunks/paper |
+|---|---|---|---|
+| `sentence_splitter` | 0.60 | **0.49** | 36.6 |
+| `semantic_splitter` | 0.59 | 0.40 | 43.7 |
+| `hierarchical_chunker` | 0.51 | 0.40 | 175.9 |
+| `hybrid_chunker_512` ✅ | **0.61** | 0.48 | 79.5 |
+
+ChunkFilter removed 349 of 1,670 chunks (20.9%) — References (92.0%),
+Acknowledgements, Ethics sections — with zero false positives across 28 papers.
+
+- *Problem:* No chunking strategy had been validated for academic paper retrieval;
+  boilerplate sections inflate the unverifiable claim rate in summaries by +0.036.
+- *Change:* Compared four chunking strategies on 100 ground-truth samples; derived
+  filter rules from frequency analysis over 1,670 chunks across 28 papers.
+- *Result:* `hybrid_chunker_512` achieves Recall@5 = 0.61 — strongest on
+  Keyword-heavy (0.73) and Multi-hop (0.81) queries; ChunkFilter drops 20.9%
+  of chunks with zero content sections lost.
+
+> ✅ **In current pipeline**
+> → Full report: [experiments/03-rag-summarization-pipeline/11-pdf-chunking-and-filtering-pipeline.md](experiments/03-rag-summarization-pipeline/11-pdf-chunking-and-filtering-pipeline.md)
+
+---
+
+#### Experiment 12 — Retrieval Strategy Comparison   (2026-06-17)
+
+**System Architecture:** Step 4 — Summarization (retrieval sub-step)
+
+| Strategy | Recall@5 | nDCG@5 | Latency (s) |
+|---|---|---|---|
+| Dense only | 0.553 | 0.426 | 131 |
+| BM25 hybrid | 0.566 | 0.456 | 246 |
+| **BM25 + query expansion** ✅ | **0.608** | **0.487** | 5,212 |
+| BM25 + query expansion + reranker | 0.608 | 0.487 | 6,269 |
+
+- *Problem:* Dense-only retrieval (Recall@5 = 0.553) was unvalidated; no sparse
+  model had been selected for hybrid search.
+- *Change:* Part A selected `Qdrant/bm25` as the sparse model (fastest, no GPU);
+  Part B compared 6 retrieval configs on 28 papers across 4 query types.
+- *Result:* BM25 hybrid with query expansion achieves Recall@5 = 0.608 — tied
+  with the full reranker stack but 1,057s faster per run.
+
+> ✅ **In current pipeline**
+> → Full report: [experiments/03-rag-summarization-pipeline/12-retrieval-strategy-comparison.md](experiments/03-rag-summarization-pipeline/12-retrieval-strategy-comparison.md)
+
+---
+
+#### Experiment 13 — VLM vs RAG Summarization   (2026-06-22)
+
+**System Architecture:** Step 4 — Summarization (strategy selection)
+
+| Metric | `vlm` | `rag_fixed_queries` ✅ | `rag_with_expansion` | `rag_winner_no_filter` |
+|---|---|---|---|---|
+| avg_factuality | 0.787 | **0.945** | 0.889 | 0.925 |
+| avg_hallucination_rate | 0.136 | 0.036 | 0.049 | **0.020** |
+| avg_latency_s | 242.3 | 14.7 | 36.9 | **13.9** |
+
+- *Problem:* VLM summarization (PDF pages → images → vision model) had never been
+  evaluated for factual accuracy; latency of 200–300s per paper on M1 made
+  iteration impractical.
+- *Change:* Compared 4 strategies on 8 ML papers using `claude-sonnet-4-6` NLI
+  classification to score factual accuracy against the full paper text.
+- *Result:* `rag_fixed_queries` achieves avg_factuality = 0.945 (+0.158 over
+  VLM's 0.787) at 16.5× lower latency (14.7s vs 242.3s); ChunkFilter reduces
+  unverifiable claim rate to 1.9%.
+
+> ✅ **In current pipeline**
+> → Full report: [experiments/03-rag-summarization-pipeline/13-summarization-comparison.md](experiments/03-rag-summarization-pipeline/13-summarization-comparison.md)
+
+---
+
 ## Setup
 
 ### Prerequisites
@@ -424,20 +555,6 @@ Decision: LLM → List[ParagraphItem] JSON → PptxRenderer (deterministic)
 ---
 
 ## Roadmap
-
-**Docling PDF parsing**  
-marker-pdf is not viable on M1: its OCR model requires FlashAttention,
-which Apple's Metal GPU backend doesn't support — resulting in 12–18 min/paper
-with memory thrashing. Docling uses Apple's MLX
-framework natively, bypassing PyTorch MPS entirely. It also provides
-full bounding-box coordinates per image block, required for passing
-specific figures to a VLM.
-
-**RAG pipeline**  
-Current summarization uses full-context LLM calls per paper — expensive
-in tokens and unable to recall across sessions. Planned: semantic chunking
-+ hybrid search (BM25 + vector) + RAGAS evaluation framework, with ablation
-across chunking strategies, embedding models, and rerankers.
 
 **Multi-agent orchestration**  
 A single ReAct agent has limited reasoning depth for multi-paper synthesis.
