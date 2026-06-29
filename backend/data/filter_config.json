@@ -3,7 +3,9 @@
     "references",
     "acknowledgements",
     "acknowledgments",
-    "author contributions"
+    "author contributions",
+    "bibliography",
+    "data availability"
   ],
   "keyword_filter": [
     "acknowledgment",
@@ -12,17 +14,9 @@
     "societal impact",
     "reproducibility",
     "conflict of interest",
-    "disclosure of funding"
-  ],
-  "always_filter": [
-    "author contributions",
-    "bibliography",
-    "checklist",
-    "conflict of interest",
-    "data availability",
+    "disclosure of funding",
     "funding",
-    "neurips paper checklist",
-    "reproducibility statement"
+    "checklist"
   ],
   "thresholds": {
     "paper_frequency": 0.4,

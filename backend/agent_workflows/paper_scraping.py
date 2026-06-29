@@ -1,4 +1,3 @@
-import pypdf
 import json
 import re
 import time
@@ -339,6 +338,13 @@ class PaperDownloader:
     4. openalex_oa_url  — open_access.oa_url with browser headers (publisher pages)
     """
 
+    @staticmethod
+    def download_pdf(paper: "Paper", dest_dir: Path) -> bool:
+        """Download a single paper PDF. Returns True on success, False if no accessible PDF."""
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        result = PaperDownloader().download(paper, dest_dir, _paper_filename(paper))
+        return result is not None
+
     def download(self, paper: Paper, dest_dir: Path, filename: str) -> Optional[Path]:
         """Download *paper* PDF to *dest_dir/filename*. Returns path on success, None on failure."""
         dest = dest_dir / filename
@@ -387,64 +393,6 @@ class PaperDownloader:
         _fetch_and_write(oa_url, dest)
 
 
-def download_paper_pdf(paper: Paper, dest_dir: Path) -> bool:
-    """Download a single paper PDF. Returns True on success, False if no accessible PDF."""
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    result = PaperDownloader().download(paper, dest_dir, _paper_filename(paper))
-    return result is not None
-
-
-# ── Docling PDF → markdown ─────────────────────────────────────────────────────
-
-def _get_pdf_page_count(pdf_path: Path) -> int:
-    with open(pdf_path, "rb") as f:
-        return len(pypdf.PdfReader(f).pages)
-
-
-def parse_pdf_with_docling(pdf_path: Path, output_dir: Path, converter) -> Path:
-    """Parse a PDF with Docling. Returns path to subfolder.
-
-    Cache hit (both .json and .md exist): returns immediately without re-parsing.
-    Cache miss: runs Docling, saves .json and .md.
-    PARTIAL_SUCCESS below threshold: returns empty subfolder (no .md written).
-    """
-    from docling.datamodel.base_models import ConversionStatus
-    from config import settings
-
-    subfolder = output_dir / pdf_path.stem
-    subfolder.mkdir(parents=True, exist_ok=True)
-    json_path = subfolder / f"{pdf_path.stem}.json"
-    md_path = subfolder / f"{pdf_path.stem}.md"
-
-    if json_path.exists() and md_path.exists():
-        logging.info(f"Cache hit: already parsed '{pdf_path.name}'")
-        return subfolder
-
-    total_pages = _get_pdf_page_count(pdf_path)
-    result = converter.convert(str(pdf_path), max_num_pages=50)
-
-    if result.status == ConversionStatus.PARTIAL_SUCCESS:
-        parsed_pages = len(result.document.pages)
-        success_rate = parsed_pages / total_pages if total_pages > 0 else 0.0
-        if success_rate < settings.DOCLING_MIN_SUCCESS_RATE:
-            logging.warning(
-                f"Docling PARTIAL_SUCCESS for '{pdf_path.name}': "
-                f"{parsed_pages}/{total_pages} pages ({success_rate:.0%}) — dropping"
-            )
-            return subfolder
-
-    result.document.save_as_json(json_path)
-    md_path.write_text(result.document.export_to_markdown(), encoding="utf-8")
-    logging.info(f"Docling: saved JSON cache + markdown to '{subfolder}'")
-    return subfolder
-
-
-def parse_paper_pdfs(papers_dir: Path, converter) -> None:
-    for f in papers_dir.rglob("*.pdf"):
-        logging.info(f"Parsing '{f.name}'...")
-        parse_pdf_with_docling(f, f.parents[1] / "parsed_papers", converter)
-
-
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
 @click.command()
@@ -455,7 +403,7 @@ def main(research_topic: str):
     if papers:
         dest = Path(__file__).parent / "data" / "papers"
         for paper in papers:
-            download_paper_pdf(paper, dest)
+            PaperDownloader.download_pdf(paper, dest)
 
 
 if __name__ == "__main__":

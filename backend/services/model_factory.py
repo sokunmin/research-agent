@@ -1,17 +1,16 @@
 """
 ModelFactory — provider-agnostic LLM/embedding factory backed by LiteLLM.
-Switch providers by changing LLM_*_MODEL env vars in .env — no code changes needed.
-
-Supported model ID formats (LiteLLM):
-  gemini/gemini-2.5-flash                           — Google AI Studio (free tier)
-  openrouter/meta-llama/llama-3.3-70b-instruct:free — OpenRouter (free tier)
-  openai/gpt-4o                                     — OpenAI
-  anthropic/claude-3-5-sonnet-20241022              — Anthropic
+Switch providers by editing data/model_profiles.json — no code changes needed.
 """
+import json
+import logging
+import os
+from pathlib import Path
 from typing import Optional
 
-import os
 import litellm
+
+logger = logging.getLogger(__name__)
 
 from llama_index.core.callbacks import CallbackManager
 from llama_index.embeddings.litellm import LiteLLMEmbedding
@@ -20,16 +19,33 @@ from pydantic import BaseModel, ConfigDict
 from services.multimodal import LiteLLMMultiModal
 
 
+class LLMSpec(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    model: str
+    extra_body: dict = {}
+
+    def make_llm(self, temperature: float, max_tokens: int | None = None,
+                 callback_manager: Optional[CallbackManager] = None) -> SmartLiteLLM:
+        kw: dict = {"model": self.model, "temperature": temperature}
+        if max_tokens is not None:
+            kw["max_tokens"] = max_tokens
+        if self.extra_body:
+            kw["additional_kwargs"] = {"extra_body": self.extra_body}
+        if callback_manager:
+            kw["callback_manager"] = callback_manager
+        logger.info("[LLMSpec] SmartLiteLLM: %s", kw)
+        return SmartLiteLLM(**kw)
+
+
 class ModelConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    smart_model: str           # high-capability LLM (was: gpt-4o role)
-    fast_model: str            # fast/cheap LLM (was: gpt-4o-mini role)
-    vision_model: str          # VLM
-    vision_fallback_model: str # VLM fallback on 429 (empty string = disabled)
-    embed_model: str           # embedding model for relevance filtering, RAG, and Qdrant
+    smart_model: LLMSpec
+    fast_model: LLMSpec
+    vision_model: str
+    vision_fallback_model: str
+    embed_model: str
     max_tokens: int = 4096
-    disable_ollama_think: bool = False  # pass extra_body={"think": False} (Ollama think-mode models)
 
 
 class ModelFactory:
@@ -40,19 +56,10 @@ class ModelFactory:
 
     def smart_llm(self, temperature: float = 0.0,
                   callback_manager: Optional[CallbackManager] = None) -> SmartLiteLLM:
-        kw = dict(model=self._config.smart_model, temperature=temperature,
-                  max_tokens=self._config.max_tokens)
-        if self._config.disable_ollama_think:
-            kw["additional_kwargs"] = {"extra_body": {"think": False}}
-        if callback_manager:
-            kw["callback_manager"] = callback_manager
-        return SmartLiteLLM(**kw)
+        return self._config.smart_model.make_llm(temperature, self._config.max_tokens, callback_manager)
 
     def fast_llm(self, temperature: float = 0.0) -> SmartLiteLLM:
-        kw = dict(model=self._config.fast_model, temperature=temperature)
-        if self._config.disable_ollama_think:
-            kw["additional_kwargs"] = {"extra_body": {"think": False}}
-        return SmartLiteLLM(**kw)
+        return self._config.fast_model.make_llm(temperature)
 
     def embed_model(self) -> LiteLLMEmbedding:
         """Embedding model for relevance filtering, RAG summarization, and Qdrant indexing."""
@@ -75,53 +82,31 @@ class ModelFactory:
         return LiteLLMMultiModal(**kw)
 
 
-def _register_ollama_function_calling(config: ModelConfig) -> None:
-    """Dynamically register all local Ollama models as function-calling capable.
-
-    Ollama Modelfiles often omit the {{ tools }} block even when the underlying
-    engine supports tool calls.  LiteLLM's /api/show heuristic then returns
-    supports_function_calling=False, which causes LlamaIndex's
-    FunctionCallingProgram guard to raise before any API call is made.
-
-    Only runs when at least one configured model uses the ollama/ provider to
-    avoid an unnecessary HTTP call in non-Ollama environments.
-
-    Ref: https://docs.litellm.ai/docs/providers/ollama#tool-calling
-    """
-    model_names = [config.fast_model, config.smart_model, config.vision_model]
-    if not any(m.startswith("ollama/") for m in model_names):
-        return
-
-    # Ollama does not support OpenAI-specific params (e.g. parallel_tool_calls)
-    # injected by LlamaIndex's FunctionCallingProgram. Drop them silently.
-    litellm.drop_params = True
-
-    from litellm.llms.ollama.common_utils import OllamaModelInfo
-    api_base = os.getenv("OLLAMA_API_BASE", "http://localhost:11434")
-    raw_models = OllamaModelInfo().get_models(api_base=api_base)
-    # get_models() returns bare names (e.g. "qwen3.5:2b") on success, but
-    # silently falls back to prefixed names (e.g. "ollama/llama2") when the
-    # Ollama server is unreachable.  Skip prefixed entries to avoid double-
-    # prefixing and registering stale fallback models.
-    litellm.register_model(model_cost={
-        f"ollama/{name}": {"supports_function_calling": True}
-        for name in raw_models
-        if not name.startswith("ollama/")
-    })
-
-
 def _build() -> ModelFactory:
     from config import settings
+    raw = json.loads(Path(settings.MODEL_PROFILES_PATH).read_text())
+    roles = raw["roles"]
+    model_args = raw.get("models", {})
+
+    def _make_model_spec(model_str: str) -> LLMSpec:
+        extra_body = model_args.get(model_str, {}).get("extra_body", {})
+        return LLMSpec(model=model_str, extra_body=extra_body)
+
     config = ModelConfig(
-        smart_model=settings.LLM_SMART_MODEL,
-        fast_model=settings.LLM_FAST_MODEL,
-        vision_model=settings.LLM_VISION_MODEL,
-        vision_fallback_model=settings.LLM_VISION_FALLBACK_MODEL,
-        embed_model=settings.EMBED_MODEL,
+        smart_model=_make_model_spec(roles["smart"]),
+        fast_model=_make_model_spec(roles["fast"]),
+        vision_model=roles["vision"],
+        vision_fallback_model=roles.get("vision_fallback", ""),
+        embed_model=roles["embed"],
         max_tokens=settings.MAX_TOKENS,
-        disable_ollama_think=settings.DISABLE_OLLAMA_THINK,
     )
-    _register_ollama_function_calling(config)
+    logger.info(
+        "[ModelFactory] config loaded: smart=%s fast=%s vision=%s embed=%s OLLAMA_API_BASE=%s",
+        config.smart_model.model, config.fast_model.model, config.vision_model, config.embed_model,
+        os.getenv("OLLAMA_API_BASE", "(not set)"),
+    )
+    if any(s.model.startswith("ollama") for s in [config.smart_model, config.fast_model]):
+        litellm.drop_params = True
     return ModelFactory(config)
 
 

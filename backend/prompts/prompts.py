@@ -25,10 +25,6 @@ Use Machine learning, NLP or GenAI technologies for automating powerpoint presen
 or use genAI for other layout design task.
 """
 
-LLAMAPARSE_INSTRUCTION = """
-This is a paper from arXiv that you need to parse. Make sure to parse it into proper markdown format.
-"""
-
 REACT_PROMPT_SUFFIX = """
 
 ## Tools
@@ -79,6 +75,18 @@ Below is the current conversation consisting of interleaving human and assistant
 
 """
 
+
+RETRIEVAL_QUERIES = [
+    "What problem does this paper address and what is the proposed solution?",
+    "What is the key approach, model architecture, or algorithm introduced?",
+    "What are the key components or steps in the method?",
+    "How was the model trained or finetuned, including loss functions and optimization?",
+    "What datasets were used, including size, type, source, and availability?",
+    "What evaluation methods, benchmarks, and metrics were used?",
+    "What are the conclusions, significance, limitations, and suggested future work?",
+    "Who are the authors and what is the publication year?",
+    "What are the main findings, results, and key outcomes of this work?",
+]
 
 
 SUMMARIZE_PAPER_PMT = """
