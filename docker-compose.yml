@@ -9,6 +9,22 @@ services:
       - app-network
     restart: on-failure
 
+  qdrant:
+    image: qdrant/qdrant:v1.18.0
+    ports:
+      - "6333:6333"
+    networks:
+      - app-network
+    restart: unless-stopped
+    volumes:
+      - qdrant-storage:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
   backend:
     build:
       context: ./backend
@@ -22,11 +38,13 @@ services:
         condition: service_healthy
       ollama-check:
         condition: service_completed_successfully
+      qdrant:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:80/')"]
-      interval: 60s
+      interval: 10s
       timeout: 3s
-      retries: 3
+      retries: 5
       start_period: 15s
     env_file:
       - path: .env
@@ -36,16 +54,13 @@ services:
       SLIDE_TEMPLATE_PATH: /app/assets/template.pptx
       MLFLOW_TRACKING_URI: http://mlflow:8080
       OLLAMA_API_BASE: http://host.docker.internal:11434
-      QDRANT_PATH: /app/qdrant_storage
-      SHARED_CACHE_ROOT: /app/shared_cache
+      QDRANT_URL: http://qdrant:6333
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./assets:/app/assets:ro
       - ./workflow_artifacts:/app/workflow_artifacts
       - ./mlruns:/app/mlruns:rw
       - ./mlartifacts:/app/mlartifacts:rw
-      - qdrant-storage:/app/qdrant_storage
-      - shared-cache:/app/shared_cache
 
   frontend:
     build:
@@ -93,4 +108,3 @@ networks:
 
 volumes:
   qdrant-storage:
-  shared-cache:

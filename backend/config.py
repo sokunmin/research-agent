@@ -1,5 +1,3 @@
-from typing import Literal
-
 from pydantic_settings import BaseSettings
 
 
@@ -16,11 +14,7 @@ class Settings(BaseSettings):
     SLIDE_TEMPLATE_PATH: str       # container path to the PPTX template asset
 
     # ── LiteLLM model IDs ─────────────────────────────────────────────────────
-    LLM_SMART_MODEL: str = "groq/openai/gpt-oss-120b"
-    LLM_FAST_MODEL: str = "groq/openai/gpt-oss-20b"
-    LLM_VISION_MODEL: str = "gemini/gemini-2.5-flash"
-    DISABLE_OLLAMA_THINK: bool = False  # set true for Ollama models with think mode (e.g. qwen3)
-    LLM_VISION_FALLBACK_MODEL: str = "openrouter/google/gemma-3-27b-it:free"
+    MODEL_PROFILES_PATH: str = "data/model_profiles.json"
 
     MAX_TOKENS: int = 4096
 
@@ -44,37 +38,22 @@ class Settings(BaseSettings):
     PAPER_CANDIDATE_MIN_CITATIONS: int = 50  # minimum citation count filter
     PAPER_CANDIDATE_YEAR_WINDOW: int = 3     # publication recency window (years)
 
-    # ── Relevance filter ──────────────────────────────────────────────────────
-    EMBED_MODEL: str = "ollama/nomic-embed-text"
-    # Shared embedding model for relevance filtering, RAG summarization, and Qdrant indexing.
-    # Must use the same model family as threshold calibration to keep cosine similarity scores valid.
-
     # ── Docling PDF parsing ───────────────────────────────────────────────────
     DOCLING_MIN_SUCCESS_RATE: float = 0.70
     # Papers where Docling parses fewer than 70% of pages are dropped.
 
-    # ── Qdrant local vector store ─────────────────────────────────────────────
-    QDRANT_PATH: str = "./qdrant_storage"
-    # Local Qdrant Gridstore directory. No separate Qdrant server needed.
+    # ── Qdrant ───────────────────────────────────────────────────────────────
+    QDRANT_URL: str   # required — set in .env, e.g. http://localhost:6333
     QDRANT_COLLECTION_NAME: str = "papers"
 
-    # ── In-memory RAG (summarization) ────────────────────────────────────────
+    # ── RAG ──────────────────────────────────────────────────────────────────
     RAG_CHUNK_SIZE: int = 512
     # Token budget per chunk. Matches nomic-embed-text context window.
-    RAG_SIMILARITY_TOP_K: int = 5
-    # Chunks retrieved per query. 8 queries × 5 = up to 40 unique chunks.
-
-    # ── Shared cache ──────────────────────────────────────────────────────────
-    SHARED_CACHE_ROOT: str = "./shared_cache"
-    # Persists parsed docs and summaries across workflow runs, keyed by document_id.
+    RAG_SIMILARITY_TOP_K: int = 10
+    # Chunks retrieved per query. 9 queries × 10 = up to 90 unique chunks.
 
     # ── Chunk filter ─────────────────────────────────────────────────────────
-    CHUNK_FILTER_CONFIG_PATH: str = "backend/data/filter_config.json"
-
-    # ── Summarization strategy ────────────────────────────────────────────────
-    SUMMARY_STRATEGY: Literal["rag", "vlm"] = "rag"
-    # "rag" uses Docling HybridChunker pipeline (default).
-    # "vlm" retains the legacy VLM image-based path for baseline comparison.
+    CHUNK_FILTER_CONFIG_PATH: str = "data/filter_config.json"
 
     # ── Optional provider config ───────────────────────────────────────────────
     OPENALEX_API_KEY: str = ""

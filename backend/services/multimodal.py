@@ -65,7 +65,7 @@ def _image_block_to_content_block(block: ImageBlock) -> dict:
 class LiteLLMMultiModal(MultiModalLLM):
     """
     LlamaIndex MultiModalLLM interface implemented via LiteLLM.
-    Configure the model via LLM_VISION_MODEL env var (default: gemini/gemini-2.5-flash).
+    Configure the model via the `vision` role in data/model_profiles.json.
 
     Note: MultiModalLLM extends BaseComponent (Pydantic BaseModel),
     so all config must be declared as Pydantic fields.
