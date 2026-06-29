@@ -1,6 +1,7 @@
 import asyncio
 import json
 import random
+import re
 import shutil
 import string
 import uuid
@@ -19,7 +20,6 @@ from llama_index.core.workflow import (
 )
 from llama_index.core.llms import ChatMessage
 from llama_index.core.program import (
-    FunctionCallingProgram,
     LLMTextCompletionProgram,
 )
 
@@ -48,6 +48,14 @@ def read_summary_content(file_path: Path):
     """
     with file_path.open("r") as file:
         return file.read()
+
+
+def _clean_text(text: str) -> str:
+    """Strip markdown formatting and alternative options from LLM-generated title/subtitle."""
+    text = re.split(r'\n|\*\(Alternative', text)[0]
+    text = re.sub(r'\*+', '', text)
+    text = text.strip('"\'')
+    return text.strip()
 
 
 class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
@@ -82,15 +90,6 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         self.user_input_future = asyncio.Future()
         self.user_input = None
 
-    def _fc_program(self, output_cls, prompt_template_str, llm=None):
-        """FunctionCallingProgram factory — structured output via tool calling API."""
-        return FunctionCallingProgram.from_defaults(
-            llm=llm if llm is not None else self._fast_llm,
-            output_cls=output_cls,
-            prompt_template_str=prompt_template_str,
-            verbose=True,
-        )
-
     def _text_program(self, output_cls, prompt_template_str, llm=None):
         """LLMTextCompletionProgram factory — structured output via JSON text completion."""
         return LLMTextCompletionProgram.from_defaults(
@@ -107,12 +106,14 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             + "\n".join(f"- {t}" for t in paper_titles)
             + "\n\nWhat is the unifying research theme across all these papers, "
               "expressed as an academic presentation title (max 10 words)? "
-              "Output the title only."
+              "Output the title only, plain text — no markdown, no surrounding quotes."
         )
         resp = await self._fast_llm.achat(
             [ChatMessage(role="user", content=prompt)]
         )
-        return resp.message.content.strip()
+        result = _clean_text(resp.message.content)
+        logger.info("[title] _generate_title returned: %r", result)
+        return result
 
     async def _generate_subtitle(
         self, paper_titles: list[str], presentation_title: str
@@ -124,12 +125,14 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             + "\n".join(f"- {t}" for t in paper_titles)
             + "\n\nGenerate a concise subtitle (max 8 words) that complements "
               "the presentation title above. "
-              "Output the subtitle only, no explanation."
+              "Output the subtitle only, plain text — no markdown, no surrounding quotes."
         )
         resp = await self._fast_llm.achat(
             [ChatMessage(role="user", content=prompt)]
         )
-        return resp.message.content.strip()
+        result = _clean_text(resp.message.content)
+        logger.info("[title] _generate_subtitle returned: %r", result)
+        return result
 
     def copy_final_slide(self, latest_pptx_filename: str):
         """
@@ -172,10 +175,10 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                            event_type="paper_total", total=n_summaries)
         self._emit_message(ctx, inspect.currentframe().f_code.co_name,
                            message=f"Reading {n_summaries} summaries from markdown files...")
-        for i, f in enumerate(markdown_files):
+        for i, f in enumerate(markdown_files, start=1):
             s = read_summary_content(f)
             self._emit_message(ctx, inspect.currentframe().f_code.co_name,
-                               message=f"Sending {i}th summaries...")
+                               message=f"Sending summary {i} of {len(markdown_files)}...")
             ctx.send_event(SummaryEvent(summary=s))
 
     @step(num_workers=settings.NUM_WORKERS_FAST, retry_policy=CLOUD_LLM_RETRY_POLICY)
