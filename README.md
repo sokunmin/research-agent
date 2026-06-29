@@ -548,8 +548,54 @@ Acknowledgements, Ethics sections — with zero false positives across 28 papers
    docker-compose up --build
    ```
 
-4. **Access the application:**
-   - Frontend: `http://localhost:8501`
+4. **Configure models:**
+
+   Edit `backend/data/model_profiles.json` to set which model fills each role
+   and configure per-model arguments:
+
+   ```json
+   {
+     "roles": {
+       "smart":           "ollama/gpt-oss:20b-cloud",
+       "fast":            "ollama/ministral-3:14b-cloud",
+       "vision":          "ollama/gemma4:31b-cloud",
+       "vision_fallback": "openrouter/google/gemma-3-27b-it:free",
+       "embed":           "ollama/nomic-embed-text"
+     },
+     "models": {
+       "ollama/gpt-oss:20b-cloud":      { "extra_body": {} },
+       "ollama/ministral-3:14b-cloud":  { "extra_body": {} },
+       "ollama/gemma4:31b-cloud":       { "extra_body": {} },
+       "ollama/qwen3.5:cloud":          { "extra_body": {"think": false} },
+       "ollama/nemotron-3-super:cloud": { "extra_body": {"think": false} }
+     }
+   }
+   ```
+
+   **`roles`** — assigns a model to each pipeline role. Model strings follow
+   [LiteLLM provider prefix](https://docs.litellm.ai/docs/providers) format:
+   `<provider>/<model>` (e.g. `gemini/gemini-2.5-flash`, `groq/llama-3.3-70b-versatile`).
+
+   **`models`** — per-model arguments passed directly to the provider API via
+   `extra_body`. Required for Ollama models with built-in reasoning (think mode):
+   set `{"think": false}` to suppress the internal reasoning chain and return
+   plain text. Models not listed here receive an empty `extra_body` by default.
+
+5. **Tune pipeline parameters** (optional):
+
+   Edit `.env` to adjust discovery and generation behaviour:
+
+   | Parameter | Default | Overridden by query | Description |
+   |---|---|---|---|
+   | `MAX_TOKENS` | `4096` | No | Max tokens per LLM response |
+   | `PAPER_CANDIDATE_LIMIT` | `100` | No | Max candidates fetched from OpenAlex before filtering |
+   | `PAPER_CANDIDATE_MIN_CITATIONS` | `50` | Yes | Default minimum citation count |
+   | `PAPER_CANDIDATE_YEAR_WINDOW` | `3` | Yes | Default publication recency window (years) |
+   | `NUM_MAX_FINAL_PAPERS` | `5` | No | Top-N papers kept after relevance filtering |
+   | `SLIDE_GEN_MAX_RETRY_ATTEMPTS` | `3` | No | Max slide validation retries before stopping |
+
+6. **Access the application:**
+   - Frontend: `http://localhost:3001`
    - Backend API docs: `http://localhost:8000/docs`
 
 ---
