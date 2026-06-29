@@ -103,7 +103,7 @@ SSE events use `WorkflowStreamingEvent` with `event_type` of `server_message` or
 
 All tunable parameters live in `backend/config.py` and are set via `.env`. Key settings:
 
-- `LLM_SMART_MODEL`, `LLM_FAST_MODEL`, `LLM_VISION_MODEL`, `LLM_EMBED_MODEL`, `LLM_RELEVANCE_EMBED_MODEL`
+- `MODEL_PROFILES_PATH` — path to model role config (default: `data/model_profiles.json`); edit that file to switch models or set per-model arguments
 - `NUM_WORKERS_SMART/FAST/VISION`, `DELAY_SECONDS_SMART/FAST/VISION` — concurrency + rate limiting
 - `NUM_MAX_FINAL_PAPERS`, `PAPER_CANDIDATE_LIMIT`, `PAPER_CANDIDATE_MIN_CITATIONS`, `PAPER_CANDIDATE_YEAR_WINDOW`
 - `SLIDE_GEN_MAX_RETRY_ATTEMPTS`
