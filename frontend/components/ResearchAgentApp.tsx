@@ -5,6 +5,7 @@ import { AppHeader } from '@/components/layout/AppHeader'
 import { CanvasLayout } from '@/components/layout/CanvasLayout'
 import { ChatThread } from '@/components/chat/ChatThread'
 import { ChatInput } from '@/components/chat/ChatInput'
+import { Button } from '@/components/ui/button'
 import { CanvasPanel } from '@/components/canvas/CanvasPanel'
 
 // Root component: calls useWorkflow() and passes slices of state down.
@@ -41,17 +42,21 @@ export function ResearchAgentApp() {
               onGenerate={(ids) => wf.submitPaperSelection('select', ids)}
               onNewSearch={() => wf.submitPaperSelection('abort')}
             />
-            <ChatInput
-              onSend={handleSubmit}
-              disabled={wf.isInputDisabled}
-              placeholder={
-                wf.canvasPhase === 'paper-selection'
-                  ? 'Ask about any paper...'
-                  : wf.canvasPhase === 'complete'
-                    ? 'Ask about the papers...'
+            {wf.canvasPhase === 'complete' ? (
+              <div className="shrink-0 border-t p-3 flex justify-center">
+                <Button onClick={wf.reset}>New Search</Button>
+              </div>
+            ) : (
+              <ChatInput
+                onSend={handleSubmit}
+                disabled={wf.isInputDisabled}
+                placeholder={
+                  wf.canvasPhase === 'paper-selection'
+                    ? 'Ask about any paper...'
                     : 'Enter your research topic...'
-              }
-            />
+                }
+              />
+            )}
           </>
         }
         right={

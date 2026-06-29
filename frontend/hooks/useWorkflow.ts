@@ -35,7 +35,7 @@ export function useWorkflow() {
   const [supervisorMessage,  setSupervisorMessage]   = useState<string | null>(null)
 
   // AI SDK v5 status: 'submitted' | 'streaming' | 'ready' | 'error' (NO 'idle')
-  const { messages, sendMessage, status } = useChat<ResearchUIMessage>({
+  const { messages, sendMessage, status, setMessages } = useChat<ResearchUIMessage>({
     transport: new DefaultChatTransport({
       api: `${BACKEND_URL}/run-slide-gen`,
       // FastAPI expects {"query":"..."} — not the default AI SDK messages array payload
@@ -155,6 +155,7 @@ export function useWorkflow() {
   }
 
   const reset = () => {
+    setMessages([])
     setWorkflowId(null)
     setWorkflowPhase('idle')
     setHasConversation(false)

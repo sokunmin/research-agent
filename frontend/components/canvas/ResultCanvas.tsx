@@ -11,6 +11,7 @@ interface ResultCanvasProps {
 
 export function ResultCanvas({ finalResult }: ResultCanvasProps) {
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
+  const [pdfError, setPdfError] = useState<boolean>(false)
 
   useEffect(() => {
     let blobUrl: string
@@ -20,7 +21,7 @@ export function ResultCanvas({ finalResult }: ResultCanvasProps) {
         blobUrl = URL.createObjectURL(blob)
         setPdfBlobUrl(blobUrl)
       })
-      .catch(console.error)
+      .catch(err => { console.error(err); setPdfError(true) })
     return () => {
       if (blobUrl) URL.revokeObjectURL(blobUrl)
     }
@@ -48,7 +49,9 @@ export function ResultCanvas({ finalResult }: ResultCanvasProps) {
       </div>
       {pdfBlobUrl
         ? <iframe src={pdfBlobUrl} className="flex-1 w-full rounded border min-h-0" title="slides preview" />
-        : <Skeleton className="flex-1 w-full" />}
+        : pdfError
+          ? <p className="text-destructive text-sm p-4">Failed to load PDF preview. Use Download PDF to view.</p>
+          : <Skeleton className="flex-1 w-full" />}
     </div>
   )
 }
