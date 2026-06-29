@@ -11,7 +11,9 @@ RUN apt-get update && \
         libreoffice-impress \
         libreoffice-common \
         fonts-dejavu \
-        fonts-liberation && \
+        fonts-liberation \
+        libgl1 \
+        libglib2.0-0 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     mkdir -p /app/.config/libreoffice && \
