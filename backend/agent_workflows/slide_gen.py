@@ -84,7 +84,7 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
         # ToolSpec instances — each domain's tools are managed by its own class.
         self.pptx_spec            = PptxLayoutToolSpec(self.slide_template_path)
         self.pptx_conversion_spec = PptxConversionToolSpec()
-        self.renderer             = PptxRenderer(self.slide_template_path, self.workflow_artifacts_path)
+        self.renderer             = PptxRenderer(self.slide_template_path, self.workflow_artifacts_path, self.pptx_spec)
 
         self.parent_workflow = None
         self.user_input_future = asyncio.Future()
@@ -317,6 +317,17 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     available_layout_names=all_layout_names,
                     available_layouts=self.pptx_spec.all_layout,
                 )
+                response_text = "".join(p.text for p in response.content).strip()
+                source_text = "".join(p.text for p in slide.content).strip()
+                if not response_text and source_text:
+                    # AUGMENT_LAYOUT_PMT instructs the LLM to copy `content` verbatim —
+                    # empty output despite non-empty input means it failed to copy,
+                    # not that this slide is intentionally content-less.
+                    self._emit_message(
+                        ctx, "outlines_with_layout",
+                        message=f"Content dropped for slide '{slide.title}', restoring from source",
+                    )
+                    response.content = slide.content
                 slides_w_layout.append(response)
 
         paper_titles = [ev.paper_outline.paper_title for ev in ready]
