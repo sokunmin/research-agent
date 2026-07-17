@@ -111,9 +111,6 @@ class PptxLayoutToolSpec:
           2. Structural match: has title-type + content-type placeholders,
              with <= 2 meaningful placeholders (excludes SLIDE_NUMBER/DATE/FOOTER)
           3. Fallback: first layout in template
-
-        Verified correct for template.pptx (TITLE_SLIDE) and
-        template2.pptx (TITLE) by smoke_test_level1.py.
         """
         _KNOWN = ["title_slide", "title slide", "title"]
         for layout in self._all_layout:
@@ -151,15 +148,19 @@ class PptxRenderer:
     """Deterministic PPTX rendering from JSON outlines. No LLM involved.
 
     Replaces the ReActAgent-based slide_gen and modify_slides steps.
-    Verified by smoke_test_level1.py and smoke_test_triage_and_visual_fix.py.
     """
 
-    def __init__(self, template_path: str, output_dir: Path) -> None:
+    def __init__(self, template_path: str, output_dir: Path, layout_spec: "PptxLayoutToolSpec") -> None:
         self._template_path = template_path
         self._output_dir = output_dir
+        self._layout_spec = layout_spec
 
     def generate_pptx(self, outlines: list, output_fname: str) -> Path:
         """Render JSON outlines → .pptx deterministically.
+
+        idx_title_placeholder / idx_content_placeholder are computed from the
+        layout's actual placeholder types, not read from the LLM-generated
+        outline — the LLM only needs to pick layout_name correctly.
 
         Sets auto_size=TEXT_TO_FIT_SHAPE on content placeholders so text
         scales to fit regardless of template's default auto_size setting.
@@ -174,8 +175,7 @@ class PptxRenderer:
             if layout is None:
                 raise ValueError(f"Layout '{item['layout_name']}' not in template")
             slide = prs.slides.add_slide(layout)
-            idx_t = item.get("idx_title_placeholder")
-            idx_c = item.get("idx_content_placeholder")
+            idx_t, idx_c = self._layout_spec.get_placeholder_indices(item["layout_name"])
             if idx_t is not None:
                 ph = slide.placeholders[idx_t]
                 ph.text_frame.clear()
