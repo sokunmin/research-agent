@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 import json
 import shutil
 import uuid
@@ -189,7 +190,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         if intent_result.intent != "research_query":
             fixed_responses = {
                 "greeting_or_help": "Hi! I search academic papers and generate slides. Enter a research topic to get started.",
-                "ambiguous": "Could you describe the research topic? e.g. 'LoRA fine-tuning for LLMs'",
+                "ambiguous": "The topic is not clear. Could you describe the research topic? e.g. 'LoRA fine-tuning for LLMs'",
                 "out_of_scope": "I can search academic papers or answer questions about downloaded papers.",
             }
             message = fixed_responses.get(intent_result.intent, "Please enter a research topic to get started.")
@@ -199,7 +200,24 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
 
         self._emit_message(ctx, "supervisor_search", message="Analyzing your research topic...")
 
-        params: SearchParams = await self._search_params_program.acall(user_query=user_query)
+        params: SearchParams = await self._search_params_program.acall(
+            user_query=user_query,
+            current_year=date.today().year
+        )
+
+        if not params.has_identifiable_topic:
+            message = (
+                f"The topic is not clear. {params.topic_missing_reason or ''} "
+                "Could you describe the research topic? "
+                "e.g. 'LoRA fine-tuning for LLMs'"
+            ).strip()
+            self._emit_message(
+                ctx, "supervisor_search",
+                event_type="supervisor_response",
+                message=message
+            )
+            logger.info("[DIAG] leaving supervisor_search: no identifiable topic")
+            return StopEvent(result=None)
 
         async with ctx.store.edit_state() as state:
             state["search_params"] = params.model_dump()
