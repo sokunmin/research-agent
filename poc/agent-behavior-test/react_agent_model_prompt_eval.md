@@ -1,7 +1,7 @@
 # LLM Model & Prompt Style Evaluation for ReAct Agent (Slide Generation Pipeline)
 
 **Report Date:** 2026-03-27
-**Experiment Rounds:** 3
+**Experiment Rounds:** 5 (Rounds 1-3: ReAct model/prompt selection; Rounds 4-5: outlines_with_layout FunctionCallingProgram testing, added later)
 **Models Evaluated:** qwen3.5:4b, gemma3:4b, gemma3n:e2b, gemma3n:e4b (all via Ollama)
 
 ---
@@ -121,20 +121,9 @@ Pipeline 中有兩個由 ReAct Agent 執行的核心步驟：
 
 ### Tool Call Sequence
 
-**qwen3.5:4b:**
-```
-run_code → run_code → run_code → run_code → run_code →
-run_code → run_code → run_code → run_code → run_code →
-run_code → list_files → run_code → run_code → run_code →
-run_code → run_code
-（16 次 run_code，反覆修正才成功）
-```
+**qwen3.5:4b:** `run_code ×16 → list_files` (interleaved; 1 list_files at position 12)
 
-**gemma3:4b:**
-```
-run_code → list_files → list_files → list_files
-（1 次 run_code 即成功，後續 list_files 確認檔案存在）
-```
+**gemma3:4b:** `run_code → list_files ×3`
 
 ### Efficiency Comparison
 
@@ -201,20 +190,7 @@ run_code → list_files → list_files → list_files
 | 發生錯誤 | 無 |
 | 總 tool call 次數 | 4 |
 
-Tool call 序列：
-```
-run_code → list_files → list_files → list_files
-（1 次 run_code 即成功，後續 list_files 確認檔案存在）
-```
-
-Final answer tail（最後 ~400 字元）：
-```
-...one didn't already exist.
-4.  The code iterated through each outline item in the JSON.
-5.  For each item, a new slide was created using the specified layout.
-6.  The slide title was set to the item's title.
-7.  The slide content was set to the item's content, using the placeholder indices provided.
-```
+Tool call 序列：`run_code → list_files ×3`
 
 解讀：行為一致，gemma3:4b 複測結果與第一輪相同，確認穩定。
 
@@ -231,11 +207,6 @@ Final answer tail（最後 ~400 字元）：
 | Final Answer 含問句 | ❌ |
 | 發生錯誤 | ✅ TIMEOUT |
 | 總 tool call 次數 | 0 |
-
-Tool call 序列：
-```
-[]（無任何 tool call）
-```
 
 錯誤訊息：
 ```
@@ -259,11 +230,6 @@ Final answer tail：（空，因 timeout 未完成）
 | Final Answer 含問句 | ❌ |
 | 發生錯誤 | 無 |
 | 總 tool call 次數 | 0 |
-
-Tool call 序列：
-```
-[]（無任何 tool call）
-```
 
 Final answer tail（最後 ~400 字元）：
 ```
@@ -345,12 +311,7 @@ Save the modified slide deck as `paper_summaries_v1.pptx`.
 
 ### Tool Call Sequence
 
-```
-Prompt A: run_code → list_files
-          （1 次即成功，list_files 確認新檔案存在）
-
-Prompt B: []（無任何 tool call，20 輪迴圈後 timeout）
-```
+Prompt A: `run_code → list_files`
 
 ### Analysis
 
@@ -455,6 +416,8 @@ LLM_SMART_MODEL=ollama/gemma3:4b
 | `modify_slides` | 5 步驟 prose 格式 | ✅ 保持現狀，不需修改 |
 | 其他 LLM step | FunctionCallingProgram | 不適用（非 ReAct） |
 
+（註：這個假設後來被 Round 4/5 推翻——FunctionCallingProgram 對 Ollama 本地模型完全不可行，詳見下方）
+
 ### 7.3 Model Evaluation Checklist for Future Models
 
 當評估新 LLM 模型是否可用於 ReAct agent 時，應確認：
@@ -511,19 +474,6 @@ LLM_SMART_MODEL=ollama/gemma3:4b
 ValueError: Model name ollama/gemma3:4b does not support function calling API.
 ```
 
-**完整 traceback：**
-```
-File "augment_test.py", line 435, in <module>
-    asyncio.run(main())
-File "augment_test.py", line 350, in main
-    result = await run_prompt_test(label, prompt)
-File "augment_test.py", line 303, in run_prompt_test
-    result = await run_single(prompt_template, slide)
-File "augment_test.py", line 241, in run_single
-    program = FunctionCallingProgram.from_defaults(
-ValueError: Model name ollama/gemma3:4b does not support function calling API.
-```
-
 **觸發位置：** `llama_index.core.program.function_program.FunctionCallingProgram.from_defaults()` — 在嘗試建立 `FunctionCallingProgram` 實例時，LlamaIndex 會於建構期驗證底層 LLM 是否支援 function calling API。`ollama/gemma3:4b` 透過 LiteLLM 接入時，未被識別為支援 native function calling API 的模型，因此在任何 LLM 呼叫發出前即拋出 ValueError。
 
 ### 量化結果
@@ -574,6 +524,8 @@ ValueError: Model name ollama/gemma3:4b does not support function calling API.
 **下一輪實驗（Round 5 建議）：**
 - 將 `FunctionCallingProgram` 改為 `LLMTextCompletionProgram` 並重新執行 4 個 prompt variant 比較
 - 或使用支援 function calling 的模型（如 `ollama/llama3.1:8b`）以正確觸發 `FunctionCallingProgram` 路徑
+
+（後續：Round 5 執行了這個方向，詳見下一節）
 
 ---
 
@@ -723,161 +675,8 @@ ValueError: Model name ollama/qwen3.5:4b does not support function calling API.
 - 重點觀察：是否出現 `{"properties": ...}` wrapping bug（production log 中觀察到的根本問題）；若出現，哪個 prompt variant 能有效消除它
 
 ---
-Function calling 不是一個統一標準，各家實作方式不同：                                                      
-                                                                                                               
-    OpenAI GPT-4 / GPT-4o                                                                                      
-      → 原生支援 tool_calls API                                                                                
-      → LiteLLM 直接識別，FunctionCallingProgram 可用                                                          
-      → 原作者用這個，所以沒問題 ✅                                                                            
-                                                                                                               
-    Ollama (本地模型)                                                                                          
-      → 要看模型有沒有 tools tag                                                                               
-      → gemma3:4b / qwen3.5:4b 都沒有 → LiteLLM 拒絕建立 FunctionCallingProgram ❌                             
-      → 就算有 tools tag，走的是 Ollama 自己的 /api/chat format 參數                                           
-        不一定等於 OpenAI tool_calls schema                                                                    
-                                                                                                               
-    各家差異                                                                                                   
-                                                                                                               
-    ┌──────────────────┬──────────────────────────────────────────────────────────────────┐                    
-    │     Provider     │                      Function Calling 機制                       │                    
-    ├──────────────────┼──────────────────────────────────────────────────────────────────┤                    
-    │ OpenAI           │ tool_calls 欄位，原生支援，LiteLLM 完整支援                      │                    
-    ├──────────────────┼──────────────────────────────────────────────────────────────────┤                    
-    │ Anthropic Claude │ tool_use 區塊，格式不同，LiteLLM 有轉換層                        │                    
-    ├──────────────────┼──────────────────────────────────────────────────────────────────┤                    
-    │ Ollama           │ 依模型而定：有 tools tag 的走 /api/chat format，沒有的完全不支援 │                    
-    ├──────────────────┼──────────────────────────────────────────────────────────────────┤                    
-    │ Groq             │ 支援 OpenAI 相容格式，LiteLLM 可用                               │                    
-    ├──────────────────┼──────────────────────────────────────────────────────────────────┤                    
-    │ Gemini           │ 自己的 function calling 格式，LiteLLM 有轉換層                   │                    
-    └──────────────────┴──────────────────────────────────────────────────────────────────┘ 
 
-原作者用 ChatGPT 為何可以
+## Appendix: Structured Output Method Background (superseded)
 
-    FunctionCallingProgram 在 LiteLLM 底層走的是 OpenAI tool call API：
+This exploratory discussion of FunctionCallingProgram/Ollama incompatibility and alternative structured-output methods is now covered in `experiments/02-agent-behavior/06-structured_output_method_comparison.md`.
 
-    LlamaIndex FunctionCallingProgram
-        │
-        ▼
-    LiteLLM  →  POST /v1/chat/completions
-                body: { "tools": [...schema...], "tool_choice": "auto" }
-        │
-        ▼
-    OpenAI API → GPT-4o / GPT-4o-mini
-
-    OpenAI 的模型原生支援這個格式，回傳：
-    { "tool_calls": [{ "function": { "name": "SlideOutlineWithLayout", "arguments": "{...}" } }] }
-
-    LlamaIndex 解析 arguments 字串 → Pydantic validate → 完成。
-
-    原作者用 OpenAI 模型，這條路全程通。
-
-    ---
-    換成 Ollama 為何不行
-
-    每家 provider 的 function calling 實作方式不同：
-
-    ┌───────────┬─────────────────────────────────┬──────────────────────────────────┐
-    │ Provider  │              機制               │              相容性              │
-    ├───────────┼─────────────────────────────────┼──────────────────────────────────┤
-    │ OpenAI    │ 原生 tool_calls API，有訓練支援 │ ✅ FunctionCallingProgram 直接用 │
-    ├───────────┼─────────────────────────────────┼──────────────────────────────────┤
-    │ Anthropic │ tool_use block，格式不同        │ LiteLLM 會轉換，通常可用         │
-    ├───────────┼─────────────────────────────────┼──────────────────────────────────┤
-    │ Ollama    │ 兩條路，見下方                  │ 視模型而定                       │
-    └───────────┴─────────────────────────────────┴──────────────────────────────────┘
-
-    Ollama 的情況最複雜：
-    - /api/chat（原生端點）：支援 tools 參數，但只有 modelfile 裡有 tools 設定的模型才有效
-    - /v1/chat/completions（OpenAI 相容端點）：接受 tools 參數格式，但轉換不完整，有已知 bug
-
-    LiteLLM 呼叫 Ollama 時，先做 capability check：查 Ollama 回報的模型資訊裡有沒有 tools 支援。gemma3:4b 和
-    qwen3.5:4b 都沒有 → 直接在建構期拋出 ValueError，程式碼根本不執行。
-
-    ---
-    Ollama 的 tools tag 是什麼
-
-    Ollama 的 modelfile（模型配置）裡有一個 chat template，定義了怎麼格式化對話。
-
-    有 tools tag 的模型，代表它的 chat template 裡有處理 tool call 的 token 和格式，例如：
-
-    <|start_header_id|>ipython<|end_header_id|>   ← Llama3.1 的 tool result token
-
-    這表示模型在訓練時就看過 tool call 格式的資料，知道怎麼產生正確的 function call 輸出。
-
-    沒有 tools tag（如 gemma3:4b）= chat template 裡沒有 tool 相關 token = 模型沒有被訓練成做 function calling
-    = 就算你送 tools schema 給它，它也不知道該怎麼回應，可能輸出普通文字、或原樣 echo schema。
-
-    ---
-    一句話總結
-
-    ▎ Function calling 不是一個通用標準，而是每家廠商各自實作的能力。原作者用 OpenAI
-    模型走的是有原生支援的路。換成 Ollama 本地模型後，必須先確認模型有 tools tag，且 LiteLLM
-    能偵測到，FunctionCallingProgram 才能運作。否則要換用其他結構化輸出方式（如 Ollama 的 format 參數做
-    constrained decoding）。
-
-
-1. llm.structured_predict() / llm.astructured_predict()
-                                                                                                               
-    直接在 LLM 物件上呼叫，LlamaIndex 內部自動決定走哪條路：                                                   
-                                                                                                               
-    result = await llm.astructured_predict(                                                                    
-        SlideOutlineWithLayout,                                                                                
-        prompt=PromptTemplate("...{slide_content}..."),                                                        
-        slide_content="..."                                                                                    
-    )                                                                                                          
-                                                                                                               
-    內部邏輯由 pydantic_program_mode 控制：                                                                    
-    - PydanticProgramMode.DEFAULT → 有 function calling 就用，沒有就 fallback                                  
-    - PydanticProgramMode.LLM → 強制走 text completion 路徑                                                    
-                                                                                                               
-    ---                                                                                                        
-    2. llm.as_structured_llm(OutputClass)                                                                      
-                                                                                                               
-    把 LLM 包裝成一個 StructuredLLM，然後用一般 chat 介面操作：                                                
-                                                                                                               
-    sllm = llm.as_structured_llm(SlideOutlineWithLayout)                                                       
-    response = await sllm.achat(messages)                                                                      
-    result = response.raw  # SlideOutlineWithLayout instance                                                   
-                                                                                                               
-    同樣內部自動選擇機制，對呼叫端透明。                                                                       
-
-    ---                                                                                                       
-    3. MultiModalLLMCompletionProgram                                                                          
-                                                                                                               
-    你的 codebase 裡 validate_slides 已經在用：                                                                
-
-    from llama_index.core.program import MultiModalLLMCompletionProgram
-
-    專門用於 VLM（有圖片輸入的情境），概念上是 LLMTextCompletionProgram 的多模態版本，不走 function calling。
-
-    ---
-    4. 手動 JSON parse（無框架）
-
-    文件也提到的最底層方式：
-
-    schema = MyModel.model_json_schema()
-    prompt = f"Output JSON matching this schema: {schema}\n\n{user_content}"
-    response = await llm.acomplete(prompt)
-    result = MyModel.model_validate_json(response.text)
-
-    ---
-    整體對比
-
-    ┌────────────────────────────────┬─────────────────────┬──────────────────────────┬──────────────────────┐
-    │              方法              │   需要 function     │        跨模型相容        │       使用情境       │
-    │                                │       calling       │                          │                      │
-    ├────────────────────────────────┼─────────────────────┼──────────────────────────┼──────────────────────┤
-    │ FunctionCallingProgram         │ ✅ 必須             │ ❌ 僅支援 tool-capable   │ GPT-4, Claude 等     │
-    │                                │                     │ 模型                     │                      │
-    ├────────────────────────────────┼─────────────────────┼──────────────────────────┼──────────────────────┤
-    │ LLMTextCompletionProgram       │ ❌                  │ ✅                       │ 任何文字 LLM         │
-    ├────────────────────────────────┼─────────────────────┼──────────────────────────┼──────────────────────┤
-    │ structured_predict()           │ 自動選擇            │ ✅                       │ 懶人首選，讓框架決定 │
-    ├────────────────────────────────┼─────────────────────┼──────────────────────────┼──────────────────────┤
-    │ as_structured_llm()            │ 自動選擇            │ ✅                       │ 需要 chat 介面的場合 │
-    ├────────────────────────────────┼─────────────────────┼──────────────────────────┼──────────────────────┤
-    │ MultiModalLLMCompletionProgram │ ❌                  │ ✅                       │ 有圖片輸入           │
-    ├────────────────────────────────┼─────────────────────┼──────────────────────────┼──────────────────────┤
-    │ 手動 JSON parse                │ ❌                  │ ✅                       │ 需要最大控制權       │
-    └────────────────────────────────┴─────────────────────┴──────────────────────────┴──────────────────────┘

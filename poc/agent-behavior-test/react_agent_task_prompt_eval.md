@@ -1,7 +1,7 @@
 # Slide Gen Prompt Engineering — Experiment Report
 
 **Date:** 2026-04-05  
-**Script:** `poc/agent-behavior-test/slide_gen_prompt_eng.py`  
+**Script:** `poc/agent-behavior-test/react_agent_task_prompt_eval.py`  
 **Raw results:** `poc/agent-behavior-test/slide_gen_prompt_eng_results.json`
 
 ---
@@ -75,9 +75,10 @@ Four boolean checks per generated code string:
 | `import_correct` | `from pptx import Presentation` present. | Sanity only |
 
 **Known limitations of static analysis:**
-- `layout_lookup_correct`: inline `add_slide(next(...))` is a false negative (two-step pattern required).
 - `null_guard_correct`: co-presence check only — does not verify structural wrapping. Unrelated `is not None` elsewhere causes false positive.
 - `save_path_correct` / `import_correct`: expected near 100%; these have low discriminating power between prompt variants.
+
+(See §6 Caveat 6 for the `layout_lookup_correct` false-negative case.)
 
 ---
 
@@ -187,57 +188,14 @@ structured code context anchors its output format. P2 makes it explicit.
 P3 prepends `Required imports: from pptx import Presentation` before the requirements block.
 Result: no measurable difference from P2. Both models include the import at 100% even at P0.
 
-This is not a coincidence — it reflects how LLMs work with high-prior patterns.
+This is not a coincidence: `from pptx import Presentation` appears in virtually every
+python-pptx tutorial, example, and StackOverflow answer in the training corpus, so both
+models already emit it without being told to. A prompt addition that doesn't change the
+output distribution adds no signal — just tokens.
 
-**Reason 1: The import is already saturated in the LLM's training distribution.**
-
-`from pptx import Presentation` appears in virtually every python-pptx tutorial, example,
-and StackOverflow answer in the training corpus. The conditional probability:
-
-```
-P(generate "from pptx import Presentation" | task = "write python-pptx code") ≈ 1.0
-```
-
-This prior is already at saturation. Adding the import to the prompt does not shift the
-posterior — the model would have generated it anyway. A token that does not change the
-output distribution provides no signal and only adds noise.
-
-**Reason 2: Every extra token competes for attention.**
-
-When generating token N, a causal LM attends to all preceding tokens simultaneously.
-Each additional prompt token occupies a slice of the attention budget:
-
-```
-Prompt tokens:  [PREAMBLE] [slide data] [requirements] [layout code] [null guard code] [import ← P3 adds this]
-                                                                                           ↑
-                                         This token competes with the useful tokens above.
-                                         For small models (4B), the effective context per
-                                         token is finite — redundant tokens dilute the
-                                         attention weight on the tokens that actually matter.
-```
-
-**Reason 3: P3 changes the information order (prepend disrupts causality).**
-
-Causal LMs generate left-to-right. Prepending the imports block changes the position of
-every downstream token, which shifts the attention context each requirement token sees
-during generation:
-
-```
-P2 token order:  PREAMBLE → requirements text → layout code → null guard code
-P3 token order:  imports → PREAMBLE → requirements text → layout code → null guard code
-                    ↑
-                    Inserted here — all downstream tokens now have a different left-context.
-                    Theoretical risk: format drift in models sensitive to prompt ordering.
-                    Not triggered in this experiment, but the risk is real for smaller models.
-```
-
-**Conclusion (Occam's Razor applied to prompt engineering):**
-
-The principle is: *the minimal prompt that achieves the target output is preferred over
-a longer one.* Adding tokens that do not change the output distribution is never neutral —
-each token is a potential source of attention dilution, ordering side-effects, and
-maintenance cost. P3 adds tokens that contribute nothing measurable and introduce
-theoretical risks. P2 is the minimal sufficient prompt and is therefore recommended.
+**Conclusion (Occam's Razor applied to prompt engineering):** the minimal prompt that
+achieves the target output is preferred over a longer one. P3 adds tokens that contribute
+nothing measurable. P2 is the minimal sufficient prompt and is therefore recommended.
 
 ```
 Before adding anything to a prompt, ask:
