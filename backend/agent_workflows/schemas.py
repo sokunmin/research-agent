@@ -95,7 +95,8 @@ class SearchParams(BaseModel):
         description=(
             "Clean topic string for BM25 search. "
             "Plain keywords only — no boolean operators, no quotes, no date syntax. "
-            "Preserves domain-specific terminology. Omits time/filter language."
+            "Preserves domain-specific terminology. Omits time/filter language. "
+            "Empty string if no identifiable research topic exists."
         )
     )
     year_window: int = Field(
@@ -105,6 +106,18 @@ class SearchParams(BaseModel):
     min_citations: int = Field(
         default=50,
         description="Minimum citation count. Extracted from 'highly cited', 'at least N citations', etc."
+    )
+    has_identifiable_topic: bool = Field(
+        description=(
+            "True if the user message contains an identifiable academic research concept, "
+            "technology, method, or domain — even if broad. "
+            "False if no concrete topic can be extracted (e.g. 'find something', "
+            "'find papers from 2024', placeholder text)."
+        )
+    )
+    topic_missing_reason: Optional[str] = Field(
+        default=None,
+        description="Required when has_identifiable_topic=False. One short sentence explaining why."
     )
 
 
