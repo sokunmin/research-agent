@@ -39,6 +39,43 @@ jobs:
       - name: Fetch dev branch
         run: git fetch origin dev
 
+      - name: Validate commit categorization
+        run: |
+          # 找出 dev 上還沒進 main 的 commits，跟下面 cherry-pick 步驟用同一套邏輯
+          NEW_COMMITS=$(git cherry origin/main origin/dev | grep '^+' | awk '{print $2}')
+
+          if [ -z "$NEW_COMMITS" ]; then
+            echo "No new commits to check — nothing to merge"
+            exit 0
+          fi
+
+          # 只檢查「不會被跳過」的 commit：確認它沒有混到 dev-only 路徑
+          # （poc/、dev-tracker/、experiments/REPORTING_GUIDE.md、CLAUDE.md/AGENTS.md/GEMINI.md）
+          FAILED=0
+          while IFS= read -r sha; do
+            MSG=$(git log -1 --format="%s" "$sha")
+            if echo "$MSG" | grep -qE '^chore\(poc\)|^chore\(dev\)|^docs\(claude\)'; then
+              continue   # 反正會被跳過，不用檢查它動了哪些檔案
+            fi
+
+            FLAGGED=$(git show --name-only --format="" "$sha" \
+              | grep -E '^poc/|^dev-tracker/|^experiments/REPORTING_GUIDE\.md$|^CLAUDE\.md$|^AGENTS\.md$|^GEMINI\.md$' \
+              || true)
+            if [ -n "$FLAGGED" ]; then
+              echo "::error::Commit $sha ($MSG) is not tagged chore(poc)/chore(dev)/docs(claude) but touches a dev-only path:"
+              echo "$FLAGGED" | sed 's/^/::error::  /'
+              FAILED=1
+            fi
+          done <<< "$NEW_COMMITS"
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo "One or more commits mix dev-only paths with public paths."
+            echo "Fix the commit's category or split it on dev, then retrigger this workflow."
+            exit 1
+          fi
+
+          echo "All candidate commits are clean — no dev-only paths mixed in."
+
       - name: Create release branch and cherry-pick public commits
         id: clean_branch
         run: |
