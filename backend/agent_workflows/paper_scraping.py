@@ -89,19 +89,27 @@ def _extract_display_names(items: list) -> Optional[List[str]]:
 
 
 def _extract_arxiv_id(work: dict) -> Optional[str]:
-    """Extract ArXiv ID from OpenAlex work locations. Strips version suffix.
+    """Extract ArXiv ID from OpenAlex work locations, falling back to the DOI.
+    Strips version suffix.
 
     ArXiv IDs are NOT in work["ids"] — they appear only in work["locations"]
     landing_page_url values (e.g. "https://arxiv.org/abs/1706.03762v5").
     Version suffix is stripped so constructed PDF URLs always resolve to the
     latest version: https://arxiv.org/pdf/1706.03762
+
+    Fallback: some records have no arxiv.org entry in locations at all, even
+    though the paper is ArXiv-native — ArXiv's own DOI prefix (10.48550)
+    encodes the ArXiv ID directly (e.g. "10.48550/arxiv.2501.06425").
     """
     for loc in work.get("locations", []):
         url = loc.get("landing_page_url") or ""
         if "arxiv.org" in url:
             raw = url.rstrip("/").split("/")[-1]
             return re.sub(r"v\d+$", "", raw)    # "1706.03762v5" → "1706.03762"
-    return None
+
+    doi = (work.get("ids") or {}).get("doi") or work.get("doi") or ""
+    m = re.search(r"10\.48550/arxiv\.([\w.]+)", doi)
+    return m.group(1) if m else None
 
 
 def _paper_filename(paper: "Paper") -> str:
@@ -318,9 +326,18 @@ def _fetch_and_write(url: str, dest: Path) -> None:
 
     Browser headers are required: some OA publishers (e.g. AAAI OJS) block
     requests with the default python-requests User-Agent with HTTP 403.
+    Validates the response body starts with the PDF magic bytes (%PDF-)
+    rather than trusting the HTTP status code alone — some hosts return 200
+    for an HTML error/abstract page instead of the direct PDF.
     """
     response = requests.get(url, headers=_BROWSER_HEADERS, timeout=30)
     response.raise_for_status()
+    if not response.content.startswith(b"%PDF-"):
+        content_type = response.headers.get("Content-Type", "")
+        raise ValueError(
+            f"Response is not a PDF (Content-Type: {content_type}, "
+            f"does not start with %PDF- magic bytes)"
+        )
     dest.write_bytes(response.content)
 
 
@@ -387,7 +404,10 @@ class PaperDownloader:
         content = Works()[openalex_id].pdf.get()
         if content is None:
             raise ValueError("pyalex returned no PDF content")
-        dest.write_bytes(content if isinstance(content, bytes) else content.encode())
+        content_bytes = content if isinstance(content, bytes) else content.encode()
+        if not content_bytes.startswith(b"%PDF-"):
+            raise ValueError("pyalex returned content that is not a PDF (missing %PDF- magic bytes)")
+        dest.write_bytes(content_bytes)
 
     def _openalex_oa_url(self, oa_url: str, dest: Path) -> None:
         _fetch_and_write(oa_url, dest)
