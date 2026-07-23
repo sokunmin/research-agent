@@ -142,7 +142,7 @@ This repository is a fork of
   - [Exp 2 — Re-ranking & Verification Pipeline](#experiment-2--re-ranking--verification-pipeline---2026-03-17)
   - [Exp 3 — Threshold Analysis for System Routing](#experiment-3--threshold-analysis-for-system-routing---2026-03-17)
   - [Exp 4 — PDF Download Reliability](#experiment-4--pdf-download-reliability---2026-03-18)
-  - [Exp 5 — Query Transformation for BM25 Retrieval](#experiment-5--query-transformation-for-bm25-retrieval---2026-05-14)
+  - [Exp 5 — Query Transformation: Structured Extraction](#experiment-5--query-transformation-structured-extraction---2026-07-15)
 - [Slide Generation Pipeline](#experiments--slide-generation-pipeline)
   - [Exp 6 — Structured Output Method Comparison](#experiment-6--structured-output-method-comparison---2026-03-28)
   - [Exp 7 — Slide Layout Selection](#experiment-7--slide-layout-selection---2026-04-02)
@@ -262,21 +262,18 @@ Research Topic
 
 ---
 
-#### Experiment 5 — Query Transformation for BM25 Retrieval   (2026-05-14)
+#### Experiment 5 — Query Transformation: Structured Extraction   (2026-07-15)
 
 **System Architecture:** Step 1 — Paper Retrieval (query transformation sub-step)
 
-| | Strategy A: Raw query | Strategy C: Clean topic + dynamic filters ✅ |
+| Metric | Single-Call Design ✅ | Split-Call Design |
 |---|---|---|
-| BM25 input | Original user query | LLM-extracted clean_topic |
-| Filters | Fixed defaults | LLM-extracted year_window + min_citations |
-| mean_sim@20 (median, N=25) | 0.5321 | 0.5557 |
-| precision@5 (mean, N=20) | 0.120 | 0.185 |
-| A vs C significance | — | p=0.0043 ✓ |
+| Mean topic-keyword quality (1–3) | **2.92** | 2.65 |
+| LLM calls per query | **1** | 2 |
 
-- *Problem:* Raw queries with time or citation constraint phrases cause BM25 to match constraint words as topic terms — median mean_sim@20 = 0.5321 on the 25-query test set.
-- *Change:* A single LLM call extracts clean_topic, year_window, and min_citations from the user query; clean_topic replaces the raw query for BM25 search; extracted filter values are applied to OpenAlex quality filters.
-- *Result:* median mean_sim@20 +4.4% (p=0.0043); topic cleaning delivers the full retrieval gain; dynamic filters added at zero extra LLM cost to preserve user-expressed constraints.
+- *Problem:* lz-chen's paper-discovery step cannot filter candidate papers by recency or citation count, and has no LLM step of any kind to interpret those preferences from the query.
+- *Change:* Compared a single LLM call against a split two-call design for extracting the search topic and those preferences; the single-call design's exact prompt wording was integrated.
+- *Result:* The single-call design ties on structured field accuracy and wins on topic-keyword quality (2.92 vs. 2.65 out of 3), while issuing half as many LLM calls per query.
 
 > ✅ INTEGRATED
 > → Full report: [experiments/01-openalex-paper-discovery/05-query_transformation_strategies.md](experiments/01-openalex-paper-discovery/05-query_transformation_strategies.md)
@@ -438,7 +435,7 @@ PDF file
       │  Recall@5 = 0.608
       ▼
  [Exp 13] RAG vs VLM summarization quality?
- RAG factuality 0.945 vs VLM 0.787; 16.5× faster
+ RAG factuality 0.945 vs VLM 0.787; 11.3× faster on average
       │
       ▼
   Paper summary → Slide Outline + HITL
@@ -504,7 +501,7 @@ Acknowledgements, Ethics sections — with zero false positives across 28 papers
 |---|---|---|---|---|
 | avg_factuality | 0.787 | **0.945** | 0.889 | 0.925 |
 | avg_hallucination_rate | 0.136 | 0.036 | 0.049 | **0.020** |
-| avg_latency_s | 242.3 | 14.7 | 36.9 | **13.9** |
+| avg_latency_s | 165.6 | 14.7 | 36.9 | **13.9** |
 
 - *Problem:* VLM summarization (PDF pages → images → vision model) had never been
   evaluated for factual accuracy; latency of 200–300s per paper on M1 made
@@ -512,7 +509,7 @@ Acknowledgements, Ethics sections — with zero false positives across 28 papers
 - *Change:* Compared 4 strategies on 8 ML papers using `claude-sonnet-4-6` NLI
   classification to score factual accuracy against the full paper text.
 - *Result:* `rag_fixed_queries` achieves avg_factuality = 0.945 (+0.158 over
-  VLM's 0.787) at 16.5× lower latency (14.7s vs 242.3s); ChunkFilter reduces
+  VLM's 0.787) at 11.3× lower latency on average (14.7s vs 165.6s); ChunkFilter reduces
   unverifiable claim rate to 1.9%.
 
 > ✅ **In current pipeline**

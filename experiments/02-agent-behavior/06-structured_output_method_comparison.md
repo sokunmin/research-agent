@@ -1,15 +1,32 @@
-# Experiment 6 — Constrained Decoding vs. Text Completion: Structured Output Method Selection for Local LLMs
+# Experiment 6 — Constrained Decoding vs. Text Completion: Structured Output Method Selection Across LiteLLM Providers
 
 ## Task Context
 
 This experiment targets **Step 5 — Slide Outline + Human-in-the-Loop** from the system architecture (README → System Architecture).
+
+Before the pipeline diagram, two terms need defining: a PPTX **layout** and its **placeholders**. A slide is built from a layout (a pre-designed template slot) containing one or more placeholders (text boxes with a fixed position and style). One `.pptx` template file defines multiple layouts (e.g. "Title Slide", "Section Header", "Blank"), each with a different placeholder arrangement.
+
+```
+┌──────────────────────────────────────┐
+│  Layout: "Title and Content"         │  ← layout_name
+│  ┌─────────────────────────────┐     │
+│  │ Placeholder idx=0 (Title)   │     │  ← idx_title_placeholder
+│  └─────────────────────────────┘     │
+│  ┌─────────────────────────────┐     │
+│  │ Placeholder idx=1 (Content) │     │  ← idx_content_placeholder
+│  │                             │     │
+│  └─────────────────────────────┘     │
+└──────────────────────────────────────┘
+```
+
+Given one slide's text content, the LLM's job in this step is to pick which layout fits it and which placeholder index each piece of text belongs in. lz-chen's original does not ship a template file — `SLIDE_TEMPLATE_PATH` points to a personal, gitignored PPTX from her employer's branding. This fork supplies its own template asset instead.
 
 ```
 Input: paper summaries (*.md, one per paper)        ← Step 4: Summarization
       │
       ▼
 ┌── 5. SLIDE OUTLINE + HUMAN-IN-THE-LOOP ───────────────────────────────┐
-├─── Original (lz-chen) ───────────┬─── My Implementation ─────────────┤
+├─── Original (lz-chen) ───────────┬─── My Implementation ──────────────┤
 │ GPT-4o: 1 outline per paper      │ Local LLM: 1 title slide           │
 │ FunctionCallingProgram           │           + 4 content slides       │
 │ HITL: approve / reject           │ LLMTextCompletionProgram           │
@@ -39,7 +56,7 @@ Step 5 — Slide Outline + Human-in-the-Loop (detail)
  ┌─── EXPERIMENT TARGET ────────────────────────────────────────┐
  │ [outlines_with_layout]                                       │
  │   For each content slide:                                    │
- │     LLM picks layout from the PPTX template                 │
+ │     LLM picks layout from the PPTX template                  │
  │   Input:  SlideOutline { title, content }                    │
  │   Prompt: AUGMENT_LAYOUT_PMT                                 │
  │   Output: SlideOutlineWithLayout { title, content,           │
@@ -58,12 +75,9 @@ Step 5 — Slide Outline + Human-in-the-Loop (detail)
 
 ## Summary
 
-- **Problem:** The layout selection step requires the LLM to return a structured JSON object (layout name + placeholder indices) for deterministic PPTX rendering downstream.
-  - The default function-calling API silently failed on all tested local models — 0% valid output, pipeline blocked.
-  - Root cause was unknown: Ollama API incompatibility vs prompt design vs model capability.
-- **Solution:** Systematically compared all 5 LlamaIndex structured output APIs across 2 local models and 4 prompt variants — 360 LLM calls total.
-- **Result:** Text Completion was adopted as the pipeline solution — works across all LiteLLM providers (OpenAI, Anthropic, Ollama, Gemini).
-  - Ollama Format Parameter achieves 100% accuracy regardless of prompt quality, but is Ollama-specific — incompatible with the multi-provider requirement.
+- **Problem:** lz-chen's original produces every slide through one fixed path — Azure OpenAI's GPT-4o calling its native function-calling API to generate a single text block per paper. Structured output and LLM provider are coupled into that one mechanism, so nothing in the design indicates whether the same approach still works if the provider or model changes.
+- **Solution:** Compared 6 ways to get structured JSON out of an LLM — native function calling, four text-completion variants, and provider-native schema enforcement — across 5 models (2 local, 3 cloud) and 4 prompt variants.
+- **Result:** Text completion was adopted as the pipeline solution — the only strategy, alongside one close variant, to reach 100% success on every model tested, while function calling failed on both local models and one of three cloud providers.
 
 ---
 
@@ -71,34 +85,401 @@ Step 5 — Slide Outline + Human-in-the-Loop (detail)
 
 ✅ = currently used in the pipeline
 
-### Objective
+### Shared Test Configuration
 
-- **Problem:** `FunctionCallingProgram` crashes silently on all Ollama models — 0% valid output, pipeline blocked
-- **Goal:** Which LlamaIndex structured output method reliably returns valid Pydantic JSON across 2 models and 4 prompt variants, and stays compatible with LiteLLM multi-provider routing?
-- **Pass condition:** 100% valid JSON output
+| Parameter | Value |
+|---|---|
+| Slide test case | 1 academic content slide ("Attention Is All You Need") |
+| Runs per combination | 1 |
+| Total LLM calls | 120 (108 real + 12 auto-skipped) |
+| Execution mode | Ollama models sequential; cloud API models concurrent via `asyncio.gather` |
 
-### Methods compared
+### Models Compared
+
+| Model | Type |
+|---|---|
+| `ollama/gemma3:4b` | Local (Ollama) |
+| `ollama/ministral-3:14b-cloud` | Local (Ollama, 14B) |
+| `groq/openai/gpt-oss-20b` | Cloud API |
+| `openrouter/google/gemini-3.1-flash-lite-preview` | Cloud API |
+| `gemini/gemini-3.1-flash-lite-preview` | Cloud API |
+
+### Methods Compared
 
 **Three underlying approaches:**
 - **Function Calling** — structure enforced by the model's native tool-call API (model-side)
 - **Text Completion** — model outputs JSON as text; client-side Pydantic parser validates it
-- **Grammar Enforcement** — Ollama server constrains token generation to valid JSON (server-side decoding)
+- **Constrained Decoding** — the serving layer masks the model's token probabilities at generation time so only schema-valid tokens can be produced (server-side)
 
-| Method | LlamaIndex API | Mechanism |
+| Method | API Owner | Mechanism |
 |---|---|---|
-| Function Calling | `FunctionCallingProgram` | Relies on the model's native tool/function-calling capability via LiteLLM. Fails if the model does not support it. |
-| Text Completion ✅ | `LLMTextCompletionProgram` | Appends JSON schema instructions to the prompt; parses the text output into the Pydantic model. No native tool call required. |
-| Ollama Format Parameter | `LLMTextCompletionProgram` + Ollama `format` kwarg | Same as Text Completion, but passes the Pydantic schema as `format` in `additional_kwargs`. Ollama enforces grammar-constrained decoding server-side — output is valid JSON before it leaves the model. Ollama-only. |
-| Structured LLM Wrapper | `llm.as_structured_llm()` → `acomplete()` | Wraps the LLM with `as_structured_llm(OutputCls)`; the parsed Pydantic object is in `response.raw`. |
-| Structured Predict | `llm.astructured_predict()` with `PydanticProgramMode.LLM` | Routes through LlamaIndex's LLM-mode structured prediction; uses text completion internally. |
+| Function Calling | LlamaIndex (`FunctionCallingProgram`) | Relies on the model's native tool/function-calling capability via LiteLLM. Fails if the model does not support it. |
+| Text Completion ✅ | LlamaIndex (`LLMTextCompletionProgram`) | Appends JSON schema instructions to the prompt; parses the text output into the Pydantic model. No native tool call required. |
+| Ollama Format Parameter | LlamaIndex (`LLMTextCompletionProgram`) + Ollama server | Same as Text Completion, but passes the Pydantic schema as `format` in `additional_kwargs`. Ollama enforces grammar-constrained decoding server-side. Ollama-only — auto-skipped for cloud models. |
+| Structured LLM Wrapper | LlamaIndex (`as_structured_llm()`) | Wraps the LLM with `as_structured_llm(OutputCls)`; the parsed Pydantic object is read from `response.raw`. |
+| Structured Predict | LlamaIndex (`astructured_predict()`) | Routes through LlamaIndex's LLM-mode structured prediction; uses text completion internally. |
+| Provider-Native Schema | litellm (bypasses LlamaIndex) | Calls `litellm.acompletion()` directly with `response_format=<Pydantic class>`, bypassing LlamaIndex entirely — the provider's own structured-output API enforces the shape. |
 
-### Primary metric — Success Rate
+<details>
+<summary>Function Calling — internal call chain</summary>
 
-Percentage of LLM calls returning valid JSON that matches the Pydantic schema without error.
-- `0%` = method produces no valid output (crashes, returns schema definition, or malformed JSON)
-- `100%` = all outputs are valid
+~~~text
+FunctionCallingProgram(Function Calling)
 
-### Prompt variants
+from_defaults() construction step — can fail here, before any call
+        │
+        ▼
+if not llm.metadata.is_function_calling_model:
+    raise ValueError(...)
+        │  → pure local lookup (litellm's bundled model_cost table)
+        │  → no API call at all; the 0.3-0.8s failure is table-lookup overhead
+        ▼
+lookup result = supported → proceed
+        │
+        ▼
+wrap the Pydantic schema as a tool
+        │
+        ▼
+llm.apredict_and_call([tool], ...)
+        │  → llm.achat(tools=[tool], ...)
+        ▼
+extract tool_calls from the response, construct directly:
+   output_cls(**tool_kwargs)
+        │  ★ no regex, no text parsing —
+        │    the Pydantic object is built straight from the API's
+        │    native tool-call arguments
+        ▼
+return Model instance (or ValueError/TypeError)
+
+★ A completely different mechanism family from the text-completion
+  methods — relies on whether the model was trained for tool calling
+  and whether the API natively supports it.
+~~~
+
+</details>
+
+<details>
+<summary>Text Completion — internal call chain</summary>
+
+~~~text
+LLMTextCompletionProgram (Text Completion — the method chosen for the pipeline)
+
+llm.chat() returns raw text
+        │
+        ▼
+PydanticOutputParser.parse(raw_text)
+        │  → extract_json_str()  regex \{.*\} (DOTALL) grabs everything
+        │    between the first { and the last }
+        │  → model_validate_json()
+        ▼
+return Model instance
+
+★ A fixed, non-branching path — the same logic runs regardless of
+  which model is behind it.
+~~~
+
+</details>
+
+<details>
+<summary>Ollama Format Parameter — internal call chain</summary>
+
+~~~text
+LLMTextCompletionProgram + Ollama format kwarg (Ollama Format Parameter)
+
+Same LLMTextCompletionProgram as Text Completion — the only difference
+is an extra additional_kwargs={"format": schema}
+        │
+        ▼
+LiteLLM wrapper._model_kwargs merges format in
+        │
+        ▼
+litellm package: format isn't a standard parameter, falls into
+non_default_params
+        │
+        ▼
+Ollama-specific transform_request():
+   format = optional_params.pop("format")
+   data["format"] = format      ← placed into the outgoing HTTP body
+        │
+        ▼
+POST /api/chat, body carries the format field
+        │
+        ▼
+★ Python's involvement ends here — the actual grammar-constrained
+  decoding runs server-side in Ollama (llama.cpp), not in this codebase
+        │
+        ▼
+Response text is parsed by the same extract_json_str() (\{.*\} regex)
+as Text Completion
+        │  ★ Parsing is unchanged — same tolerance as Text Completion
+        ▼
+return Model instance
+~~~
+
+</details>
+
+<details>
+<summary>Structured LLM Wrapper — internal call chain</summary>
+
+~~~text
+as_structured_llm() (Structured LLM Wrapper)
+
+new StructuredLLM(llm=self, output_cls=...)
+        │  (does not mutate the original llm object — wraps it in a new shell)
+        ▼
+StructuredLLM.chat() internally calls:
+   self.llm.structured_predict(...)
+        │
+        ▼
+★ Reuses the entire branching logic from Structured Predict below!
+   The PoC code never explicitly sets pydantic_program_mode here,
+   so it stays at DEFAULT → the is_function_calling_model check
+   branches dynamically, per model
+        │
+        ▼
+Result lands in response.raw (not returned directly — wrapped in a
+ChatResponse)
+~~~
+
+</details>
+
+<details>
+<summary>Structured Predict — internal call chain</summary>
+
+~~~text
+astructured_predict() (Structured Predict)
+
+get_program_for_llm(pydantic_program_mode=...)
+        │
+        ▼
+checks the llm.pydantic_program_mode field
+        │
+    ┌───┴─────────────────────────┐
+    ▼                             ▼
+= DEFAULT                       = LLM (the PoC code explicitly forces this)
+    │                             │
+    ▼                             ▼
+checks is_function_calling_model  goes straight to LLMTextCompletionProgram
+on the model                      (identical to the Text Completion method)
+    │
+  ┌─┴──────┐
+  ▼        ▼
+ True     False
+  │        │
+  ▼        ▼
+native    LLMTextCompletionProgram
+Function  (same as Text Completion)
+Calling
+
+★ Because the PoC code forces pydantic_program_mode = LLM before every
+  call, this method is guaranteed to always take the safe text-completion
+  path — it never depends on which model is behind it.
+~~~
+
+</details>
+
+<details>
+<summary>Provider-Native Schema — internal call chain</summary>
+
+~~~text
+litellm.acompletion(response_format=...) (Provider-Native Schema)
+
+Bypasses LlamaIndex entirely, calls the litellm package directly
+        │
+        ▼
+Step 1 — normalize the schema into one canonical shape regardless of
+provider:
+   type_to_response_format_param()
+   → {"type": "json_schema", "json_schema": {"schema": {...}, "strict": True}}
+        │
+        ▼
+Step 2 — branches per provider
+    ┌─────────────┬───────────────────────┬──────────────────┐
+    ▼             ▼                       ▼
+  OpenAI        Ollama (ministral-3:14b-  Gemini
+  passed as-is  cloud goes this way)      written into
+                unwraps the envelope,     generationConfig.
+                puts the raw schema       responseSchema
+                back into Ollama's own
+                format field
+                ★ ends up almost
+                  identical to what
+                  Ollama Format Parameter
+                  sends!
+        │
+        ▼
+Response parsing: _strip_json_fence() — a hand-written regex
+   Only recognizes a ```json ... ``` code-fenced block; if the
+   response isn't fenced that way, it falls back to text.strip()
+   as-is
+        │  ★ Much stricter than the \{.*\} regex used by Text
+        │    Completion / Ollama Format Parameter
+        ▼
+model_validate_json(content)
+→ returns a Model instance, or fails validation outright
+~~~
+
+</details>
+
+### Structured Output Fields
+
+`SlideOutlineWithLayout` — the Pydantic schema every method must produce:
+
+| Field | Meaning |
+|---|---|
+| `title` | Slide title text, copied verbatim from the input |
+| `content` | Slide body text, copied verbatim from the input |
+| `layout_name` | Name of the chosen layout from the PPTX template (e.g. "Title and Content") |
+| `idx_title_placeholder` | Index of the placeholder that holds the title, within the chosen layout |
+| `idx_content_placeholder` | Index of the placeholder that holds the body text, within the chosen layout |
+
+### Prompt Variants
+
+```
+Prompt 1 (original, verbatim lz-chen prompt)
+   │
+   │  remove Norwegian phrase + add explicit output field list
+   ▼
+Prompt 2 ──────────────┬──────────────
+   │                   │
+   │  add a worked     │  replace the field list with a
+   │  example          │  forceful "no schema wrapping" directive
+   ▼                   ▼
+Prompt 3            Prompt 4
+(Prompt 2 + example)  (Prompt 2's setup + new closing instruction)
+```
+
+Prompt 3 and Prompt 4 are independent branches off Prompt 2, each isolating one change — not a linear Prompt 1→2→3→4 progression.
+
+<details>
+<summary>Prompt 1 (original) — full text</summary>
+
+~~~text
+You are an AI that selects slide layout from a template for the slide text given.
+You will receive a page content with title and main text.
+Your task is to select the appropriate layout and information such as index of the placeholder for the page
+ based on what type of the content it is (e.g. is it topic overview/agenda,
+ or actual content, or thank you message).
+For content slides, make sure to
+ - choose a layout that has content placeholder (also referred to as 'Plassholder for innhold')
+ after the title placeholder
+ - choose the content placeholder that is large enough for the text content
+
+The following layout are available: {available_layout_names} with their detailed information:
+{available_layouts}
+
+Here is the slide content:
+{slide_content}
+~~~
+
+</details>
+
+<details>
+<summary>Prompt 2 (field descriptions added) — full text</summary>
+
+~~~text
+You are an AI that selects the most appropriate slide layout for given slide content.
+You will receive a slide with a title and main text body.
+
+Select the layout and placeholder indices based on the content type
+(e.g. agenda/overview, regular content, title slide, or closing/thank-you slide).
+
+For content slides:
+ - choose a layout that has a content placeholder after the title placeholder
+ - choose the content placeholder that is large enough for the text
+
+The following layouts are available: {available_layout_names} with their detailed information:
+{available_layouts}
+
+Here is the slide content:
+{slide_content}
+
+Output the following fields:
+- title: the slide title text (copy verbatim from input)
+- content: the slide body text (copy verbatim from input)
+- layout_name: the exact name string of the chosen layout (must match one of the available layout names)
+- idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout
+- idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout
+~~~
+
+</details>
+
+<details>
+<summary>Prompt 3 (few-shot) — full text</summary>
+
+~~~text
+You are an AI that selects the most appropriate slide layout for given slide content.
+You will receive a slide with a title and main text body.
+
+Select the layout and placeholder indices based on the content type
+(e.g. agenda/overview, regular content, title slide, or closing/thank-you slide).
+
+For content slides:
+ - choose a layout that has a content placeholder after the title placeholder
+ - choose the content placeholder that is large enough for the text
+
+The following layouts are available: {available_layout_names} with their detailed information:
+{available_layouts}
+
+--- Example ---
+Slide content:
+  title: "Deep Learning for NLP"
+  content: "* Recurrent Networks\n* Transformers\n* BERT pre-training"
+
+Expected output:
+  title:                    "Deep Learning for NLP"
+  content:                  "* Recurrent Networks\n* Transformers\n* BERT pre-training"
+  layout_name:              "Title and Content"
+  idx_title_placeholder:    "0"
+  idx_content_placeholder:  "1"
+--- End Example ---
+
+Here is the slide content:
+{slide_content}
+
+Output the following fields:
+- title: the slide title text (copy verbatim from input)
+- content: the slide body text (copy verbatim from input)
+- layout_name: the exact name string of the chosen layout (must match one of the available layout names)
+- idx_title_placeholder: the numeric index (as a string) of the title placeholder in the chosen layout
+- idx_content_placeholder: the numeric index (as a string) of the content placeholder in the chosen layout
+~~~
+
+</details>
+
+<details>
+<summary>Prompt 4 (no-wrap directive) — full text</summary>
+
+~~~text
+You are an AI that selects the most appropriate slide layout for given slide content.
+You will receive a slide with a title and main text body.
+
+Select the layout and placeholder indices based on the content type
+(e.g. agenda/overview, regular content, title slide, or closing/thank-you slide).
+
+For content slides:
+ - choose a layout that has a content placeholder after the title placeholder
+ - choose the content placeholder that is large enough for the text
+
+The following layouts are available: {available_layout_names} with their detailed information:
+{available_layouts}
+
+Here is the slide content:
+{slide_content}
+
+CRITICAL: Provide the ACTUAL VALUES for each field — not a schema, not a description.
+Do NOT wrap your answer inside a "properties" key or any JSON Schema structure.
+Do NOT output field definitions or type annotations. Output concrete values only.
+
+Required fields (fill each with the real value, not a placeholder):
+- title:                   copy the title string from the slide content above
+- content:                 copy the content string from the slide content above
+- layout_name:             the exact layout name string chosen from the available list
+- idx_title_placeholder:   the string form of the integer index for the title placeholder
+- idx_content_placeholder: the string form of the integer index for the content placeholder
+~~~
+
+</details>
 
 | Prompt | Description |
 |---|---|
@@ -109,205 +490,88 @@ Percentage of LLM calls returning valid JSON that matches the Pydantic schema wi
 
 > The prompt used in the pipeline was further redesigned in a follow-up experiment and is not directly equivalent to any of the 4 variants above. See the prompt experiment report for details.
 
-**Models:** `ollama/gemma3:4b`, `ollama/qwen3.5:4b`  
-**Slide test cases:** 3 types — academic content, agenda/overview, closing/thank-you  
-**Runs per combination:** 3  
-**Total LLM calls:** 360 (all sequential — Ollama does not support parallel inference)
+### Metrics
+
+| Metric | Definition | Role |
+|---|---|---|
+| Success Rate | Percentage of LLM calls returning valid JSON that matches the Pydantic schema without error. `0%` = crashes, returns schema definition, or malformed JSON. `100%` = all outputs valid. | Primary |
+| Avg Elapsed (s) | Mean wall-clock time per call, including any retries. | Secondary (latency) |
 
 ---
 
 ## Full Experimental Results
 
-### `ollama/gemma3:4b` — Success Rate
+### Success Rate — Prompts Passed per (Method × Model)
 
-- **Purpose:** Test all 5 structured output methods on `gemma3:4b` across 4 prompt variants
-- **Expected:** At least one method achieves 100% success rate on this model
+`x/4` = number of the 4 prompt variants that reached 100% success on this model.
 
-| Method | Prompt 1 (original) | Prompt 2 (field descriptions) | Prompt 3 (few-shot) | Prompt 4 (no-wrap) |
-|---|---|---|---|---|
-| Function Calling | 0% | 0% | 0% | 0% |
-| Text Completion ✅ | 0% | **100%** | **100%** | **100%** |
-| Ollama Format Parameter | **100%** | **100%** | **100%** | **100%** |
-| Structured LLM Wrapper | 0% | **100%** | **100%** | **100%** |
-| Structured Predict | 0% | **100%** | **100%** | **100%** |
+| Method | `gemma3:4b` | `ministral-3:14b-cloud` | `groq/gpt-oss-20b` | `openrouter/gemini` | `gemini` (direct) |
+|---|---|---|---|---|---|
+| Function Calling | 0/4 | 0/4 | 3/4 | 0/4 | 4/4 |
+| Text Completion ✅ | 4/4 | 4/4 | 4/4 | 4/4 | 4/4 |
+| Ollama Format Parameter | 4/4 | 4/4 | – | – | – |
+| Structured LLM Wrapper | 4/4 | 4/4 | 3/4 | 4/4 | 4/4 |
+| Structured Predict | 4/4 | 4/4 | 4/4 | 4/4 | 4/4 |
+| Provider-Native Schema | 4/4 | 0/4 | 1/4* | 4/4 | 4/4 |
 
-**Conclusion:** Function Calling fails at construction time on all prompts — grammar-constrained decoding works on any prompt, but text completion requires field descriptions added to the prompt for gemma3:4b.
+\* Groq's 1/4 is Prompt 4 only — the other 3 prompts fail due to rate-limit exhaustion at that point in the run, not a genuine method result.
 
-The 0.3–0.5s elapsed time for Function Calling is framework overhead, not a model response — the method crashes before inference starts, and this applies to both models across all 4 prompts.
+**Conclusion:** Text Completion and Structured Predict are the only two methods with zero failures across every model and prompt; both 3/4 cells (Structured LLM Wrapper on Groq) fail on the same prompt — the no-wrap directive that Prompt 4 adds.
 
-### `ollama/gemma3:4b` — Avg Elapsed (s) per Call
+### Latency — Range Across Successful Calls (seconds)
 
-| Method | Prompt 1 (original) | Prompt 2 | Prompt 3 | Prompt 4 |
-|---|---|---|---|---|
-| Function Calling | 0.5 | 0.4 | 0.4 | 0.4 |
-| Text Completion ✅ | 4.0 | 4.3 | 6.1 | 4.5 |
-| Ollama Format Parameter | 3.5 | 3.3 | 5.3 | 4.6 |
-| Structured LLM Wrapper | 3.8 | 4.6 | 5.8 | 4.5 |
-| Structured Predict | 3.5 | 4.2 | 5.6 | 4.6 |
+Range spans the fastest to slowest successful call across the 4 prompts; failing calls are excluded from the range (a fast failure isn't a fast result).
 
-**Conclusion:** Text-completion methods run at 3.5–6.1s on gemma3:4b — the few-shot prompt adds ~2s per call with no accuracy gain over field descriptions.
+| Method | `gemma3:4b` | `ministral-3:14b-cloud` | `groq/gpt-oss-20b` | `openrouter/gemini` | `gemini` (direct) |
+|---|---|---|---|---|---|
+| Function Calling | fails | fails | 0.5–4.6s | fails | 1.9–2.4s |
+| Text Completion ✅ | 7.3–13.0s | 1.8–2.2s | 0.6–4.7s | 1.1–2.0s | 1.4–4.7s |
+| Ollama Format Parameter | 6.9–7.6s | 1.8–47.6s† | – | – | – |
+| Structured LLM Wrapper | 7.6–7.9s | 2.1–2.5s | 4.5–4.7s | 2.3–3.0s | 2.1–2.6s |
+| Structured Predict | 7.4–8.2s | 1.8–2.2s | 4.6–13.0s | 1.4–1.8s | 2.2–3.5s |
+| Provider-Native Schema | 4.8–6.5s | fails | 0.8s | 1.8–7.9s | 1.9–3.0s |
 
----
+† A single anomalous 47.6s call on `ministral-3:14b-cloud` — a transient Ollama constrained-decoding stall, not typical latency for this method.
 
-### `ollama/qwen3.5:4b` — Success Rate
-
-- **Purpose:** Verify whether the same method findings hold on `qwen3.5:4b`
-- **Expected:** Results broadly consistent with `gemma3:4b` — same methods pass or fail
-
-| Method | Prompt 1 (original) | Prompt 2 (field descriptions) | Prompt 3 (few-shot) | Prompt 4 (no-wrap) |
-|---|---|---|---|---|
-| Function Calling | 0% | 0% | 0% | 0% |
-| Text Completion ✅ | **100%** | **100%** | **100%** | **100%** |
-| Ollama Format Parameter | **100%** | **100%** | **100%** | **100%** |
-| Structured LLM Wrapper | **100%** | **100%** | **100%** | **100%** |
-| Structured Predict | **100%** | **100%** | **100%** | **100%** |
-
-**Conclusion:** qwen3.5:4b is more robust than gemma3:4b — text completion works on the original prompt without field descriptions.
-
-### `ollama/qwen3.5:4b` — Avg Elapsed (s) per Call
-
-| Method | Prompt 1 (original) | Prompt 2 | Prompt 3 | Prompt 4 |
-|---|---|---|---|---|
-| Function Calling | 0.3 | 0.3 | 0.3 | 0.4 |
-| Text Completion ✅ | 8.1 | 7.9 | 7.7 | 7.9 |
-| Ollama Format Parameter | 7.5 | 7.7 | 7.4 | 8.2 |
-| Structured LLM Wrapper | 7.7 | 8.3 | 8.0 | 8.1 |
-| Structured Predict | 7.6 | 8.2 | 7.9 | 8.0 |
-
-**Conclusion:** qwen3.5:4b runs ~2× slower than gemma3:4b per call but achieves consistent 100% success without prompt tuning.
-
----
-
-### Cross-Method Summary: Best Prompt per (Model × Method)
-
-- **Purpose:** Identify the best prompt per model per method to compare peak performance across all combinations
-- **Expected:** `Text Completion` and `Ollama Format Parameter` reach 100% for both models; `Function Calling` stays at 0%
-
-| Model | Method | Best Prompt | Success Rate |
-|---|---|---|---|
-| `ollama/gemma3:4b` | Function Calling | Prompt 1 (original) | 0% |
-| `ollama/gemma3:4b` | Text Completion ✅ | Prompt 2 (field descriptions) | 100% |
-| `ollama/gemma3:4b` | Ollama Format Parameter | Prompt 1 (original) | 100% |
-| `ollama/gemma3:4b` | Structured LLM Wrapper | Prompt 2 (field descriptions) | 100% |
-| `ollama/gemma3:4b` | Structured Predict | Prompt 2 (field descriptions) | 100% |
-| `ollama/qwen3.5:4b` | Function Calling | Prompt 1 (original) | 0% |
-| `ollama/qwen3.5:4b` | Text Completion ✅ | Prompt 1 (original) | 100% |
-| `ollama/qwen3.5:4b` | Ollama Format Parameter | Prompt 1 (original) | 100% |
-| `ollama/qwen3.5:4b` | Structured LLM Wrapper | Prompt 1 (original) | 100% |
-| `ollama/qwen3.5:4b` | Structured Predict | Prompt 1 (original) | 100% |
-
-**Conclusion:** Function Calling is the only method that cannot reach 100% regardless of prompt or model — all text-completion-based methods are equivalent at peak performance.
+**Conclusion:** Provider-Native Schema is fastest among the methods that succeed on `gemma3:4b`; latency on the cloud models is dominated by per-call rate-limit variance rather than by which JSON-generation method is used.
 
 ---
 
 ## Observations
 
-### Method selection: why Function Calling fails
+### Which methods have zero failures across the entire test matrix?
 
-```
-Bug: 0% structured output at outlines_with_layout
-      │
-      ▼
-Root cause: FunctionCallingProgram
-      │  No tool calling support in Ollama/LiteLLM
-      │  Crashes before inference → silent failure (0.3–0.5s)
-      │
-      ▼
-Switch to text-completion methods
-      │
-      ├─ gemma3:4b + Prompt 1 ──────────────────── 0% ✗
-      │    · No output field descriptions
-      │    · Norwegian placeholder name (Plassholder for innhold)
-      │      (`Plassholder for innhold` = "Content placeholder" in Norwegian —
-      │       from the original project's branded PPTX template by Inmeta,
-      │       a Norwegian IT consultancy)
-      │
-      ├─ gemma3:4b + Prompt 2 ──────────────────────── 100% ✓
-      │
-      ├─ qwen3.5:4b + Prompt 1 ─────────────────── 100% ✓
-      │
-      └─ Any model + Ollama `format` param ────────── 100% ✓
-            Server-side grammar enforcement
-            Works even with broken Prompt 1
-            (Ollama-only — see Decision for why not chosen)
-```
+Text Completion and Structured Predict are the only two methods that reach 100% success on every one of the 5 models across all 4 prompts — zero failures in 20 of 20 combinations each.
 
-**Conclusion:** Function Calling crashes silently before inference — text-completion methods succeed but gemma3:4b requires field descriptions in the prompt.
-- The 0.3–0.5s elapsed time is framework overhead, not a model response. The method crashes before inference starts. Easy to miss without explicit error logging.
-- qwen3.5:4b requires thinking mode disabled; otherwise chain-of-thought tokens break JSON parsing.
-- Slide content type has no effect on success rate. All three types — academic content, agenda, and closing — pass or fail together for every method-prompt combination.
+- Every other method fails on at least 1 of 5 models: Function Calling on 3, Ollama Format Parameter is inapplicable to 3 (cloud-only skip), Structured LLM Wrapper on 1 (Groq, Prompt 4), Provider-Native Schema on 1 (ministral, all prompts).
+- Both zero-failure methods are LlamaIndex text-completion paths — neither depends on native tool-calling or provider-side schema enforcement.
 
-### Prompt sensitivity: which prompt works per model
+### Does Function Calling fail on OpenRouter because of the model or the routing layer?
 
-```
-Prompt comparison — Text Completion method
-      │
-      ├─ Prompt 1 (original)
-      │    gemma3:4b  → 0%   ✗
-      │    qwen3.5:4b → 100% ✓  ← primary model, no change needed
-      │
-      ├─ Prompt 2 (field descriptions added)
-      │    gemma3:4b  → 100% ✓
-      │    qwen3.5:4b → 100% ✓
-      │
-      ├─ Prompt 3 (few-shot)
-      │    gemma3:4b  → 100% ✓
-      │    qwen3.5:4b → 100% ✓
-      │    +1–2s latency, no accuracy gain over Prompt 2
-      │
-      └─ Prompt 4 (no-wrap directive)
-           gemma3:4b  → 100% ✓
-           qwen3.5:4b → 100% ✓
-```
+Function Calling fails 100% of the time on the OpenRouter-routed Gemini model but succeeds 100% of the time on the same underlying model called directly through the Gemini API, showing the failure is a routing-layer capability check rather than a model limitation.
 
-**Conclusion:** Prompt 1 is kept for the pipeline — qwen3.5:4b succeeds without changes, and gemma3:4b recovers with field descriptions added.
+- OpenRouter calls fail in 0.0s across all 4 prompts — no network request is made before the failure.
+- The direct Gemini API call succeeds on the identical model in 1.9–2.4s per call.
 
-Prompt 1 was kept because qwen3.5:4b (the primary model) already achieves 100% with it — no prompt changes needed. gemma3:4b achieves 100% with Prompt 2 (field descriptions added).
+### Why doesn't Structured LLM Wrapper's near-perfect score make it a safe alternative to Text Completion?
+
+Structured LLM Wrapper fails on Groq specifically because it silently defers to the same native tool-calling mechanism Function Calling uses whenever the underlying model supports it — inheriting that method's one weak spot instead of behaving as an independent implementation.
+
+- Structured LLM Wrapper and Function Calling fail on the exact same cell: Groq, Prompt 4 — the only prompt either method fails on that model.
+- Every other model and prompt combination for Structured LLM Wrapper matches Text Completion's 4/4 score exactly, making this one shared failure the only signal that separates the two methods' reliability.
 
 ---
 
 ## Decision
 
-```
-Which method works across ALL providers?
-      │
-      ├── Ollama Format Parameter (METHOD_C)
-      │     ✓ 100% on any prompt — server-side grammar enforcement
-      │     ✗ Ollama-specific — breaks on cloud providers
-      │     → REJECTED: incompatible with multi-provider requirement
-      │
-      ├── Text Completion / LLMTextCompletionProgram (METHOD_B) ✅
-      │     ✓ 100% on all providers (OpenAI, Anthropic, Ollama, Gemini)
-      │     ✓ Explicit program factory — stateless, no side effects
-      │     △ gemma3:4b requires Prompt 2 (field descriptions added)
-      │     → CHOSEN: universal compatibility, most direct API
-      │
-      ├── Structured LLM Wrapper (METHOD_D)
-      │     ✓ 100% — same accuracy as METHOD_B
-      │     ✓ Works on all providers
-      │     △ Requires manual prompt formatting + response.raw access
-      │     → NOT CHOSEN: equal result, more steps than METHOD_B
-      │
-      ├── Structured Predict (METHOD_E)
-      │     ✓ 100% — same accuracy as METHOD_B
-      │     ✓ Works on all providers
-      │     △ Modifies LLM instance state (pydantic_program_mode)
-      │     → NOT CHOSEN: equal result, side-effect risk vs METHOD_B
-      │
-      └── Function Calling (METHOD_A)
-            ✗ 0% on all Ollama models — crashes at construction time
-            → REJECTED: fundamentally incompatible with Ollama/LiteLLM
-```
+### Which structured-output method for the pipeline?
 
-Text Completion, Structured LLM Wrapper, and Structured Predict all use text completion internally and reach 100% for both models. Text Completion was picked over the other two — same result, and the most direct LlamaIndex API with no extra wrapping. gemma3:4b needs Prompt 2 (field descriptions) under any text-completion method. For qwen3.5:4b, Prompt 1 works as-is.
+Text Completion is chosen over Structured Predict — the only other zero-failure method — because it needs no forced configuration step to reach that reliability.
+
+- Structured Predict only matches Text Completion's reliability because the code forces a global setting on the shared LLM instance before every call — an extra step whose absence is easy to miss when debugging.
 
 ---
 
 ## Pipeline Integration Status ✅ INTEGRATED
 
 Text completion method replaced function calling in `slide_gen.py` → `_text_program()` → `outlines_with_layout`.
-
-### Impact
-
-- Structured output reliability: 0% → 100% for all Ollama models.
-- Compatible with all LiteLLM providers (OpenAI, Anthropic, Ollama, Gemini) — no provider lock-in.

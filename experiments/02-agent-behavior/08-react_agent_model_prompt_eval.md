@@ -1,8 +1,10 @@
-# Experiment 8 — ReAct Agent: Model & Prompt Evaluation for PPTX Rendering
+# Experiment 8 — ReAct Agent: Model and Prompt Selection for PPTX Rendering
 
 ## Task Context
 
-This experiment targets **Step 6 — PPTX Rendering** (original ReAct approach) from the system architecture (README → System Architecture). This is the first of three sequential experiments (Exp 7 → Exp 8 → Exp 9). Together they progressively diagnosed each failure layer of the ReActAgent approach — forming the evidence trail for replacing it with deterministic rendering. The original author used GPT-4o in a ReActAgent loop to generate python-pptx code at runtime and execute it in an Azure sandbox. The fork replaces the hard-coded Azure dependency with a provider-agnostic LiteLLM layer — any LLM provider is switchable via `.env` with no code changes. To validate pipeline feasibility without cloud cost or access constraints, local SLMs (~4B parameters) served via Ollama on an M1 MacBook are used as the test vehicle. This experiment identifies which local SLM and prompt configuration can reliably drive the same ReAct loop.
+This experiment targets **Step 6 — PPTX Rendering** (original ReAct approach) from the system architecture (README → System Architecture).
+
+lz-chen's original renders slides through a ReActAgent bound to Azure GPT-4o. The model writes python-pptx code as free text, and the agent executes it in an Azure sandbox. This experiment tests whether the same ReAct loop holds up when the model is swapped for a local, ~4B-parameter class run through Ollama on an M1 MacBook. It is the first of three experiments — Exp 8 → Exp 9 → Exp 10 — that progressively test this ReActAgent approach, motivating its eventual replacement by deterministic rendering.
 
 ```
 Input: slide_outlines.json + PPTX template       ← Step 5: Slide Outline + HITL
@@ -27,32 +29,44 @@ Step 6 has two ReActAgent-driven sub-steps with a VLM validation loop in between
 
 ```
 Step 6 — PPTX Rendering (detail)
-──────────────────────────────────────────────────────────────────
+lz-chen's original tool and prompt names; this experiment substitutes `llm-sandbox`'s equivalent
+execution tool (tested as `run_code` throughout this report) because Azure access was unavailable.
+──────────────────────────────────────────────────────────────────────────────────────
  slide_outlines.json + PPTX template
        │
        ▼
- ┌─── EXPERIMENT TARGET ──────────────────────────────────────────┐
- │                                                                │
- │  ① [slide_gen]                                                 │
- │     ReActAgent · SLIDE_GEN_PMT · max_iterations=50            │
- │     Tools: run_code, list_files, upload_file, get_all_layout   │
- │       │                                                        │
- │       ▼  paper_summaries.pptx                                  │
- │  ② [validate_slides]   VLM per slide image  ◄───────────────┐ │
- │       │                                                      │ │
- │       ├─ all OK ────────────────── stop: final.pptx ✓        │ │
- │       │                                                      │ │
- │       └─ issues found AND n_retry < 2                        │ │
- │              │                                               │ │
- │              ▼                                               │ │
- │  ③ [modify_slides]                                           │ │
- │     ReActAgent · SLIDE_MODIFICATION_PMT · max_iterations=50  │ │
- │     saves paper_summaries_v{n_retry}.pptx                    │ │
- │              │                                               │ │
- │              └───────────────────────────────────────────────┘ │
- │                    (up to 2 retries; n_retry ≥ 2 → ✗)          │
- │                                                                │
- └────────────────────────────────────────────────────────────────┘
+ ┌─── EXPERIMENT TARGET ──────────────────────────────────────────────────────────────┐
+ │                                                                                    │
+ │  ① [slide_gen]                                                                    │
+ │  ┌─── Original (lz-chen) ────────────────┬─── My Implementation ──────────────┐    │
+ │  │ ReActAgent · Azure GPT-4o             │ ReActAgent · local 4B LLM (Ollama) │    │
+ │  │ SLIDE_GEN_PMT · max_iterations=50     │ SLIDE_GEN_PMT · max_iterations=50  │    │
+ │  │ Tools: code_interpreter, list_files,  │ Tools: run_code, list_files,       │    │
+ │  │   upload_file, get_all_layout         │   upload_file, get_all_layout      │    │
+ │  │ Sandbox: Azure managed container      │ Sandbox: llm-sandbox (Docker)      │    │
+ │  └───────────────────────────────────────┴────────────────────────────────────┘    │
+ │       │                                                                            │
+ │       ▼  paper_summaries.pptx                                                      │
+ │  ② [validate_slides]   VLM per slide image  ◄──────────────────────────────────┐  │
+ │       │                                                                         │  │
+ │       ├─ all OK ──────────────────────────────────── stop: final.pptx ✓         │  │
+ │       │                                                                         │  │
+ │       └─ issues found AND n_retry < 2                                           │  │
+ │              │                                                                  │  │
+ │              ▼                                                                  │  │
+ │  ③ [modify_slides]                                                             │  │
+ │  ┌─── Original (lz-chen) ────────────────┬─── My Implementation ──────────────┐ │  │
+ │  │ ReActAgent · Azure GPT-4o             │ ReActAgent · local 4B LLM (Ollama) │ │  │
+ │  │ SLIDE_MODIFICATION_PMT                │ SLIDE_MODIFICATION_PMT             │ │  │
+ │  │ max_iterations=50                     │ max_iterations=50                  │ │  │
+ │  │ Sandbox: Azure managed container      │ Sandbox: llm-sandbox (Docker)      │ │  │
+ │  └───────────────────────────────────────┴────────────────────────────────────┘ │  │
+ │     saves paper_summaries_v{n_retry}.pptx                                       │  │
+ │              │                                                                  │  │
+ │              └──────────────────────────────────────────────────────────────────┘  │
+ │                    (up to 2 retries; n_retry ≥ 2 → ✗)                              │
+ │                                                                                    │
+ └────────────────────────────────────────────────────────────────────────────────────┘
        │
        ▼
  paper_summaries.pptx
@@ -69,19 +83,83 @@ Step 6 — PPTX Rendering (detail)
 
 If `slide_gen` fails to call `run_code`, no PPTX is produced and `validate_slides` receives nothing — the pipeline stalls. If `modify_slides` fails to call `run_code`, the same invalid slide deck re-enters `validate_slides` and is rejected until retries are exhausted.
 
+<details>
+<summary><strong>`slide_gen` — internal ReAct loop</strong> (expand for a turn-by-turn walkthrough)</summary>
+
+```
+Input: user message = "example outline item in JSON is {...}, generate a slide deck"
+Tools available: run_code, list_files, upload_file, get_all_layout
+
+┌─ Turn 1 ─────────────────────────────────────────────────────────────┐
+│ Thought: I need to write python-pptx code and execute it              │
+│ Action: run_code                                                       │
+│ Action Input: {"code": "prs = Presentation(...); ... prs.save(...)"}  │
+│        ▼ tool actually executes the code (mock: checks for prs.save())│
+│ Observation: "Execution successful. Files created:                    │
+│               /sandbox/paper_summaries.pptx"                          │
+└────────────────────────────────────────────────────────────────────┘
+┌─ Turn 2 (some models add this verification step) ───────────────────┐
+│ Thought: I should confirm the file exists                             │
+│ Action: list_files                                                     │
+│ Observation: ["pptx-template.pptx", "slide_outlines.json",             │
+│               "paper_summaries.pptx"]                                  │
+└────────────────────────────────────────────────────────────────────┘
+┌─ Final turn ──────────────────────────────────────────────────────────┐
+│ Answer: "Done. paper_summaries.pptx has been saved."                   │
+└────────────────────────────────────────────────────────────────────┘
+
+Failure mode: if the model outputs code as Answer text instead of an
+Action: run_code line, the tool never executes — 0 calls, no PPTX file
+is ever produced, even though the code itself may be correct.
+```
+
+</details>
+
+<details>
+<summary><strong>`modify_slides` — internal ReAct loop</strong> (expand for a turn-by-turn walkthrough)</summary>
+
+```
+Input: user message = "latest deck is at /sandbox/paper_summaries.pptx,
+  feedback: {slide_idx:2 text overflow, slide_idx:4 title cut off},
+  save as paper_summaries_v1.pptx"
+Tools available: same as slide_gen
+
+┌─ Turn 1 ─────────────────────────────────────────────────────────────┐
+│ Thought: confirm the existing file first                              │
+│ Action: list_files                                                     │
+│ Observation: ["pptx-template.pptx", "slide_outlines.json",             │
+│               "paper_summaries.pptx"]                                  │
+└────────────────────────────────────────────────────────────────────┘
+┌─ Turn 2 ─────────────────────────────────────────────────────────────┐
+│ Thought: apply the feedback — shrink font on slide 2, widen title      │
+│          box on slide 4                                                │
+│ Action: run_code                                                       │
+│ Action Input: {"code": "prs = Presentation('paper_summaries.pptx');    │
+│   ... prs.save('paper_summaries_v1.pptx')"}                           │
+│ Observation: "Execution successful. Files created:                    │
+│               /sandbox/paper_summaries_v1.pptx"                       │
+└────────────────────────────────────────────────────────────────────┘
+┌─ Final turn ──────────────────────────────────────────────────────────┐
+│ Answer: "Done. paper_summaries_v1.pptx has been saved."                │
+└────────────────────────────────────────────────────────────────────┘
+
+Failure mode: if the model's output is neither a valid Action: line nor
+an Answer: line, the loop repeats without progress until it hits the
+iteration/timeout limit — this is what happens with Prompt B in
+Sub-exp 3 below.
+```
+
+</details>
+
 ---
 
 ## Summary
 
-- **Problem:** The fork's provider-agnostic LiteLLM layer must support local SLMs as well as cloud models. Validating the ReAct-based rendering step with a local 4B SLM revealed a failure — models output code as text instead of calling the tool, producing no PPTX file.
-  - Root cause was unknown: prompt ambiguity vs fundamental model limitation.
-- **Solution:** 3-round evaluation across 4 models and 2 agent tasks:
-  - Round 1 — prompt fix validation on slide generation: qwen3.5:4b vs gemma3:4b
-  - Round 2 — gemma3n series viability on slide generation: 3 models
-  - Round 3 — prompt style comparison on slide modification: prose vs CRITICAL-style directive
-- **Result:** gemma3:4b was the only viable model across all rounds.
-  - Prompt style must match task ambiguity level — CRITICAL for high-ambiguity tasks, prose for low-ambiguity tasks. This applies to any future agent step design.
-  - The ReActAgent approach was superseded after Exp 8 confirmed it was not viable for local inference.
+- **Problem:** lz-chen's original drives PPTX generation through a ReActAgent loop bound to Azure GPT-4o, where the model writes python-pptx code as free-form text and the agent parses it into tool calls. Nothing in that design indicates whether the same loop, prompts, and tool-parsing behavior hold when the underlying model is a class smaller than GPT-4o.
+- **Solution:** An ablation tests four local Ollama models across both ReAct sub-steps — slide generation and slide modification — isolating model choice from prompt style as separate variables.
+  - Part A — model comparison for slide generation across four candidate models
+  - Part B — prompt style comparison for slide modification using the strongest candidate from Part A
+- **Result:** `gemma3:4b` is the only model that completes both sub-steps in a single tool call; the directive-style prompt that fixes slide generation breaks slide modification completely, 0 tool calls against a working 1-call baseline.
 
 ---
 
@@ -89,40 +167,75 @@ If `slide_gen` fails to call `run_code`, no PPTX is produced and `validate_slide
 
 > This experiment's approach was superseded by deterministic rendering — no ✅ applies. See Pipeline Integration Status.
 
-### Objective
+### Sub-Experiments
 
-- **Problem:** The original `SLIDE_GEN_PMT` causes 4B models to output code as text instead of calling `run_code` — 0 PPTX produced
-- **Goal:** Which model calls `run_code` in 1 attempt after the prompt fix, and does the same CRITICAL-style directive also work for `modify_slides`?
-- **Pass condition:** `run_code()` count = 1, no error
+| Sub-exp | Name | Task | Models | Variables | Purpose |
+|---|---|---|---|---|---|
+| Sub-exp 1 | Tool-Call Fix Verification | `slide_gen` | `qwen3.5:4b`, `gemma3:4b` | Updated `SLIDE_GEN_PMT` | Verify prompt fix; compare model efficiency |
+| Sub-exp 2 | gemma3n Series Evaluation | `slide_gen` | `gemma3:4b`, `gemma3n:e2b`, `gemma3n:e4b` | Updated `SLIDE_GEN_PMT` | Evaluate gemma3n series as replacement |
+| Sub-exp 3 | Prompt Generalization Test | `modify_slides` | `gemma3:4b` | Prompt A (baseline) vs Prompt B (CRITICAL) | Identify best prompt style |
 
-### Models
+**Problem (motivating Sub-exp 1):** lz-chen's original `SLIDE_GEN_PMT` says "Respond user with the python code that generates the slide deck" — phrasing that reads as an instruction to write the code into the answer text, not to execute it via a tool. 4B models followed this literally: they produced correct code but never called `run_code`, so no PPTX file was ever created.
 
-| Model | Size | Source | Rounds |
+**Fix:** Replaced with an explicit tool-call directive: "CRITICAL: You MUST use `run_code` to actually execute the code. Do not output code as text only."
+
+### Shared ReAct Configuration
+
+| Parameter | Value |
+|---|---|
+| Agent framework | LlamaIndex `ReActAgent` |
+| Inference | Ollama local inference (M1 MacBook) |
+| Sandbox representation | Mock `FunctionTool` stubs — tools check whether generated code contains `prs.save()` and return synthetic sandbox responses; no real Docker execution in this experiment |
+| Temperature | 0.1 |
+| Max tokens | 4096 |
+| Timeout | 600s (Sub-exp 1, Sub-exp 2) |
+| Max iterations | 20 (Sub-exp 3) |
+
+### Models Compared
+
+| Model | Size | Source | Sub-exp |
 |---|---|---|---|
-| `ollama/gemma3:4b` | 4B | Ollama | R1, R2, R3 |
-| `ollama/qwen3.5:4b` | 4B | Ollama | R1 |
-| `ollama/gemma3n:e2b` | 2B | Ollama | R2 |
-| `ollama/gemma3n:e4b` | 4B | Ollama | R2 |
-
-### Rounds
-
-| Round | Task | Models | Variables | Purpose |
-|---|---|---|---|---|
-| R1 | `slide_gen` | qwen3.5:4b, gemma3:4b | Updated `SLIDE_GEN_PMT` | Verify prompt fix; compare model efficiency |
-| R2 | `slide_gen` | gemma3:4b, gemma3n:e2b, gemma3n:e4b | Updated `SLIDE_GEN_PMT` | Evaluate gemma3n series as replacement |
-| R3 | `modify_slides` | gemma3:4b | Prompt A (prose) vs Prompt B (CRITICAL) | Identify best prompt style |
-
-**Prompt change (R1 prerequisite):** the original `SLIDE_GEN_PMT` contained "Respond user with the python code" — 4B models interpreted this as outputting text, not calling the tool. Replaced with: "CRITICAL: You MUST use `run_code` to actually execute the code. Do not output code as text only."
+| `ollama/gemma3:4b` | 4B | Ollama | Sub-exp 1, Sub-exp 2, Sub-exp 3 |
+| `ollama/qwen3.5:4b` | 4B | Ollama | Sub-exp 1 |
+| `ollama/gemma3n:e2b` | 2B | Ollama | Sub-exp 2 |
+| `ollama/gemma3n:e4b` | 4B | Ollama | Sub-exp 2 |
 
 | Prompt | Name | Style | Key design |
 |---|---|---|---|
-| A | `SLIDE_MODIFICATION_PMT` | 5-step prose | locate file → run code → save → verify → confirm. No CRITICAL directives. |
+| A (baseline) | `SLIDE_MODIFICATION_PMT` | 5-step prose | lz-chen's original prompt, verbatim — locate file → run code → save → verify → confirm. No CRITICAL directives. |
 | B | `SLIDE_MODIFICATION_PMT_V2` | CRITICAL-style | "ONLY job / Do NOT explain / MUST use `run_code`" — mirrors updated `SLIDE_GEN_PMT` |
 
 #### Prompt Texts
 
 <details>
-<summary><strong>SLIDE_GEN_PMT</strong> — updated system prompt for slide_gen (used in R1, R2; held constant across models)</summary>
+<summary><strong>SLIDE_GEN_PMT (original — baseline)</strong> — lz-chen's unmodified prompt; the "Respond user with the python code" phrasing is the root cause fixed below</summary>
+
+````text
+You are an AI that generate slide deck from a given slide outlines and uses the
+ template file provided. Write python-pptx code for generating the slide deck by loop over the slide 
+ outlines provided.
+You will be provided with a json file `{json_file_path}` that contains a list of slide outlines
+ and layout to use from the template.
+The template file is located at `{template_fpath}`.
+If you can't find those files at remote location, you need to upload them.
+Respond user with the python code that generates the slide deck.
+
+Requirement:
+- If there is no front page or 'thank you' page, create them by using the related layout template in the
+ layout information provided, DO NOT assume the index of the layout for them
+- If the placeholder chosen has text auto_size set to TEXT_TO_FIT_SHAPE, make sure to set the
+ text to fit the shape (use MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE) and DO NOT set a font size
+- One slide page per outline item that you are given, fill in all the title and content you are given
+- Use layout and text box index according to what is given in each of the slide content item 
+- Vary the content layout of the slides to make the presentation engaging
+- Generate the python code before you try to execute it
+- Save the final slide pptx file with name `{generated_slide_fname}`
+````
+
+</details>
+
+<details>
+<summary><strong>SLIDE_GEN_PMT (fixed — used in this experiment)</strong> — updated system prompt for `slide_gen` (used in Sub-exp 1, Sub-exp 2; held constant across models)</summary>
 
 ````text
 You are an AI code executor that generates a PowerPoint slide deck using python-pptx.
@@ -157,7 +270,7 @@ CRITICAL: Task is complete only when `list_files` confirms `{generated_slide_fna
 </details>
 
 <details>
-<summary><strong>REACT_PROMPT_SUFFIX</strong> — ReAct format control appended to all system prompts (lz-chen's original; this is the P0_baseline variant tested separately in Exp 9)</summary>
+<summary><strong>REACT_PROMPT_SUFFIX (original — baseline)</strong> — ReAct format control appended to all system prompts (lz-chen's original; this is the P0_baseline variant tested separately in Exp 10)</summary>
 
 ````text
 
@@ -214,7 +327,7 @@ Below is the current conversation consisting of interleaving human and assistant
 </details>
 
 <details>
-<summary><strong>Prompt A — SLIDE_MODIFICATION_PMT</strong> — 5-step prose style (used in R3)</summary>
+<summary><strong>Prompt A — SLIDE_MODIFICATION_PMT (original — baseline)</strong> — lz-chen's unmodified prompt, verbatim; 5-step prose style (used in Sub-exp 3)</summary>
 
 ````text
 You are an AI assistant specialized in modifying slide decks based on user feedback using the python-pptx library. 
@@ -248,7 +361,7 @@ Follow these steps precisely:
 </details>
 
 <details>
-<summary><strong>Prompt B — SLIDE_MODIFICATION_PMT_V2</strong> — CRITICAL-style directive (used in R3; defined inline in the script)</summary>
+<summary><strong>Prompt B — SLIDE_MODIFICATION_PMT_V2</strong> — CRITICAL-style directive (used in Sub-exp 3; defined inline in the script)</summary>
 
 ````text
 You are an AI code executor that modifies a PowerPoint slide deck using python-pptx based on validation feedback.
@@ -274,11 +387,9 @@ CRITICAL: Task is complete only when `list_files` confirms the new filename exis
 
 </details>
 
-**Execution:** MacBook M1 · LlamaIndex `ReActAgent` · Ollama local inference · mock `FunctionTool` stubs (tools check whether generated code contains `prs.save()` and return synthetic sandbox responses — no real Docker execution in this experiment)
+### Metrics
 
-**Timeout:** 600s (R1, R2) · max_iterations=20 (R3)
-
-### Primary metric — `run_code()` call count
+**Primary metric — `run_code()` call count**
 - `0` = model never called the tool (failure — no PPTX produced)
 - `1` = first attempt succeeded (efficient)
 - `>1` = model self-debugged across multiple calls (works, but inefficient)
@@ -289,35 +400,35 @@ CRITICAL: Task is complete only when `list_files` confirms the new filename exis
 
 ## Full Experimental Results
 
-### Round 1 — slide_gen: Prompt Fix Validation
+### Sub-exp 1 — `slide_gen`: Tool-Call Fix Verification
 
 - **Purpose:** Verify the updated `SLIDE_GEN_PMT` causes models to call `run_code` instead of outputting code as text; compare efficiency between `qwen3.5:4b` and `gemma3:4b`
 - **Expected:** Both models call `run_code` exactly once under the new prompt
 
 | Model | `run_code()` calls | Total tool calls | Old prompt | New prompt |
 |---|---|---|---|---|
-| qwen3.5:4b | **16** | 17 | ✗ outputs code as text | ✓ calls `run_code` |
-| gemma3:4b | **1** | 4 | not tested | ✓ calls `run_code` |
+| `qwen3.5:4b` | 16 | 17 | ✗ outputs code as text | ✓ calls `run_code` |
+| `gemma3:4b` | **1** | **4** | not tested | ✓ calls `run_code` |
 
 **Tool call sequences:**
 ```
 qwen3.5:4b:  run_code ×11 → list_files → run_code ×5   (list_files appears mid-sequence after 11th call)
 gemma3:4b:   run_code → list_files ×3    (1 call succeeds; list_files verifies result)
 ```
-**Conclusion:** Both models call the tool, but gemma3:4b does it in 1 call vs qwen3.5:4b's 16.
+**Conclusion:** Both models recover from the original text-output failure once the prompt explicitly names the tool, but the fix does not make them equally efficient.
 
 ---
 
-### Round 2 — slide_gen: gemma3n Series Evaluation
+### Sub-exp 2 — `slide_gen`: gemma3n Series Evaluation
 
 - **Purpose:** Evaluate whether `gemma3n:e2b` or `gemma3n:e4b` can replace `gemma3:4b` as the slide generation model
 - **Expected:** At least one gemma3n model matches `gemma3:4b`'s 1-call result
 
 | Model | `run_code()` calls | Elapsed (s) | Error |
 |---|---|---|---|
-| gemma3:4b | 1 | 46.1 | none |
-| gemma3n:e2b | 0 | 600.0 | TIMEOUT |
-| gemma3n:e4b | 0 | 19.3 | none (format mismatch — silent) |
+| `gemma3:4b` | **1** | **46.1** | none |
+| `gemma3n:e2b` | 0 | 600.0 | TIMEOUT |
+| `gemma3n:e4b` | 0 | 19.3 | none (format mismatch — silent) |
 
 **Tool call sequences:**
 ```
@@ -326,7 +437,7 @@ gemma3n:e2b:  []  (run_agent_step never returned in 600s)
 gemma3n:e4b:  []  (exited at turn 1 — output treated as StopEvent)
 ```
 
-**gemma3n:e4b final answer fragment:**
+**`gemma3n:e4b` final answer fragment:**
 
     ```tool_code
     print(open('/sandbox/slide_outlines.json').read())
@@ -342,30 +453,32 @@ cannot match it to the `Action:` pattern → treats the entire output as the
 final answer → emits StopEvent → loop exits at turn 1 with 0 tool calls and
 no error or warning.
 
-**Conclusion:** Both gemma3n models failed — gemma3n:e2b by timeout, gemma3n:e4b by silent format mismatch with LlamaIndex ReAct.
+**Conclusion:** Neither gemma3n variant reaches a single tool call, closing off the smaller-parameter path as a substitute for `gemma3:4b`.
 
 ---
 
-### Round 3 — modify_slides: Prompt Style Comparison (gemma3:4b)
+### Sub-exp 3 — `modify_slides`: Prompt Generalization Test (`gemma3:4b`)
+
+Sub-exp 1 fixed `slide_gen` by adding an explicit CRITICAL-style directive ("You MUST use `run_code`") to the prompt. This sub-experiment tests whether the same directive style also works for a different task — `modify_slides`, which edits an already-generated slide deck based on feedback (e.g., shrink an overflowing font on one slide, widen a cut-off title on another) instead of generating one from scratch. The model is fixed to `gemma3:4b`, the winner from Sub-exp 1/2.
 
 - **Purpose:** Determine whether the CRITICAL-style prompt that fixed `slide_gen` also works for `modify_slides`, or whether a different prompt style is needed
 - **Expected:** Prompt B (CRITICAL) matches or improves on Prompt A's 1-call result
 
 | Prompt | `run_code()` calls | Elapsed (s) | Error |
 |---|---|---|---|
-| A — prose | 1 | 39.7 | none |
-| B — CRITICAL | 0 | 336.8 | max iterations (20) |
+| A — prose (baseline) | **1** | **39.7** | none |
+| B — CRITICAL (rewrite) | 0 | 336.8 | max iterations (20) |
 
 **Tool call sequences:**
 ```
 Prompt A: run_code → list_files  (1 call succeeds; list_files confirms new file)
 Prompt B: []  (20 agent steps — no tool call generated in any round)
 ```
-**Conclusion:** Prompt B caused complete failure — the CRITICAL directive breaks slide modification despite fixing slide generation.
+**Conclusion:** The same directive that fixed slide generation makes slide modification fail completely, showing the two sub-steps need independently tuned prompts.
 
 ---
 
-### Cross-Model Summary (Rounds 1 + 2, slide_gen)
+### Cross-Model Summary (Sub-exp 1 + 2, `slide_gen`)
 
 | Model | Size | `run_code` called | Call count | Verdict |
 |---|---|---|---|---|
@@ -378,145 +491,38 @@ Prompt B: []  (20 agent steps — no tool call generated in any round)
 
 ## Observations
 
-### slide_gen: prompt ambiguity and fix
+### Why do both gemma3n variants fail to produce a single tool call?
 
-```
-Root: slide_gen agent outputs code as text — no tool call, no PPTX produced
-      │
-      ▼
-Root cause: prompt ambiguity in original SLIDE_GEN_PMT
-      │  "Respond user with the python code" is interpreted as:
-      │    write code in the response text (text-generation mode)
-      │    not: call the run_code tool to execute code (agent mode)
-      │  4B RLHF models have a strong prior toward "explain/describe"
-      │  over "execute via tool"; ambiguous phrasing activates that prior
-      │
-      ▼
-Fix: CRITICAL directive added to SLIDE_GEN_PMT
-      │  "CRITICAL: You MUST use run_code to actually execute the code."
-      │  Forces model from text-generation mode into agent-action mode
-      │  Both qwen3.5:4b and gemma3:4b call run_code under new prompt ✓
-```
+`gemma3n:e2b` stalls before completing a single agent step, and `gemma3n:e4b` exits after one turn because it outputs a Gemini-style `tool_code` block that LlamaIndex's ReAct parser can't match to the `Action:` format — neither failure raises an exception or warning.
 
-### slide_gen: model comparison (R1 + R2)
+- `gemma3n:e2b` times out after 600s with 0 tool calls.
+- `gemma3n:e4b` exits after 19.3s, also with 0 tool calls.
 
-```
-Model efficiency gap (R1, fixed prompt)
-      │
-      ├─ gemma3:4b ── 1 run_code call  ✓
-      │    First code attempt is correct python-pptx (includes prs.save())
-      │    Subsequent list_files are proactive result verification
-      │    Strategy: write once → verify
-      │
-      └─ qwen3.5:4b ── 16 run_code calls  △
-           First attempt fails (import errors, placeholder index, save path)
-           Self-debugs across 16 iterations before succeeding
-           4.25× more LLM rounds; same end result, far higher cost
-      │
-      ▼
-gemma3n series (R2): two distinct failure modes
-      │
-      ├─ gemma3n:e2b ── TIMEOUT at 600s  ✗
-      │    0 tool calls — run_agent_step never returned
-      │    Model too slow to complete a single agent step within timeout
-      │
-      └─ gemma3n:e4b ── format mismatch, exits at turn 1  ✗
-           Outputs ```tool_code``` block (Gemini function-call format)
-           LlamaIndex ReAct parser expects "Action: / Action Input:" format
-           Parser cannot read tool_code → treats output as StopEvent
-           Loop exits immediately with 0 tool calls and no error or warning
-```
+### Why does the directive-style prompt that fixed slide generation break slide modification?
 
-**Conclusion:** gemma3n:e4b fails silently — no error or warning appears at the workflow level.
-The model outputs a tool_code block in under 20s. This looks like fast execution. LlamaIndex's ReAct parser cannot read this format and exits the loop at turn 1, treating the raw block as the final answer. There is no exception, no warning in logs — the failure is invisible at the workflow level.
+Slide modification's feedback message already supplies explicit action signals — specific slide indices, issue descriptions, and an output filename — so adding directive constraints on top creates competing signals `gemma3:4b` can't resolve into either an `Action:` or `Answer:` line.
 
-### modify_slides: prompt style sensitivity (R3)
-
-```
-New finding: CRITICAL directive harms modify_slides
-      │  Prompt A (5-step prose): 1 run_code call, complete in 39.7s
-      │  Prompt B (CRITICAL style): 0 tool calls, 20-iteration timeout (336.8s)
-      │
-      ▼
-Root cause: task ambiguity determines optimal prompt style
-      │
-      ├─ slide_gen (high ambiguity):
-      │    "Generate a slide deck" — no concrete action signal in the request
-      │    Model prior drifts toward explaining/describing code as text
-      │    CRITICAL directive needed to override this prior
-      │
-      └─ modify_slides (low ambiguity):
-           Feedback message contains explicit action signals:
-           specific slide indices, specific issue types, specific output filename
-           These activate the model's problem-solving prior directly
-           Adding CRITICAL creates competing signals:
-             "Do NOT explain" vs "understand feedback text before fixing"
-           gemma3:4b generates output that is neither Action: nor Answer:
-           workflow loop runs 20 iterations without making progress
-```
-
-**Conclusion:** Prompt complexity must match task ambiguity — applying the same directive style uniformly breaks low-ambiguity tasks.
-The CRITICAL directive that fixed slide generation completely broke slide modification. For gemma3:4b, 5-step prose gives the model a sequential state machine to follow. Global CRITICAL constraints force the model to maintain them across every token in the strict Thought/Action/Observation structure. When the task context is dense — feedback text, filenames, and fix instructions all present — 4B models can't sustain that reliably.
+- Prompt A (5-step prose) completes `modify_slides` in 1 `run_code` call, 39.7s.
+- Prompt B (CRITICAL-style) produces 0 tool calls after 20 iterations, timing out at 336.8s.
 
 ---
 
 ## Decision
 
-### Which model for ReAct-based PPTX rendering?
+### Which model for ReAct-based slide generation?
 
-```
-Which model for ReAct-based PPTX rendering?
-      │
-      ├── gemma3:4b
-      │     ✓ 1 run_code call for slide_gen (one-shot code generation)
-      │     ✓ Works on both slide_gen and modify_slides with correct prompts
-      │     ✓ Stable across repeated runs
-      │     → CHOSEN: only viable option among tested models
-      │
-      ├── qwen3.5:4b
-      │     △ Works but requires 16 run_code calls (4.25× more LLM rounds)
-      │     → NOT CHOSEN: inefficient
-      │
-      ├── gemma3n:e2b
-      │     ✗ Times out at 600s — cannot complete one agent step on M1
-      │     → REJECTED
-      │
-      └── gemma3n:e4b
-            ✗ Gemini-style tool_code format incompatible with LlamaIndex ReAct
-            ✗ Silent failure — workflow exits at turn 1 with no error
-            → REJECTED
-```
+`gemma3:4b` is selected — it is the only tested model that reaches a working PPTX in a single tool call, with a stable repeat result.
 
-### Which prompt style for modify_slides?
+- `gemma3:4b`: 1 `run_code` call in both the initial run and the repeat run (46.1s elapsed on repeat).
 
-```
-Which prompt style for modify_slides?
-      │
-      ├── Prompt A — 5-step prose (SLIDE_MODIFICATION_PMT)
-      │     ✓ 1 run_code call, task complete in 39.7s
-      │     → KEPT: already correct for this task
-      │
-      └── Prompt B — CRITICAL style (SLIDE_MODIFICATION_PMT_V2)
-            ✗ 0 tool calls, 20-iteration timeout
-            → REJECTED: harms modify_slides despite fixing slide_gen
-```
+### Which prompt style for slide modification?
 
-Each agent step requires an independently designed prompt. Unifying prompt style across steps is not viable for 4B models.
+`Prompt A` — the existing 5-step prose format — is selected over the CRITICAL-style rewrite for its higher reliability on this sub-step.
+
+- Prompt A: 1 `run_code` call, 39.7s.
 
 ---
 
 ## Pipeline Integration Status 🚫 SUPERSEDED
 
-### What replaced it
-- ReActAgent step replaced with deterministic `PptxRenderer`
-- LLM now outputs schema-validated JSON only; the renderer constructs the PPTX directly — no runtime code generation, no sandbox
-- Eliminates all ReAct-related failure modes regardless of model size
-
-### Why the decision was made
-- **Exp 7 (this experiment):** gemma3:4b selected as the model — but even with the correct model, the agent wrote invalid python-pptx API calls at 8.3% overall correctness. This failure motivated Exp 8.
-- **Exp 8:** Fixed `SLIDE_GEN_PMT` with explicit code patterns (P2) — code generation reached 100%. But tool dispatch was still broken: wrong argument keys caused the agent to never call `run_code` correctly.
-- **Exp 9:** Fixed `REACT_PROMPT_SUFFIX` tool dispatch (P4) — task completion reached 100%. But the error path still caused hallucinated failures.
-- **Architectural finding (2026-04-15):** python-pptx has no markdown parser — LLM-generated bullet text collapsed into a single paragraph and literal `*` characters appeared on slides. Docker sandbox added latency and infrastructure dependency on top of non-deterministic code generation. These two issues together drove the decision to replace the ReActAgent with a schema-controlled renderer.
-
-### Transferable findings
-- Prompt style must match task ambiguity: CRITICAL directives for high-ambiguity tasks, prose step guides for low-ambiguity tasks — applicable to any future agent step design
+ReActAgent-driven `slide_gen`/`modify_slides` were replaced by a deterministic `PptxRenderer` (schema-validated JSON in, no runtime code generation or sandbox). Exp 9 refined the task prompt further. Exp 10 then found prompt engineering alone couldn't fix a persistent-error loop failure under real error conditions. The transferable lesson — that prompt style must match task ambiguity — still applies to future agent step design.
