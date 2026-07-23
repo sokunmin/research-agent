@@ -2,7 +2,17 @@
 
 ## Task Context
 
-This experiment targets **Step 6 — PPTX Rendering** (original ReActAgent approach) from the system architecture (README → System Architecture). This experiment is the second in a three-part diagnostic chain (Exp 7 → Exp 8 → Exp 9): Exp 7 established gemma3:4b as the model but found the agent wrote invalid python-pptx code at 8.3% overall correctness — this experiment targets that failure by fixing the task prompt (`SLIDE_GEN_PMT`). The original author used GPT-4o in a ReActAgent loop to generate python-pptx code at runtime. This experiment identifies which task prompt (`SLIDE_GEN_PMT`) gets a local 4B model to write correct python-pptx code — specifically the layout lookup pattern, null guards, and save path.
+lz-chen's ReActAgent used GPT-4o to write python-pptx code at runtime. Exp 8 swapped in a
+local 4B model and fixed a tool-invocation failure — the model wrote correct-looking code
+but never called the tool to execute it. This experiment picks up from there: assuming the
+tool IS called, is the code the model writes actually correct? A code audit of lz-chen's
+task prompt (`SLIDE_GEN_PMT`) found it described required python-pptx patterns in prose
+only, with no code examples. This experiment identifies which task prompt gets a local 4B
+model to write correct python-pptx code — specifically the layout lookup pattern, null
+guards, and save path.
+
+This experiment targets **Step 6 — PPTX Rendering** (original ReActAgent approach) from the
+system architecture (README → System Architecture).
 
 ```
 Input: slide_outlines.json + PPTX template       ← Step 5: Slide Outline + HITL
@@ -21,92 +31,77 @@ Output: paper_summaries.pptx                      → Step 7: Slide Validation &
 
 Step 6 is the first step where a rendered PPTX file is produced. If the agent writes invalid python-pptx code, the sandbox execution fails, nothing is saved to `/sandbox/`, and the pipeline stalls with no output.
 
-**Variable names defined here:**
-- `SLIDE_GEN_PMT` — the system prompt telling the agent what python-pptx code to write: which files to load, which API patterns to use, where to save output. This is the prompt under test.
-- `REACT_PROMPT_SUFFIX` — the ReAct format control prompt: Thought/Action/Observation loop structure, termination instructions. This is held constant and is tested separately in Exp 9.
-- `system_prompt = SLIDE_GEN_PMT + REACT_PROMPT_SUFFIX`
+A **PPTX layout** is a slide template that defines which placeholder areas exist on a slide — title bar, body text region, photo region, or nothing at all. The layouts with no text placeholders (`THREE_PHOTO`, `FULL_PHOTO`, `BLANK`) are exactly what this experiment's null-guard test case targets.
+
+![PPTX Layout Groups](imgs/pptx_layout_groups.svg)
 
 Step 6 — PPTX Rendering (detail, original ReActAgent approach)
 
 ```
 Step 6 — PPTX Rendering (detail)
-──────────────────────────────────────────────────────────────────
+lz-chen's original tool and prompt names; this experiment substitutes a Docker-based
+execution tool (tested as `run_code` throughout this report) because Azure access was unavailable.
+This experiment tests `SLIDE_GEN_PMT` via direct LLM completion, not the live ReAct loop shown below —
+see Experiment Setup for the static-analysis method.
+────────────────────────────────────────────────────────────────────────────────
  slide_outlines.json + PPTX template
        │
        ▼
- ┌─── EXPERIMENT TARGET ──────────────────────────────────────────┐
- │                                                                │
- │  ① [slide_gen]                                                 │
- │     ReActAgent · SLIDE_GEN_PMT (P0–P3 variants under test)    │
- │     REACT_PROMPT_SUFFIX: held constant                        │
- │     Tools: run_code, list_files, upload_file, get_all_layout   │
- │       │                                                        │
- │       ▼  paper_summaries.pptx                                  │
- │  ② [validate_slides]   VLM per slide image  ◄───────────────┐ │
- │       │                                                      │ │
- │       ├─ all OK ────────────────── stop: final.pptx ✓        │ │
- │       │                                                      │ │
- │       └─ issues found AND n_retry < 2                        │ │
- │              │                                               │ │
- │              ▼                                               │ │
- │  ③ [modify_slides]                                           │ │
- │     ReActAgent · SLIDE_MODIFICATION_PMT                      │ │
- │     saves paper_summaries_v{n_retry}.pptx                    │ │
- │              │                                               │ │
- │              └───────────────────────────────────────────────┘ │
- │                    (up to 2 retries; n_retry ≥ 2 → ✗)          │
- │                                                                │
- └────────────────────────────────────────────────────────────────┘
+ ┌─── EXPERIMENT TARGET ──────────────────────────────────────────────────────────────┐
+ │                                                                                    │
+ │  ① [slide_gen]                                                                    │
+ │  ┌─── Original (lz-chen) ────────────────┬─── My Implementation ──────────────┐    │
+ │  │ ReActAgent · Azure GPT-4o             │ ReActAgent · local 4B LLM (Ollama) │    │
+ │  │ SLIDE_GEN_PMT                         │ SLIDE_GEN_PMT (P0–P3 tested)       │    │
+ │  │ Tools: code_interpreter, list_files,  │ Tools: run_code, list_files,       │    │
+ │  │   upload_file, get_all_layout         │   upload_file, get_all_layout      │    │
+ │  └───────────────────────────────────────┴────────────────────────────────────┘    │
+ │       │                                                                            │
+ │       ▼  paper_summaries.pptx                                                      │
+ └────────────────────────────────────────────────────────────────────────────────────┘
        │
        ▼
  paper_summaries.pptx
 ```
 
+**Variable names defined here:**
+- `SLIDE_GEN_PMT` — the system prompt telling the agent what python-pptx code to write: which files to load, which API patterns to use, where to save output. This is the prompt under test.
+- `REACT_PROMPT_SUFFIX` — the ReAct format control prompt (Thought/Action/Observation loop structure, termination instructions) that the pipeline appends to `SLIDE_GEN_PMT` when running inside the live agent. This experiment tests `SLIDE_GEN_PMT` via direct LLM completion instead of the ReAct loop, so `REACT_PROMPT_SUFFIX` is not part of the prompts evaluated here — it is tested separately in Exp 10.
+
 ---
 
 ## Summary
 
-- **Problem:** lz-chen's task prompt produced three recurring code errors that caused sandbox failures on every run — 8.3% overall correctness across both models:
-  - Wrong layout selection pattern causes AttributeError — the prompt describes what to do but gives no code example, so models default to passing a string name directly
-  - Missing null guard causes TypeError — the prompt says to skip null placeholder indices but gives no code pattern, so models omit the check when data has no null values
-  - Wrong save path — the prompt provides only a filename without directory prefix
-- **Solution:** 4 prompt variants (P0 through P3), each adding one code pattern incrementally, tested across 2 models and 2 test cases via static analysis — 48 LLM calls total. Static analysis (regex) was chosen to isolate LLM output quality from sandbox execution noise and ReAct loop variability.
-- **Result:** The prompt with explicit layout lookup and null guard patterns achieves 100% overall correctness on both models and both test cases. The key non-obvious finding: adding the layout pattern alone causes gemma3:4b to drop null guards to 0% on data with no null values — the model mimics the style of the provided code example, including its omissions. The validated prompt was not deployed; the ReActAgent was replaced by deterministic rendering before integration.
+- **Problem:** lz-chen's task prompt (`SLIDE_GEN_PMT`) described required python-pptx patterns in prose only, with no code examples — a code audit traced this to three recurring bugs: the model picks the wrong slide layout (some layouts, like photo-only slides, have no title or content fields at all), writes to those missing fields without checking first and crashes, and saves the file with no directory prefix.
+- **Solution:** Four prompt variants, each adding one more code example, were tested on two models via static code analysis to isolate prompt quality from execution noise.
+- **Result:** Adding two code examples raised correctness from 8.3% to 100% on both models — but a partial fix briefly made things worse, since the model copies a code example's omissions as faithfully as its content. The validated prompt was never deployed; the ReActAgent route was replaced before integration.
 
 ---
 
 ## Experiment Setup
 
-> This experiment's approach was superseded by deterministic rendering — no ✅ applies. See Pipeline Integration Status. A later experiment (Exp 9) validated the `REACT_PROMPT_SUFFIX` independently; that experiment is also superseded for the same reason.
-
-### Objective
-
-- **Baseline:** lz-chen's `SLIDE_GEN_PMT` (P0_vague) is the control condition — vague text instructions, no explicit python-pptx code patterns. It achieves 8.3% overall correctness on local models, establishing the reference point for measuring prompt improvement.
-- **Goal:** Identify the minimal set of explicit code patterns to add to `SLIDE_GEN_PMT` that achieves 100% code correctness on both models across both test cases
-- **Pass condition:** `overall% = 100%` for both models on both test cases (all 4 static analysis checks pass)
-
 ### Models
 
 | Label | Model string | Type |
 |---|---|---|
-| gemma3:4b | ollama/gemma3:4b | Local, 4B |
-| ministral-3:14b-cloud | ollama/ministral-3:14b-cloud | Cloud via Ollama routing |
+| `gemma3:4b` | `ollama/gemma3:4b` | Local, 4B |
+| `ministral-3:14b-cloud` | `ollama/ministral-3:14b-cloud` | Cloud via Ollama routing |
 
-**LLM call:** `litellm.completion()` — plain text output, no structured output parsing, no ReAct loop. The LLM is asked to generate python-pptx code directly; the code string is then evaluated statically.
+**LLM call:** `litellm.completion()` at `temperature=0.1` — plain text output, no structured output parsing, no ReAct loop. The LLM is asked to generate python-pptx code directly; the code string is then evaluated statically.
 
 ### Prompt Variants
 
 All variants share the same preamble (task description, template path, slide data). The requirements section differs incrementally:
 
-| ID | What is added vs previous |
+| Name | Key Design |
 |---|---|
-| **P0** `P0_vague` | Text-only requirements, no python-pptx code examples. lz-chen's original prompt (with the save path bug isolated: `/sandbox/` prefix pre-fixed to remove one confound). |
-| **P1** `P1_layout_pattern` | P0 + explicit `add_slide` lookup pattern: `layout = next(l for l in prs.slide_layouts if l.name == item['layout_name'])` |
-| **P2** `P2_null_guard` | P1 + explicit null guard pattern: `if item['idx_title_placeholder'] is not None: slide.placeholders[...]` |
-| **P3** `P3_full_pattern` | P2 + prepended `Required imports: from pptx import Presentation` block |
+| `P0_baseline` | Text-only instructions only — no code example for layout selection or null handling. (The save-path instruction is already correct here.) |
+| `P1_layout_pattern` | Adds one code example: how to correctly look up the matching layout object by name. |
+| `P2_null_guard` | Adds a second code example on top of `P1_layout_pattern`: how to skip a placeholder when its index is null. |
+| `P3_full_pattern` | Adds one more line on top of `P2_null_guard`: a required-imports statement. |
 
 <details>
-<summary><strong>P0</strong> — <code>P0_vague</code>: text-only requirements, no python-pptx code examples (lz-chen baseline with save path pre-fixed)</summary>
+<summary><code>P0_baseline</code>: text-only requirements, no python-pptx code examples (lz-chen's original prompt, save path already correct)</summary>
 
 ````text
 You are a Python code generator.
@@ -132,7 +127,7 @@ Requirements:
 </details>
 
 <details>
-<summary><strong>P1</strong> — <code>P1_layout_pattern</code>: P0 + explicit <code>add_slide</code> layout lookup pattern</summary>
+<summary><code>P1_layout_pattern</code>: `P0_baseline` + explicit layout lookup pattern</summary>
 
 ````text
 You are a Python code generator.
@@ -162,7 +157,7 @@ python-pptx layout lookup (add_slide requires a SlideLayout object, NOT a string
 </details>
 
 <details>
-<summary><strong>P2</strong> — <code>P2_null_guard</code>: P1 + explicit null guard pattern for idx fields</summary>
+<summary><code>P2_null_guard</code>: `P1_layout_pattern` + explicit null guard pattern for idx fields</summary>
 
 ````text
 You are a Python code generator.
@@ -198,7 +193,7 @@ Placeholder fill with null guard (idx values may be None for visual-only layouts
 </details>
 
 <details>
-<summary><strong>P3</strong> — <code>P3_full_pattern</code>: P2 + prepended Required imports block</summary>
+<summary><code>P3_full_pattern</code>: `P2_null_guard` + prepended Required imports block</summary>
 
 ````text
 You are a Python code generator.
@@ -238,32 +233,217 @@ Placeholder fill with null guard (idx values may be None for visual-only layouts
 
 ### Test Cases
 
-| ID | Description | Null idx values? |
+| Name | Description | Null idx values? |
 |---|---|---|
-| **TC1** `TC1_standard` | 3 slides: TITLE_SLIDE, TITLE_AND_BODY, TITLE_SLIDE. All `idx_title/content_placeholder` are integers (0 or 1). | No |
-| **TC2** `TC2_with_nulls` | 5 slides including one FULL_PHOTO with `idx_title_placeholder: null, idx_content_placeholder: null`. | Yes |
+| `TC1_standard` | 3 slides: TITLE_SLIDE, TITLE_AND_BODY, TITLE_SLIDE. All `idx_title/content_placeholder` are integers (0 or 1). | No |
+| `TC2_with_nulls` | 5 slides including one FULL_PHOTO with `idx_title_placeholder: null, idx_content_placeholder: null`. | Yes |
 
-TC2 specifically tests whether the LLM handles `None`-valued idx fields (visual-only layouts). TC1 tests whether null guards are written defensively even when the data doesn't force them — which turns out to be the most discriminating condition (see Observations).
+<details>
+<summary><code>TC1_standard</code> — input JSON (3 slides, no null idx values)</summary>
+
+```json
+[
+  {
+    "title": "Attention Is All You Need",
+    "content": "A Research Presentation\nPresented by: John Smith",
+    "layout_name": "TITLE_SLIDE",
+    "idx_title_placeholder": 0,
+    "idx_content_placeholder": 1
+  },
+  {
+    "title": "Key Approach",
+    "content": "* Transformer architecture using self-attention\n* Eliminates recurrence entirely",
+    "layout_name": "TITLE_AND_BODY",
+    "idx_title_placeholder": 0,
+    "idx_content_placeholder": 1
+  },
+  {
+    "title": "Thank You",
+    "content": "Q&A",
+    "layout_name": "TITLE_SLIDE",
+    "idx_title_placeholder": 0,
+    "idx_content_placeholder": 1
+  }
+]
+```
+
+</details>
+
+<details>
+<summary><code>TC2_with_nulls</code> — input JSON (5 slides, one FULL_PHOTO with null idx values)</summary>
+
+```json
+[
+  {
+    "title": "Attention Is All You Need",
+    "content": "A Research Presentation\nPresented by: John Smith",
+    "layout_name": "TITLE_SLIDE",
+    "idx_title_placeholder": 0,
+    "idx_content_placeholder": 1
+  },
+  {
+    "title": "Model Architecture",
+    "content": "* Multi-head attention\n* Positional encoding\n* Feed-forward layers",
+    "layout_name": "BULLET_LIST",
+    "idx_title_placeholder": 0,
+    "idx_content_placeholder": 1
+  },
+  {
+    "title": "",
+    "content": "",
+    "layout_name": "FULL_PHOTO",
+    "idx_title_placeholder": null,
+    "idx_content_placeholder": null
+  },
+  {
+    "title": "Results",
+    "content": "* BLEU score: 41.0 on WMT 2014 En-De\n* Outperforms all previous SOTA",
+    "layout_name": "TITLE_AND_BODY",
+    "idx_title_placeholder": 0,
+    "idx_content_placeholder": 1
+  },
+  {
+    "title": "Thank You",
+    "content": "Q&A",
+    "layout_name": "TITLE_SLIDE",
+    "idx_title_placeholder": 0,
+    "idx_content_placeholder": 1
+  }
+]
+```
+
+</details>
+
+`TC2_with_nulls` specifically tests whether the LLM handles `None`-valued idx fields (visual-only layouts). `TC1_standard` tests whether null guards are written defensively even when the data doesn't force them — which turns out to be the most discriminating condition (see Observations).
 
 ### Evaluation Checks (Static Analysis)
 
-Four boolean checks per generated code string. The method is static analysis (regex), not execution. This isolates LLM output quality from sandbox execution variability and ReAct loop behavior.
+Four boolean checks are run against the generated code string via regex — not execution — to isolate LLM output quality from sandbox and ReAct loop variability.
 
 | Check | Measures | Primary signal? |
 |---|---|---|
-| `layout_lookup_correct` | `slide_layouts` iterated + `add_slide(variable)` + `.name ==` comparison. Rejects `add_slide("string")` and `add_slide(0)`. | **Yes** |
-| `null_guard_correct` | `is not None` check AND `placeholders[` both present in code. | **Yes** |
-| `save_path_correct` | `prs.save()` target starts with `/sandbox/` or is a relative path. Rejects `/app/`, `/root/`. | Low (expected ~100% after P0 save fix) |
-| `import_correct` | `from pptx import Presentation` present. | Sanity only |
+| `layout_lookup_correct` | The model looks up the matching layout object by name, instead of passing a layout name or index directly. | **Yes** |
+| `null_guard_correct` | The code guards against a null placeholder index before writing to it. | **Yes** |
+| `save_path_correct` | The output file is saved to the expected sandbox directory, not an arbitrary system path. | Low — the correct path is already given in every variant's text instructions |
+| `import_correct` | The required library import is present. | Sanity only |
+
+<details>
+<summary>How each check works — regex walkthrough with pass/fail examples</summary>
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  1. layout_lookup_correct — did the code look up the layout          │
+│     correctly?                                                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+generated code string
+      │
+      ▼
+  ┌─ Check A: contains "slide_layouts"? ───────────────┐
+  │  layout = next(l for l in prs.slide_layouts...)    │  ✓ yes
+  └─────────────────────────────────────────────────────┘
+      │
+      ▼
+  ┌─ Check B: contains ".add_slide(variable)"? ────────┐
+  │  slide = prs.slides.add_slide(layout)              │  ✓ yes (layout is a variable)
+  └─────────────────────────────────────────────────────┘
+      │
+      ▼
+  ┌─ Check C: contains a ".name ==" comparison? ───────┐
+  │  if l.name == item['layout_name']                  │  ✓ yes
+  └─────────────────────────────────────────────────────┘
+      │
+      ▼
+  ┌─ Check D: does add_slide("string") or add_slide(number) appear? ─┐
+  │  (does not appear)                                               │  ✓ no → good
+  └───────────────────────────────────────────────────────────────────┘
+      │
+      ▼
+  A✓ + B✓ + C✓ + D(absent) ──▶ ✅ PASS
+
+Counter-example:
+  slide = prs.slides.add_slide("TITLE_AND_BODY")
+        │
+        ▼
+  Hits check D (string passed directly) ──▶ ❌ FAIL
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  2. null_guard_correct — is there a null check before writing?       │
+└─────────────────────────────────────────────────────────────────────┘
+
+generated code string
+      │
+      ├─ Contains the string "is not None"? ──── ✓/✗
+      │
+      └─ Contains the string "placeholders["? ── ✓/✗
+      │
+      ▼
+   Both must be present in the code
+
+✅ PASS example:
+  if item['idx_title_placeholder'] is not None:      ← "is not None" present
+      slide.placeholders[...] = item['title']         ← "placeholders[" present
+
+❌ FAIL example:
+  slide.placeholders[item['idx_title_placeholder']].text = item['title']
+                     ↑
+              "is not None" never appears anywhere in the code
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  3. save_path_correct — was the file saved to the right path?        │
+└─────────────────────────────────────────────────────────────────────┘
+
+  What is passed into prs.save(...)?
+      │
+      ├─ A hardcoded string path?
+      │     │
+      │     ├─ Starts with "/sandbox/"? ────────────▶ ✅ PASS
+      │     ├─ Not "/"-prefixed (relative path)? ────▶ ✅ PASS
+      │     └─ Some other absolute path (e.g. /app/)? ▶ ❌ FAIL
+      │
+      └─ A variable, e.g. prs.save(output_path)?
+            │
+            └─ ✅ PASS
+
+Examples:
+  prs.save('/sandbox/paper_summaries.pptx')   → starts with /sandbox/ → ✅ PASS
+  prs.save('/app/output.pptx')                → absolute path, not /sandbox/ → ❌ FAIL
+  prs.save('paper_summaries.pptx')            → relative path → ✅ PASS
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  4. import_correct — is the required import present?                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+  Does the code contain either of these lines?
+      │
+      ├─ "from pptx import Presentation" ──┐
+      │                                     ├── either one present ──▶ ✅ PASS
+      └─ "import pptx" ─────────────────────┘
+                                             neither present ──▶ ❌ FAIL
+
+(This check nearly always passes — it's the most common first line in any python-pptx tutorial.)
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  overall% — all 4 checks must pass for this generation to count as    │
+│  fully correct                                                        │
+└─────────────────────────────────────────────────────────────────────┘
+
+  layout✓ + null_guard✓ + save_path✓ + import✓  ──▶ overall = 1 (pass)
+  any single ✗                                    ──▶ overall = 0 (fail)
+```
+
+</details>
 
 **`overall%`** = 1 only if all 4 checks pass. This is the primary metric.
 
-**Known limitations of static analysis:**
-- `layout_lookup_correct`: inline `add_slide(next(...))` is a false negative — the two-step pattern is required.
-- `null_guard_correct`: co-presence check only — does not verify structural wrapping. An unrelated `is not None` elsewhere in the code causes a false positive.
-- `save_path_correct` / `import_correct`: low discriminating power between prompt variants; these are sanity signals.
-
-**Run parameters:** N=3 per (model × prompt × test_case). Total: 4 prompts × 2 models × 2 test cases × 3 runs = **48 LLM calls**. N=3 is intentional for a resource-constrained environment (MacBook M1, local inference): if a model fails 2/3 runs at small N, additional runs won't change the direction.
+**Run parameters:**
+- N=3 per (model × prompt × test_case)
+- Total: 4 prompts × 2 models × 2 test cases × 3 runs = **48 LLM calls**
+- N=3 is intentional for a resource-constrained environment (MacBook M1, local inference) — if a model fails 2/3 runs at small N, additional runs won't change the direction
 
 ---
 
@@ -272,14 +452,14 @@ Four boolean checks per generated code string. The method is static analysis (re
 ### Full Summary Table
 
 - **Purpose:** Measure per-check and overall correctness across all prompt variants, models, and test cases
-- **Expected:** P2 or later achieves `overall% = 100%` for both models on both test cases
+- **Expected:** `P2_null_guard` or later achieves `overall% = 100%` for both models on both test cases
 
-**MODEL: gemma3:4b**
+**MODEL: `gemma3:4b`**
 
 | prompt | test_case | N | layout% | save% | null% | import% | overall% |
 |---|---|---|---|---|---|---|---|
-| P0_vague | TC1_standard | 3 | 0.0 | 33.3 | 100.0 | 100.0 | 0.0 |
-| P0_vague | TC2_with_nulls | 3 | 0.0 | 100.0 | 100.0 | 100.0 | 0.0 |
+| P0_baseline | TC1_standard | 3 | 0.0 | 33.3 | 100.0 | 100.0 | 0.0 |
+| P0_baseline | TC2_with_nulls | 3 | 0.0 | 100.0 | 100.0 | 100.0 | 0.0 |
 | P1_layout_pattern | TC1_standard | 3 | 100.0 | 100.0 | 0.0 | 100.0 | 0.0 |
 | P1_layout_pattern | TC2_with_nulls | 3 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
 | P2_null_guard | TC1_standard | 3 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
@@ -287,12 +467,12 @@ Four boolean checks per generated code string. The method is static analysis (re
 | P3_full_pattern | TC1_standard | 3 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
 | P3_full_pattern | TC2_with_nulls | 3 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
 
-**MODEL: ministral-3:14b-cloud**
+**MODEL: `ministral-3:14b-cloud`**
 
 | prompt | test_case | N | layout% | save% | null% | import% | overall% |
 |---|---|---|---|---|---|---|---|
-| P0_vague | TC1_standard | 3 | 33.3 | 100.0 | 100.0 | 100.0 | 33.3 |
-| P0_vague | TC2_with_nulls | 3 | 0.0 | 100.0 | 66.7 | 100.0 | 0.0 |
+| P0_baseline | TC1_standard | 3 | 33.3 | 100.0 | 100.0 | 100.0 | 33.3 |
+| P0_baseline | TC2_with_nulls | 3 | 0.0 | 100.0 | 66.7 | 100.0 | 0.0 |
 | P1_layout_pattern | TC1_standard | 3 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
 | P1_layout_pattern | TC2_with_nulls | 3 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
 | P2_null_guard | TC1_standard | 3 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 |
@@ -306,7 +486,7 @@ Four boolean checks per generated code string. The method is static analysis (re
 
 | prompt | layout | save | null | import | N |
 |---|---|---|---|---|---|
-| P0_vague | 91.7 | 16.7 | 8.3 | 0.0 | 12 |
+| P0_baseline | 91.7 | 16.7 | 8.3 | 0.0 | 12 |
 | P1_layout_pattern | 0.0 | 0.0 | 25.0 | 0.0 | 12 |
 | P2_null_guard | 0.0 | 0.0 | 0.0 | 0.0 | 12 |
 | P3_full_pattern | 0.0 | 0.0 | 0.0 | 0.0 | 12 |
@@ -317,152 +497,21 @@ Four boolean checks per generated code string. The method is static analysis (re
 
 ## Observations
 
-### Prompt text vs code pattern (P0 → P1)
+### Does a text-only instruction fix the layout lookup API misuse?
 
-```
-P0_vague baseline
-      │  layout% = 0% for gemma3:4b, 16.7% for ministral (across TC1+TC2)
-      │  Text instruction: "match each slide to its layout by layout_name"
-      │  Both models default to add_slide("TITLE_AND_BODY") or add_slide(int)
-      │  → AttributeError in sandbox execution on every call
-      │
-      ▼
-P1: add explicit two-line lookup pattern
-      │  layout = next(l for l in prs.slide_layouts if l.name == item['layout_name'])
-      │  slide  = prs.slides.add_slide(layout)
-      │
-      ▼
-layout% → 100% for both models, both test cases
-```
+No — both models default to the wrong API pattern until the prompt includes an explicit lookup pattern, regardless of model size (`gemma3:4b` and `ministral-3:14b-cloud` both go from 0–33% to 100% correctness with the same fix).
 
-**Conclusion:** Text instructions alone are insufficient for non-obvious API patterns — both models default to the most common training distribution form when no code example is provided.
-- Both models pass a string name directly to the layout selection call. That form appears frequently in simple tutorials.
-- The two-step pattern (assign layout to variable, then pass it to the add_slide call) requires an explicit code example to trigger.
-- This is not model-size-specific. Even the 14B model fails at layout lookup without an explicit code pattern. The failure is an API knowledge gap, not a reasoning gap.
+### Why does adding the layout pattern alone break the null guard?
 
-### Null guard regression (P1 → P2)
-
-This is the most important finding in the experiment. Adding a code example can make model behavior worse, not better.
-
-```
-P0 → gemma3:4b writes null guards on both TC1 and TC2 without any code example
-      │  Text instruction: "if null, do NOT fill"
-      │  null% = 100% for both test cases under text-only prompt
-      │
-      ▼
-P1: layout code pattern is introduced — but WITHOUT null guard code pattern
-      │
-      ├─ TC2 (data has None values): null% = 100%  ✓
-      │    Model sees None in the actual slide data → defensive instinct activates
-      │
-      └─ TC1 (data has no None values): null% = 0%  ✗
-           Model mimics the style of the provided layout code example
-           The layout example contains no null guards
-           With no None in the data to trigger defensive instinct,
-           the code style example becomes the dominant signal
-           → model writes code without null guards
-           → would cause TypeError at runtime on any layout with null idx
-      │
-      ▼
-P2: explicit null guard code pattern added alongside layout pattern
-      │  if item['idx_title_placeholder'] is not None:
-      │      slide.placeholders[item['idx_title_placeholder']].text = item['title']
-      │
-      ▼
-null% → 100% for both models, both test cases
-```
-
-**Conclusion:** A model mimics the style of provided code examples — including what they omit.
-- When the only code example is the layout lookup block, gemma3:4b treats any omission in that example as a style signal. The layout block has no null guards. So the model omits null guards too — even when the text instruction says to guard.
-- The test case with null values recovers. Seeing actual null values in the data overrides the code style signal.
-- The standard test case does not recover. The data contains no null values, so the code style example remains the dominant signal.
-- This means a prompt with a partial code example can be worse than a text-only prompt for the omitted pattern.
-- The 14B model result reinforces this. Even with actual null values in the data and a text instruction saying to guard, one out of three runs omitted the null guard. Adding an explicit null guard pattern stabilizes the result. For smaller and mid-size models, code examples enforce the output contract more reliably than text instructions.
-
-### P3 Occam's Razor
-
-```
-P2 → P3: prepend "Required imports: from pptx import Presentation"
-      │
-      ▼
-No measurable change: overall% = 100% for both models, both test cases
-      │
-      │  import% = 100% at P0 for both models — already saturated
-      │  P(generate "from pptx import Presentation" | task = "write python-pptx code") ≈ 1.0
-      │  Adding the import to the prompt does not shift the posterior
-      │
-      ▼
-P3 adds tokens that contribute no signal and introduce two theoretical risks:
-      1. Attention dilution: each additional prompt token competes for
-         attention weight on the tokens that actually matter (layout and null guard patterns)
-         For 4B models, effective context per token is finite
-      2. Position shift: prepending changes the left-context of every downstream token
-         P2 order: PREAMBLE → requirements → layout code → null guard code
-         P3 order: imports → PREAMBLE → requirements → layout code → null guard code
-         Theoretical risk: format drift in small models sensitive to prompt ordering
-```
-
-**Conclusion:** The minimal prompt is preferred — the import block adds tokens that shift no output distribution and fail every test for redundancy.
-- The import block fails all three Occam's Razor tests: omitting it doesn't degrade output, adding it could interfere, and it solves no problem the two-pattern prompt can't.
-- The import statement is already saturated in the training distribution of any model trained on Python code. Redundant tokens are never neutral — they dilute attention and shift token positions.
-
-### Prompt variant comparison tree
-
-```
-SLIDE_GEN_PMT variants (sorted by overall% high → low)
-[✓ = 100% overall  △ = partial  ✗ = failed]
-      │
-      ├─ P2_null_guard ── 100% ✓  ← chosen
-      │    Both models, both test cases
-      │    Minimal prompt that achieves the target
-      │
-      ├─ P3_full_pattern ── 100% ✓
-      │    Same result as P2, adds import block with no benefit
-      │    Theoretical attention dilution and position shift risk
-      │    Not chosen: fails Occam's Razor
-      │
-      ├─ P1_layout_pattern ── 75.0% △
-      │    layout% fixed to 100%; null% = 0% for gemma3:4b TC1
-      │    Null guard regression for data with no None values
-      │
-      └─ P0_vague (lz-chen baseline, control) ── 8.3%
-           layout% = 8.3% (models guess add_slide("string"))
-           save% = 83.3% (models omit /sandbox/ prefix)
-           8.3% overall — baseline reference on local models
-```
-
-The two-pattern and three-pattern prompts are tied at 100%. The two-pattern prompt is kept — it is shorter and introduces no theoretical risks.
+A model mimics the style of a partial code example, including what it omits — `gemma3:4b`'s null guard correctness drops from 100% to 0% once a layout example with no null guard is added, recovering only when the test data itself contains null values.
 
 ---
 
 ## Decision
 
-```
-Decision: Which SLIDE_GEN_PMT variant to apply?
-      │
-      ├── P0_vague (lz-chen original, control)
-      │     ✗ layout% = 8.3% — models guess wrong API
-      │     ✗ save% = 83.3% — wrong path on gemma3:4b
-      │     → BASELINE: reference point for measuring prompt improvement
-      │
-      ├── P1_layout_pattern
-      │     ✓ layout% = 100%
-      │     ✗ null% = 0% for gemma3:4b TC1 — null guard regression
-      │     → REJECTED: partial fix, introduces new failure mode
-      │
-      ├── P2_null_guard
-      │     ✓ overall% = 100% for both models, both test cases
-      │     ✓ Minimal prompt — no redundant tokens
-      │     → CHOSEN: minimal sufficient prompt
-      │
-      └── P3_full_pattern
-            ✓ overall% = 100% — same as P2
-            △ Adds import block with no measurable benefit
-            △ Attention dilution and position shift risk for small models
-            → NOT CHOSEN: redundant tokens, fails Occam's Razor
-```
+### Which `SLIDE_GEN_PMT` variant was applied?
 
-The two-pattern prompt is the minimal sufficient prompt. It adds two explicit code blocks after the existing requirements text: the layout lookup pattern and the null guard pattern. Both models were validated on this prompt. If model behavior changes with a different LLM, the layout-only prompt is the correct intermediate — it fixes the layout selection failure without introducing null guard regression.
+`P2_null_guard` (layout lookup + null guard) was chosen by Occam's razor — it matches `P3_full_pattern`'s 100% accuracy without the redundant import-fix tokens, and outperforms `P1_layout_pattern`, which fixes layout selection but introduces the null guard regression.
 
 The validated prompt was never integrated. The ReActAgent approach was replaced before deployment. See Pipeline Integration Status.
 
@@ -470,19 +519,4 @@ The validated prompt was never integrated. The ReActAgent approach was replaced 
 
 ## Pipeline Integration Status 🚫 SUPERSEDED
 
-### What replaced it
-
-- `PptxRenderer` renders PPTX directly from schema-validated `slide_outlines.json` — no LLM, no Docker sandbox, no ReAct loop.
-- LLM now outputs structured JSON only; the renderer constructs the PPTX deterministically.
-- Eliminates all layout lookup, null guard, save path, and loop failure modes investigated in this experiment.
-
-### Why the decision was made
-
-- python-pptx has no markdown parser — LLM-generated bullet text collapsed into a single paragraph and literal `*` characters appeared on slides (confirmed 2026-04-15).
-- Docker sandbox added latency and infrastructure dependency on top of non-deterministic code generation.
-
-### Transferable findings
-
-- **Code example style mimicry:** A partial code example causes a model to mimic the style of that example — including its omissions. A layout code example without null guards causes the model to omit null guards even when the text instruction says to guard. This applies to any agent step where code generation is guided by partial examples.
-- **Text instructions are insufficient for non-obvious API patterns:** Both a 4B and a 14B model fail to use the correct layout selection pattern from text description alone. Explicit code patterns are required for library APIs that don't match the most common training distribution form.
-- **Minimal prompt principle:** Every token added to a prompt that does not shift the output distribution is a potential source of attention dilution and position sensitivity — especially for models ≤ 4B. Validate each addition against a measurable failure before including it.
+The validated prompt was never deployed — `PptxRenderer` replaced the ReActAgent with deterministic rendering from schema-validated JSON after markdown formatting broke on the sandbox path and Exp 10 found the decisive tool-dispatch failure (confirmed 2026-04-15); the key transferable lesson is that a partial code example gets mimicked including its omissions, a risk for any prompt-guided code generation step.

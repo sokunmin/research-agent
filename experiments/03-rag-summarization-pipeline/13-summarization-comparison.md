@@ -41,7 +41,7 @@ Step 4 — Summarization (detail)
 
 - **Problem:** The pipeline's VLM summarization path — converting PDF pages to images and reading them visually — had never been evaluated for factual accuracy, and its latency (estimated 200–300 s per paper on M1 hardware) made iterative development impractical.
 - **Solution:** Four summarization strategies were compared on 8 ML papers spanning four structural types (short, long, math/table-heavy, appendix-heavy), using `claude-sonnet-4-6` Natural Language Inference (NLI) classification to measure factual accuracy of each generated summary against the full paper text.
-- **Result:** RAG with 9 fixed topic queries and ChunkFilter enabled achieves avg_factuality = 0.945 — +0.158 over VLM (0.787) — while running 16.5× faster (14.7 s vs 242.3 s).
+- **Result:** RAG with 9 fixed topic queries and ChunkFilter enabled achieves avg_factuality = 0.945 — +0.158 over VLM (0.787) — while running 11.3× faster on average (14.7 s vs 165.6 s across all 8 papers).
 
 ---
 
@@ -125,15 +125,13 @@ A `claude-sonnet-4-6` model reads the full `paper.md` (the Docling text extracti
 | avg_hallucination_rate | 0.136 | 0.036 | 0.049 | **0.020** |
 | avg_unverifiable_rate | 0.078 | **0.019** | 0.062 | 0.055 |
 | avg_specificity | 16.427 | 17.453 | **20.134** | 17.759 |
-| avg_latency_s | 242.3 † | 14.7 | 36.9 | **13.9** |
+| avg_latency_s | 165.6 † | 14.7 | 36.9 | **13.9** |
 | avg_output_tokens | 787.9 | 852.8 | 694.1 | 764.3 |
 | avg_retrieved_chunks | N/A | 43.6 | 11.4 | **46.3** |
 
-† `vlm` avg_latency_s = 242.3 is based on only 2 papers (LLaMA: 232.7 s, DALL-E 2: 251.8 s). The other 6 papers ran in a separate script run whose timing logs were not captured. True average across all 8 papers is unknown and likely lower, but expected to remain well above 14.7 s.
+† Measured across all 8 papers (38–252 s depending on page count); LLaMA and DALL-E 2 required DPI=150 due to Ollama's 16 MB request limit.
 
-**Note on `rag_fixed_queries` output_tokens outlier:** Paper 2109.01652 (FLAN) produced output_tokens = 1,459 — approximately 2× the normal range of 659–862 for other papers. Factuality for this paper is 0.929 (13/14 claims supported), so the model did not hallucinate — it generated a longer-than-usual summary. The high token count suppresses this paper's specificity to 9.596, pulling down the config average.
-
-**Conclusion:** `rag_fixed_queries` achieves the highest factuality and lowest unverifiable_rate while running 16.5× faster than VLM — ChunkFilter's boilerplate removal directly causes the low unverifiable_rate by preventing References-section citation noise from entering retrieved context.
+**Conclusion:** `rag_fixed_queries` achieves the highest factuality and lowest unverifiable_rate while running 11.3× faster than VLM on average — ChunkFilter's boilerplate removal directly causes the low unverifiable_rate by preventing References-section citation noise from entering retrieved context.
 
 ---
 
@@ -169,6 +167,29 @@ A `claude-sonnet-4-6` model reads the full `paper.md` (the Docling text extracti
 
 ---
 
+### Per-Paper Latency: VLM vs `rag_fixed_queries`
+
+- **Purpose:** Verify that the 11.3× average speedup holds across individual papers and show how VLM latency scales with page count.
+- **Expected:** VLM latency increases with page count; `rag_fixed_queries` latency stays approximately flat regardless of paper length.
+
+| ArXiv ID | Paper | Pages | VLM latency | `rag_fixed_queries` latency ✅ |
+|---|---|---|---|---|
+| 1608.06993 | NAS (Zoph & Le) | 9 | 38.4 s | 11.3 s |
+| 1801.06146 | ELMo | 12 | 46.0 s | **9.0 s** |
+| 2103.00020 | CLIP | 48 | 207.4 s | 18.4 s |
+| 2109.01652 | FLAN | 46 | 181.7 s | 15.9 s |
+| 2303.01469 | LLaMA † | 42 | 232.7 s | 14.5 s |
+| 2201.11903 | CoT Survey | 43 | 178.8 s | 19.0 s |
+| 2109.07958 | BIG-Bench | 39 | 187.6 s | 18.8 s |
+| 2112.10752 | DALL-E 2 † | 45 | **251.8 s** | 10.8 s |
+| **avg** | | | **165.6 s** | **14.7 s** |
+
+† DPI=150, pages-per-chunk=10 (required to stay under Ollama's 16 MB HTTP body limit).
+
+**Conclusion:** VLM latency scales with page count — short papers (9–12 pages) take 38–46 s while long papers (39–48 pages) take 178–252 s; `rag_fixed_queries` stays flat at 9–19 s across all paper lengths.
+
+---
+
 ## Observations
 
 ### Why Does RAG Achieve Higher Factuality Than VLM?
@@ -183,6 +204,13 @@ RAG reads structured text; VLM reads low-resolution images — text-based input 
 VLM factuality drops to 0.730 on appendix-heavy papers — appendices contain dense tables and figures that are harder to interpret from low-DPI images.
 
 - `rag_fixed_queries` achieves factuality = 1.000 on appendix-heavy papers: a +0.270 absolute advantage over VLM (0.730) on that category.
+
+### Why Does VLM Latency Scale With Paper Length But RAG Does Not?
+
+VLM must encode every page as an image — more pages means more batch calls and more base64-encoded data sent to the model; `rag_fixed_queries` retrieves a fixed chunk count via Qdrant regardless of paper length.
+
+- VLM range: 38.4 s (NAS, 9 pages) to 251.8 s (DALL-E 2, 45 pages at DPI=150).
+- `rag_fixed_queries` range: 9.0–19.0 s across all 8 papers regardless of page count.
 
 ### Why Does Query Expansion Hurt Coverage?
 
@@ -210,10 +238,10 @@ No — removing ChunkFilter raises unverifiable_rate but actually lowers halluci
 
 ### Which Summarization Strategy?
 
-`rag_fixed_queries` is selected — it achieves the highest factuality across 3 of 4 paper categories and runs 16.5× faster than VLM on the same M1 hardware.
+`rag_fixed_queries` is selected — it achieves the highest factuality across 3 of 4 paper categories and runs 11.3× faster than VLM on average on the same M1 hardware.
 
 - avg_factuality = 0.945 (+0.158 over VLM's 0.787).
-- 16.5× faster (14.7 s vs 242.3 s).
+- 11.3× faster on average (14.7 s vs 165.6 s; VLM ranges 38–252 s by paper length vs RAG's flat 9–19 s).
 - avg_unverifiable_rate = 0.019 — ChunkFilter keeps citation noise at 1.9% of claims.
 
 ---
