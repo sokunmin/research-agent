@@ -76,8 +76,8 @@ from llama_index.llms.litellm import LiteLLM
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
-from agent_workflows.summary_gen import _RETRIEVAL_QUERIES, SUMMARIZE_PAPER_PMT
-from services.docling_chunker import DoclingChunker
+from agent_workflows.summary_gen import RETRIEVAL_QUERIES as _RETRIEVAL_QUERIES, SUMMARIZE_PAPER_PMT
+from services.docling_pipeline import DoclingPipeline as DoclingChunker
 from services.multimodal import LiteLLMMultiModal
 from tools.filter_tools import ChunkFilter
 from utils.file_processing import pdf2images

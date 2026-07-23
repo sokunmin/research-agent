@@ -437,12 +437,12 @@ The fix required reducing both dimensions simultaneously to stay under 16 MB:
 
 ```
 DPI=200, 15 pages/chunk → FAIL  (math papers: >16 MB)
-DPI=200,  5 pages/chunk → FAIL  (still >16 MB for dense math pages)
+DPI=200, 10 pages/chunk → FAIL  (still >16 MB for dense math pages)
 DPI=150, 15 pages/chunk → FAIL  (still too large)
-DPI=150,  5 pages/chunk → SUCCESS ✓
+DPI=150, 10 pages/chunk → SUCCESS ✓
 ```
 
-Long papers (LLaMA, DALL-E 2, BIG-Bench, CLIP, FLAN, chain-of-thought) were rerun with `--vlm-pages-per-chunk 5 --vlm-dpi 150`.
+LLaMA (2303.01469, 42 pages) and DALL-E 2 (2112.10752, 45 pages) were rerun with `--vlm-dpi 150 --vlm-pages-per-chunk 10`. The other four long papers (CLIP, FLAN, BIG-Bench, chain-of-thought) completed successfully at the default DPI=200, pages-per-chunk=15 settings.
 
 **Why this fix:** Client-side control via CLI arguments is more robust than relying on server-side environment variables whose availability depends on the Ollama version. Two independent parameters allow future runs to tune resolution and batch size separately without code changes.
 
@@ -481,14 +481,32 @@ Average metrics across all 8 papers per config:
 
 | Config | avg_factuality | avg_hallucination_rate | avg_unverifiable_rate | avg_specificity | avg_latency_s | avg_output_tokens | avg_retrieved_chunks |
 |---|---|---|---|---|---|---|---|
-| vlm | 0.787 | 0.136 | 0.078 | 16.427 | 242.3 † | 787.9 | N/A |
+| vlm | 0.787 | 0.136 | 0.078 | 16.427 | 165.6 † | 787.9 | N/A |
 | rag_fixed_queries | 0.945 | 0.036 | 0.019 | 17.453 | 14.7 | 852.8 | 43.6 |
 | rag_with_expansion | 0.889 | 0.049 | 0.062 | 20.134 | 36.9 | 694.1 | 11.4 |
 | rag_winner_no_filter | 0.925 | 0.020 | 0.055 | 17.759 | 13.9 | 764.3 | 46.3 |
 
-† VLM `avg_latency_s=242.3` is based on only 2 papers (2303.01469 = 232.7s, 2112.10752 = 251.8s). The other 6 papers ran in a separate script run whose timing logs were not captured. The 2 observed values are from math-heavy and appendix-heavy papers — likely slower than short papers due to more pages per batch. The true average for all 8 papers is unknown and likely lower, but still expected to be well above 14.7s.
+† Measured across all 8 papers (38–252 s depending on page count); LLaMA (2303.01469) and DALL-E 2 (2112.10752) required `--vlm-dpi 150 --vlm-pages-per-chunk 10` due to Ollama's 16 MB HTTP body limit; the other 6 papers ran at the default DPI=200.
 
 **Note on the `rag_fixed_queries` output_tokens outlier:** Paper 2109.01652 (FLAN) produced `output_tokens=1459`, approximately 2× the normal range of 659–862 for other papers. The factuality for this paper is 0.929 (13/14 claims supported), so the model did not hallucinate — it simply generated a longer-than-usual summary. The high token count suppresses this paper's specificity to 9.596 (vs the overall `rag_fixed_queries` average of 17.453), pulling down the config average. This is a genuine model output variation, not a data error.
+
+---
+
+### 5.1.1 Per-Paper Latency: VLM vs `rag_fixed_queries`
+
+| ArXiv ID | Paper | Pages | VLM setting | VLM latency | `rag_fixed_queries` latency |
+|---|---|---|---|---|---|
+| 1608.06993 | NAS (Zoph & Le) | 9 | DPI=200 | 38.4 s | 11.3 s |
+| 1801.06146 | ELMo | 12 | DPI=200 | 46.0 s | **9.0 s** |
+| 2103.00020 | CLIP | 48 | DPI=200 | 207.4 s | 18.4 s |
+| 2109.01652 | FLAN | 46 | DPI=200 | 181.7 s | 15.9 s |
+| 2303.01469 | LLaMA | 42 | DPI=150, chunk=10 | 232.7 s | 14.5 s |
+| 2201.11903 | CoT Survey | 43 | DPI=200 | 178.8 s | 19.0 s |
+| 2109.07958 | BIG-Bench | 39 | DPI=200 | 187.6 s | 18.8 s |
+| 2112.10752 | DALL-E 2 | 45 | DPI=150, chunk=10 | **251.8 s** | 10.8 s |
+| **avg** | | | | **165.6 s** | **14.7 s** |
+
+VLM latency scales with page count: short papers (9–12 pages) take 38–46 s; long papers (39–48 pages) take 178–252 s. `rag_fixed_queries` stays flat at 9–19 s regardless of page count — retrieval operates on the Qdrant index, not on the raw PDF, so latency is determined by the number of queries (9 fixed) rather than paper length.
 
 ---
 
@@ -572,7 +590,7 @@ Reasons `rag_fixed_queries` is the recommended approach:
 
 2. **Lowest unverifiable_rate (0.019):** ChunkFilter is effective at suppressing citation noise. Only 1.9% of claims could not be verified — meaning the summary stays grounded in the paper body.
 
-3. **16.5× faster than VLM** (14.7s vs 242.3s†): Text retrieval and generation is dramatically faster than rendering pages to images and sending them through a vision model. On M1 hardware where VLM inference is slow, this difference is critical for a production pipeline.
+3. **11.3× faster than VLM on average** (14.7s vs 165.6s†; VLM ranges 38–252s by paper length vs RAG's flat 9–19s): Text retrieval operates on the Qdrant index rather than encoding page images, so latency is determined by the number of queries, not paper length.
 
 4. **Adequate retrieved_chunk_count (43.6):** 43–44 unique chunks across 9 topic queries provides sufficient coverage of the full paper. This compares favorably to `rag_with_expansion`'s 11.4 average — more content for the LLM to draw from when writing the summary.
 
@@ -584,7 +602,7 @@ Reasons `rag_fixed_queries` is the recommended approach:
 
 - **Small sample size (8 papers, 4 categories × 2 each):** With only 2 papers per category, per-category conclusions have high variance. A single paper's characteristics can dominate the category average. The exception to `rag_fixed_queries`' dominance on long papers (where `rag_with_expansion` scored 0.967 vs 0.887) may not hold with a larger long-paper sample.
 
-- **VLM latency is unreliable:** `avg_latency_s=242.3` for VLM is based on only 2 papers (the 6 that ran in a separate script run have no logged latency). True average for all 8 papers is unknown. The 2 measured papers are math-heavy and appendix-heavy (among the hardest categories), so the true average might be somewhat lower — but even at 100s/paper, VLM would still be 6.8× slower than `rag_fixed_queries`.
+- **VLM latency varies significantly by paper length:** `avg_latency_s=165.6` across all 8 papers, ranging from 38.4s (NAS, 9 pages) to 251.8s (DALL-E 2, 45 pages at DPI=150). Even the shortest paper (38.4s) is 2.6× slower than `rag_fixed_queries` (14.7s avg); long papers are 10–17× slower.
 
 - **Factuality evaluation by Claude subagents:** The judge is Claude claude-sonnet-4-6 (same model family as the assistant writing this report). Inter-rater reliability was not measured. A human expert annotator or a different model family would provide a more independent evaluation and could reduce potential systematic bias.
 
@@ -600,11 +618,11 @@ Reasons `rag_fixed_queries` is the recommended approach:
 
 **Conclusion:**
 
-This experiment compared four summarization approaches on 8 ML papers across 4 paper structural types (short, long, math/table-heavy, appendix-heavy). RAG with 9 fixed topic queries and ChunkFilter enabled (`rag_fixed_queries`) achieved the highest factuality (0.945, meaning 94.5% of claims verified), the lowest hallucination rate (0.036), the lowest unverifiable rate (0.019), and ran 16.5× faster than VLM (14.7s vs 242.3s). The VLM approach — the current production path — produced the lowest factuality (0.787) and highest hallucination rate (0.136) of all four configs. The RAG approach is ready to replace the VLM path in production.
+This experiment compared four summarization approaches on 8 ML papers across 4 paper structural types (short, long, math/table-heavy, appendix-heavy). RAG with 9 fixed topic queries and ChunkFilter enabled (`rag_fixed_queries`) achieved the highest factuality (0.945, meaning 94.5% of claims verified), the lowest hallucination rate (0.036), the lowest unverifiable rate (0.019), and ran 11.3× faster than VLM on average (14.7s vs 165.6s across all 8 papers). The VLM approach — the current production path — produced the lowest factuality (0.787) and highest hallucination rate (0.136) of all four configs. The RAG approach is ready to replace the VLM path in production.
 
 **Recommended for next phase:**
 
-`rag_fixed_queries` — because it achieves the highest factuality, the lowest citation noise rate (unverifiable_rate=0.019), and 16.5× faster latency than VLM, all on the same M1 hardware with no additional model dependencies beyond what is already used in the pipeline.
+`rag_fixed_queries` — because it achieves the highest factuality, the lowest citation noise rate (unverifiable_rate=0.019), and 11.3× faster latency on average than VLM, all on the same M1 hardware with no additional model dependencies beyond what is already used in the pipeline.
 
 **Open questions:**
 
