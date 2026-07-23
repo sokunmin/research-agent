@@ -146,10 +146,25 @@ Do not add sub-bullets to Problem or Result — the details are already in Full 
 
 The main bullet must be short enough to read in one breath.
 
+**Summary exists to hook the reader into continuing, not to front-load every detail.** Over-explaining buries the key point — the more detail crammed into a bullet, the harder it is for the reader to extract what actually matters. Every bullet must be understandable by a reader with zero context on this project, without reading any section below Summary, using the smallest set of facts that still lets Problem → Solution → Result connect into one coherent story. Do not use specific configuration names, prompt names, or field-set labels that are only defined in Experiment Setup — describe them conceptually instead (e.g. "a fast embedding pre-screen" not "Basic fields with nomic-embed-text").
+
 **Rules:**
 - Do not use internal experiment codes (E14, Path B, METHOD_A) in the Summary — use descriptive names
 - Do not start with the experiment goal — start with the pipeline problem
 - The **Problem** bullet must describe a pipeline-level failure — output missing, step stalling, reliability breaking — observable without knowledge of external APIs or data structures. An interviewer who has never used the API must understand what broke and why it matters from this bullet alone. API behaviors and data structure observations belong in Observations, not in the Problem statement.
+- **Problem must describe what was unvalidated before the experiment, not a result the experiment produced.** This applies to numbers and to qualitative claims alike: do not cite any number from this report's own Full Experimental Results in Problem (numbers are only known after the ablation runs), and do not use outcome-asserting language ("has no guaranteed support," "is unreliable," "will fail") that states a conclusion without a number attached — both reverse cause and effect. This applies even to a threshold framed as a "pass condition," since a threshold is only meaningful once you know what result it's being compared against. Test: if the sentence would need rewriting after seeing the experiment's results, it is a Result, not a Problem.
+
+  | Avoid (asserts an outcome) | Use instead (states the gap neutrally) |
+  |---|---|
+  | "...and function-calling passthrough has no guaranteed support across that many backends." | "...so nothing in the design indicates whether the same approach still works if the provider or model changes." |
+  | "...which will silently drop valid results under load." | "...and load-time behavior for this path was never exercised." |
+  | "...making the existing method unreliable for production use." | "...and no data exists on how the existing method performs outside its original single-provider setup." |
+
+- **Problem must not cite findings from experiments dated later than this one.** Check the experiment's date against other experiments referenced in README — an experiment cannot be motivated by a finding that did not exist yet.
+- **Problem must rest on objective, architectural facts about the original (lz-chen) implementation for this specific step only** — derived from the factual reference table in this guide's Project Context section, not from any measured performance number, and not from what the fork does, adds, or changes. Sentences like "this fork adds X" or "this fork routes Y through Z" describe an engineering decision — they belong in Solution or Decision, not Problem.
+- **Problem must be high-level and self-contained** — a reader with zero context on this project must understand it from this sentence alone, without needing any term defined later in the report.
+- **Suggested method:** list the original implementation's objective shortcomings for this step (aim for ~5 candidates), discard any that duplicate each other, depend on another experiment's findings, or imply a measured result, then keep the most important 3 (fewer if fewer qualify) and compress them into one sentence.
+- **Problem must cover every consequence Task Context raises for this step, while staying high-level and concise enough for a zero-context reader to understand in one read.** If Task Context's introductory paragraph states multiple failure modes (e.g., false positives wasting downstream compute AND false negatives silently dropping valid results), Problem must address all of them — but not as an itemized checklist. Find the single architectural cause that explains all the consequences at once, and let the consequences appear as a brief aside, not a list.
 
 ---
 
@@ -239,6 +254,8 @@ One sentence: what happened and why — connected with an em dash if needed.
 ```
 
 **Bullets = numbers only.** Every bullet must contain at least one concrete number or measurement. Bullets with no number are deleted. Bullets that contain both a number and a mechanism explanation — delete the mechanism clause, keep the number. No concluding clauses ("confirming...", "not better", "the lowest of all strategies" without a number). Aim for 1–2 bullets; delete any bullet that doesn't directly prove the lead-in.
+
+**Mechanism explanations must stay conceptual, not implementation-level.** The lead-in explains *why* using a general mechanism (e.g., "the prompt splits selection into a semantic-classification step and a mechanical lookup step, and the model skips the second step") — not by enumerating the actual implementation logic (every branch of a decision tree, every rule in a prompt, quoted code). A GenAI/RAG-background interviewer will never read the underlying script; the lead-in must be understandable without it. This rule applies to Decision lead-ins as well.
 
 No ASCII diagrams. No `**Conclusion:**` labels. When rewriting an existing report that contains ASCII diagrams in this section, remove the diagram and promote the `**Conclusion:**` text that followed it into the lead-in sentence.
 
@@ -462,7 +479,6 @@ Reports are factual records of what happened and what the data shows. Any claim 
 | Location | Diagram type | Starting point | Purpose |
 |---|---|---|---|
 | Task Context | Pipeline flow | Pipeline requirements | Orient reader to where the step fits |
-| Observations (prompt/config) | Comparison tree | Variable being compared | Show per-case outcomes |
 
 ---
 
@@ -576,7 +592,7 @@ Align descriptions with industry-standard terms:
 ## Fact-Check & Integrity Standards
 
 - **Data consistency:** Metrics must match raw source data
-- **Internal consistency:** Numbers cited in Summary and Objective must match the values in the Full Experimental Results tables of the same report — not from pre-experiment estimates or informal observations made outside the experiment
+- **Internal consistency:** Numbers cited in Solution, Result, Observations, and Decision must match the values in the Full Experimental Results tables of the same report — not from pre-experiment estimates or informal observations made outside the experiment. This rule does not apply to Problem, which must contain no numbers from this report at all (see the Problem rules under Summary).
 - **Honest reporting:** If a method failed, document the failure and the root cause — this demonstrates diagnostic ability
 - **No fabrication:** Do not infer results not present in the source data
 - **Stale ✅:** If a pipeline configuration has changed since the experiment, update or remove the ✅ marker and note what changed
@@ -590,10 +606,10 @@ Before finalizing any experiment report, go through every section explicitly in 
 | Section | Check |
 |---|---|
 | **Task Context** | Heading hierarchy correct (`##` → `###`)? Tech blog sentence style applied to all body text? Headings and sub-headings are exempt. |
-| **Summary** | Tech blog sentence style per sentence? No internal experiment codes (Path B, E14, Method A)? Problem bullet is pipeline-level (no API details)? |
+| **Summary** | Tech blog sentence style per sentence? No internal experiment codes (Path B, E14, Method A)? Problem bullet is pipeline-level (no API details)? Problem bullet contains no "this fork"/"my implementation" clause and no outcome-asserting language ("has no guaranteed support," "is unreliable," "will fail") even without a number? |
 | **Experiment Setup** | Hardware sub-section removed? `✅` marked on all current-pipeline rows and columns? All metrics defined? |
 | **Full Experimental Results** | `Conclusion` removed from Purpose/Expected block? `**Conclusion:**` present after every sub-experiment table? Tech blog sentence style in Conclusion line? |
-| **Observations** | `###` sub-headings (not `####`)? Each sub-heading is a question? Lead-in is one sentence only (em dash if two clauses needed)? Lead-in states the mechanism — bullets carry data only, not re-explanation of lead-in? Second bullet only if it covers a genuinely different case? No comparison tree when results are already in a Full Experimental Results table? No future speculation? Tech blog sentence style in all body text? Standard IR/NLP terms used freely; non-standard academic phrasing replaced? |
+| **Observations** | `###` sub-headings (not `####`)? Each sub-heading is a question? Lead-in is one sentence only (em dash if two clauses needed)? Lead-in states the mechanism **at a conceptual level, not implementation logic**? Bullets carry data only, not re-explanation of lead-in? Second bullet only if it covers a genuinely different case? No ASCII diagrams present? No future speculation? Tech blog sentence style in all body text? Standard IR/NLP terms used freely; non-standard academic phrasing replaced? |
 | **Decision** | `###` sub-headings where needed? Each sub-heading is a question? Lead-in sentence states the winner directly? Bullets add decision-critical data not already in the lead-in? No alternative metrics repeated from Results tables? No pipeline background restated (belongs in Task Context)? No findings from Observations restated? No future speculation? |
 | **Numbers** | Metric improvements expressed as absolute values (+0.195), not percentages (+47%)? Latency comparisons use multipliers (15×) with raw numbers in parentheses? Best value in each table column is bolded? Cross-experiment number references use config name, not metric value? |
 | **Pipeline Integration Status** | Badge inline in heading (`## Pipeline Integration Status ✅ INTEGRATED`)? `###` sub-headings (not `####`)? No "What triggered" section? "What changed" is 1 conceptual sentence with no API syntax? |
