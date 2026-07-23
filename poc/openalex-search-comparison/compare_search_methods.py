@@ -41,20 +41,20 @@ if _email:
 PER_PAGE = 25
 RESEARCH_TOPIC = "attention mechanism in transformer models"
 ACADEMIC_DOMAINS = {"arxiv.org", "doi.org", "pubmed.ncbi.nlm.nih.gov"}
-TOPIC_Q = "federated learning privacy preservation"
+TOPIC_FEDLEARN = "federated learning privacy preservation"
 
 # ── Exp 09 / 10: pipeline comparison parameters ───────────────────────────────
-TOPIC_R   = "reinforcement learning policy gradient optimization"
-TOPIC_S   = "convolutional neural network image recognition"
-TOPIC_NEW = "CRISPR gene editing therapeutic applications"   # non-ML domain
+TOPIC_RL     = "reinforcement learning policy gradient optimization"
+TOPIC_CV     = "convolutional neural network image recognition"
+TOPIC_BIOMED = "CRISPR gene editing therapeutic applications"   # non-ML domain
 
 # Five domains for empirical validation: NLP / distributed / RL / CV / biomedical
 FIVE_TOPICS: list[tuple[str, str]] = [
     (RESEARCH_TOPIC, "RESEARCH_TOPIC"),
-    (TOPIC_Q,        "TOPIC_Q"),
-    (TOPIC_R,        "TOPIC_R"),
-    (TOPIC_S,        "TOPIC_S"),
-    (TOPIC_NEW,      "TOPIC_NEW"),
+    (TOPIC_FEDLEARN, "TOPIC_FEDLEARN"),
+    (TOPIC_RL,       "TOPIC_RL"),
+    (TOPIC_CV,       "TOPIC_CV"),
+    (TOPIC_BIOMED,   "TOPIC_BIOMED"),
 ]
 
 CITES_PER_SEED     = 50                            # matches original get_citing_papers(limit=50)

@@ -2373,47 +2373,46 @@
     "reason": "The paper systematically investigates the theoretical foundations and expressive power of transformer components including dot-product self-attention, positional encoding, and FFN layers, analyzing how they work and why specific design choices are necessary for sequence modeling."
   },
   {
-    "id": "W4394566113",
-    "title": "Visual attention methods in deep learning: An in-depth survey",
-    "abstract": "",
+    "id": "W3212386989",
+    "title": "Attention mechanisms in computer vision: A survey",
+    "abstract": "Humans can naturally and effectively find salient regions in complex scenes. Motivated by this observation, attention mechanisms were introduced into computer vision with the aim of imitating this aspect of the human visual system. Such an attention mechanism can be regarded as a dynamic weight adjustment process based on features of the input image. Attention mechanisms have achieved great success in many visual tasks, including image classification, object detection, semantic segmentation, video understanding, image generation, 3D vision, multimodal tasks, and self-supervised learning. In this survey, we provide a comprehensive review of various attention mechanisms in computer vision and categorize them according to approach, such as channel attention, spatial attention, temporal attention, and branch attention; a related repository https://github.com/MenghaoGuo/Awesome-Vision-Attentions is dedicated to collecting related work. We also suggest future directions for attention mechanism research.",
     "keywords": [
       "Computer science",
-      "Deep learning",
-      "Modalities",
-      "Cognition",
-      "Focus (optics)",
+      "Categorization",
       "Artificial intelligence",
+      "Computer graphics",
+      "Process (computing)",
+      "Salient",
       "Mechanism (biology)",
-      "Data science",
-      "Human–computer interaction"
+      "Computer vision",
+      "Human–computer interaction",
+      "Human visual system model",
+      "Image (mathematics)"
     ],
     "topics": [
       "Visual Attention and Saliency Detection",
       "Advanced Neural Network Applications",
-      "Multimodal Machine Learning Applications"
+      "CCD and CMOS Imaging Sensors"
     ],
     "primary_topic": "Visual Attention and Saliency Detection",
     "concepts": [
       "Computer science",
-      "Deep learning",
-      "Modalities",
-      "Cognition",
-      "Focus (optics)",
+      "Categorization",
       "Artificial intelligence",
+      "Computer graphics",
+      "Process (computing)",
+      "Salient",
       "Mechanism (biology)",
-      "Data science",
+      "Computer vision",
       "Human–computer interaction",
-      "Sociology",
-      "Biology",
-      "Physics",
-      "Optics",
-      "Social science",
-      "Neuroscience",
+      "Human visual system model",
+      "Image (mathematics)",
       "Philosophy",
-      "Epistemology"
+      "Epistemology",
+      "Operating system"
     ],
     "relevant": true,
-    "reason": "This in-depth survey of visual attention methods in deep learning directly covers the mechanisms, design, and evolution of attention in neural networks — including transformer-based self-attention — making it highly relevant to understanding attention mechanisms in transformer models."
+    "reason": "This comprehensive survey systematically reviews attention mechanisms (channel, spatial, temporal, and branch attention) that underpin transformer self-attention and its predecessors in visual models, directly covering the design principles and evolution of attention that transformer-based architectures build on — making it highly relevant to understanding attention mechanisms in transformer models."
   },
   {
     "id": "W4392487628",

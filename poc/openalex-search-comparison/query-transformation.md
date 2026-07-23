@@ -2,546 +2,233 @@
 
 ## Purpose
 
-Compare three query strategies for OpenAlex BM25 paper search across 25 queries grouped into 5 categories. The experiment measures whether LLM-based query transformation improves retrieval relevance over raw user input, and whether adding dynamic filter extraction (year_window, min_citations) further improves results beyond topic-only cleaning.
-
-**Motivation (prior smoke test):** Informal smoke tests in `compare_search_methods.py` with hardcoded (non-LLM) query variants across 3 queries × 4 variants showed:
-- `Works().search_filter(title_and_abstract=)` always returns 0 results regardless of query quality — too strict, rejected
-- `Works().search(clean_topic)` produced correct top-1 in all 3 cases; `Works().search(raw_query)` produced off-topic results in 2/3 cases
-- **Gap:** Those tests used hand-crafted ideal variants. This experiment uses real LLM output to answer: does the LLM actually produce clean_topic reliably, and does dynamic filter extraction add further value?
-
-**Three questions this experiment answers:**
-1. Does LLM query transformation improve retrieval over raw input? (A vs B)
-2. Does dynamic filter extraction (year_window, min_citations) add improvement over topic-only cleaning? (B vs C)
-3. Are improvements statistically significant across a 25-query diverse test set?
+Compare two LLM prompt designs for extracting structured search parameters from a natural-language research query: whether the query names a research topic, whether it expresses a year or citation-count preference, and what the core topic keywords are. This experiment does not call OpenAlex and does not evaluate retrieval quality — it only checks whether each prompt design extracts these fields correctly against a hand-authored ground truth.
 
 Script: `poc/openalex-search-comparison/query-transformation.py`
-Results: `poc/openalex-search-comparison/query_transformation_results.json`
-Run log: `poc/openalex-search-comparison/query_transformation_run_log.txt`
+Ground truth: `poc/openalex-search-comparison/query_transformation_v2_gt.json` (40 queries)
+Results: `poc/openalex-search-comparison/query_transformation_v2_results/plan_comparison.json`
 
 ---
 
-## Environment
+## Background: Why This Experiment Was Redone
 
-| Item | Value |
-|---|---|
-| Python env | `micromamba py3.12` |
-| Embedding model | `ollama/nomic-embed-text` (`LLM_RELEVANCE_EMBED_MODEL` from .env) |
-| Transformation LLM | `ollama/ministral-3:14b-cloud` (`LLM_SMART_MODEL` from .env) |
-| LLM-as-judge | `ollama_chat/gemma4:31b-cloud` (`LLM_VISION_FALLBACK_MODEL` from .env) |
-| Ollama base URL | `http://localhost:11434` |
-| Think suppression | `DISABLE_OLLAMA_THINK=true` → `extra_body={"think": False}` on all LLM calls |
-| OpenAlex auth | `OPENALEX_API_KEY` + `OPENALEX_EMAIL` from .env (polite pool) |
-| pyalex config | `max_retries=5`, `retry_backoff_factor=0.5` |
+An earlier version of this script compared three strategies (raw query, LLM-cleaned topic, LLM-cleaned topic with dynamic filters) by sending each to OpenAlex and measuring retrieval quality (`mean_sim@20`, `precision@5`) across 25 queries. That comparison is documented separately and is not repeated here.
 
----
+Since that earlier comparison ran, the production pipeline's extraction prompt (`SEARCH_PARAMS_EXTRACTION_PMT` in `backend/prompts/prompts.py`) changed in ways the earlier experiment never tested:
 
-## Strategies Under Comparison
+- Two new fields were added: `has_identifiable_topic` (a boolean guard for queries with no research subject) and `topic_missing_reason` (a one-sentence explanation shown back to the user when no topic is found).
+- The `year_window` instruction was expanded with explicit filter-math examples and a `{current_year}` template variable (needed because the extraction model's training-data cutoff does not match the actual current date).
+- A rule was added instructing the model not to expand or "correct" proper nouns, model names, or abbreviations (e.g. BERT, GPT, LoRA) when extracting the topic.
+- The production prompt's few-shot examples are all drawn from the ML/AI domain (attention mechanisms, LoRA, RAG).
 
-| ID | Name | BM25 input | year_window | min_citations | LLM calls |
-|---|---|---|---|---|---|
-| **A** | Raw (pipeline baseline) | Original user query unchanged | 3 (default) | 50 (default) | 0 |
-| **B** | Clean topic | LLM-extracted `clean_topic` | 3 (default) | 50 (default) | 1 (shared with C) |
-| **C** | Clean topic + dynamic filters | LLM-extracted `clean_topic` | LLM-extracted | LLM-extracted | 1 (shared with B) |
-
-**B and C share a single LLM call per query** (`_extract_search_params`). Both receive the same `clean_topic`. The only difference between B and C is whether the LLM-extracted `year_window` and `min_citations` are applied to the OpenAlex filter.
+This experiment tests these newer behaviors directly, using a redesigned test set and a redesigned evaluation method (ground-truth comparison instead of retrieval-based similarity scoring).
 
 ---
 
-## Prompts
+## Design Decisions
 
-### SEARCH_PARAMS_PMT (used by both B and C)
+### Question-Form Prompting Instead of Declarative Field Descriptions
 
-```
-You are an academic search specialist.
-Given a user research query, return JSON with exactly three keys:
-- clean_topic: 2-6 plain keywords for OpenAlex BM25 full-text search.
-  Output ONLY simple keywords separated by spaces — no boolean operators (AND/OR/NOT),
-  no quotes, no parentheses, no date syntax, no special characters.
-  Focus only on subject matter — ignore time periods, citation counts, and how the user phrased the request.
-  Use domain-specific terminology. Keep scope faithful — do NOT generalise.
-  Examples:
-  'attention mechanism in transformer models in the last 2 years' -> 'attention mechanism transformer self-attention';
-  'highly cited papers on LoRA fine-tuning' -> 'LoRA low-rank adaptation fine-tuning';
-  'I want to learn about RAG for LLMs' -> 'retrieval augmented generation language models'
-- year_window: integer 1-20. Extract from time phrases ('last 2 years' -> 2, 'recent' -> 3). Default 3.
-- min_citations: integer >=0. Extract from citation phrases ('highly cited' -> 200,
-  'at least 100 citations' -> 100). Default 50.
-Return JSON only, no explanation, no markdown fences.
-```
+The production prompt and the earlier experiment's prompt both describe each field declaratively, e.g. `"has_identifiable_topic: boolean. True if the query names a concrete academic concept..."`. This experiment's prompts instead phrase every field as a direct question, e.g. `"Does the query actually request academic literature on some subject...? -> has_identifiable_topic (true/false)"`, with `->` mapping each question to its output field.
 
-### JUDGE_PMT_TEMPLATE (LLM-as-judge, Strategy C categories 1–4 only)
+Rationale: question-answering is a heavily represented format in LLM training and instruction-tuning data, compared to schema-field description. A direct question may align more closely with how the model is trained to reason about presence/absence of information, requiring less indirection than translating an abstract field description into an implicit judgment. This is a hypothesis motivating the design choice, not a claim independently verified by this experiment — this experiment did not run a controlled question-form-vs-declarative-form comparison; both prompt variants tested here use question form.
 
-```
-Is the following paper relevant to this research query?
+### No Few-Shot Examples
 
-Research query: {original_query}
+Neither prompt variant includes worked examples (the production prompt has four ML-domain examples for `clean_topic` extraction). This repository has two prior findings, from separate experiments, relevant to this decision:
 
-Paper title: {title}
-Paper abstract: {abstract}
+- `experiments/02-agent-behavior/09-react_agent_task_prompt_eval.md`: a code example with no null-guard caused a tested model to omit null guards in its own output, even when the text instruction said to include them — described there as "a model mimics the style of provided code examples — including what they omit."
+- `experiments/02-agent-behavior/10-react_agent_tool_dispatch_eval.md`: a few-shot JSON key name created a pattern that overrode the actual required key name in the model's output.
+- `experiments/02-agent-behavior/06-structured_output_method_comparison.md`: few-shot prompting added measured latency with no accuracy gain over field descriptions alone, on the same model family tested here.
 
-Answer with exactly one word: yes or no.
-```
+Based on these findings, this experiment's prompts rely only on field descriptions and conceptual instructions, with no example query-to-output pairs, and no domain-specific vocabulary in the instructions themselves.
 
----
+### Two Extraction Strategies Compared
 
-## Prompt Design Rationale: Negative vs Positive Instruction
-
-### The Key Change
-
-The `clean_topic` instruction in `SEARCH_PARAMS_PMT` was revised during this experiment:
-
-| Version | Instruction |
-|---|---|
-| Negative (initial) | "Strip time constraints, citation constraints, and conversational phrasing." |
-| Positive (final, current) | "Focus only on subject matter — ignore time periods, citation counts, and how the user phrased the request." |
-
-The prompt currently in the script uses the **positive (current)** version.
-
-### Why Positive Instruction Works Better (LLM Mechanism)
-
-**1. Task Framing — Extraction vs Classification+Removal**
-
-Negative instruction requires a two-step process:
-1. Classify each part of the query: "Is this a time constraint? A citation constraint? Conversational phrasing?"
-2. Remove what was classified
-
-This intermediate classification task is error-prone because the categories have fuzzy boundaries. "Highly cited" is simultaneously a citation constraint *and* a semantic modifier describing paper quality. The model must decide which interpretation wins — and often doesn't.
-
-Positive instruction instead asks: *"What is the academic subject matter of this query?"* This is a **semantic extraction** task — a single step that LLMs are directly trained to perform through exposure to millions of academic texts (paper titles, abstracts, keyword fields).
-
-**2. Language Invariance**
-
-Negative instruction implicitly assumes English grammar patterns:
-- "Strip conversational phrasing" → assumes patterns like "I want to learn about", "papers on", "help me find"
-- These don't generalize to Chinese ("最近有哪些...的論文"), Japanese, or other languages
-
-Positive instruction's core concept — *"what is the academic subject matter?"* — is language-agnostic. The LLM's multilingual capacity handles syntax differences across languages naturally without needing language-specific stripping rules.
-
-**3. Cognitive Load — One-Step vs Two-Step Reasoning**
-
-Negative instructions require the model to first define a category boundary (what counts as "time constraint"?) before applying it. This extra reasoning step introduces an additional source of error.
-
-Positive instruction directly defines the *target*: academic subject matter keywords. The model generates output by attending to what it already understands deeply — the vocabulary from paper titles, abstracts, and keyword fields.
-
-### Evidence: Q20
-
-Q20 query: *"highly cited recent work on vision transformers"*
-
-| Version | clean_topic output |
-|---|---|
-| Negative prompt | `highly cited vision transformer ViT self-attention` |
-| Positive prompt | `vision transformer ViT self-attention computer vision` |
-
-With the negative prompt, the model correctly stripped "recent" (time constraint) but failed to strip "highly cited" — because "highly cited" also describes a property of papers, making it semantically ambiguous. With the positive prompt, the model asked itself "what is the subject matter?" and answered directly: vision transformers, ViT, self-attention, computer vision. No ambiguity.
-
-### Observed Trade-off
-
-Switching to positive prompt caused precision@5 to decrease slightly for Strategy B (0.230 → 0.190). This is because some queries had clean_topics that changed from specific technical acronyms ("VLMs CLIP vision transformer") to broader conceptual terms ("multimodal foundation models"). BM25 rewards exact string matches, so more specific acronyms retrieve papers whose titles contain those exact terms — which the LLM judge then rates as relevant.
-
-However, this is a **BM25 surface matching artifact**, not an indicator of better semantic quality. The precision@5 difference is not statistically significant (p=0.1191, fails Holm-Bonferroni threshold α=0.0167), so the difference is within noise. The positive prompt produces cleaner, more language-agnostic queries that are more robust across diverse user inputs.
-
----
-
-## Static Defaults
-
-| Constant | Value | Description |
+| Strategy | LLM calls | Class |
 |---|---|---|
-| `DEFAULT_YEAR_WINDOW` | 3 | years back from current year for `publication_year` filter |
-| `DEFAULT_MIN_CITATIONS` | 50 | lower bound for `cited_by_count` filter |
-| `PER_PAGE` | 20 | top-N results fetched for similarity computation |
-| `OA_STATUS` | `diamond\|gold\|green` | OpenAlex open-access filter |
+| `single_call_staged` | 1 | `SingleCallStagedExtractor` |
+| `split_topic_filter` | 2 (topic call + filter call) | `SplitTopicFilterExtractor` |
+
+`single_call_staged` asks all seven fields (topic validity, topic-missing reason, year constraint flag, year window, citation constraint flag, min citations, clean topic) in one LLM call, with the seven questions ordered so the model judges topic validity and constraints before extracting the topic keywords last.
+
+`split_topic_filter` asks the three topic-related fields in one call and the four year/citation fields in a second, independent call. The two calls do not depend on each other's output. The implementation issues them sequentially; they were not parallelized in this run.
+
+The two strategies test whether combining all extraction into one call causes cross-task interference — specifically, whether an instruction to *ignore* year/citation phrasing when building the topic keywords (needed for the `clean_topic` field) interferes with, or is interfered with by, the requirement to *detect* that same phrasing (needed for the `has_year_constraint`/`has_citation_constraint` fields) when both instructions are present in the same prompt.
+
+### Identical Wording Across Both Strategies
+
+Both prompts use word-for-word identical phrasing for every corresponding question (e.g. both ask "however broad?" when judging topic validity; both include "use the exact number if given, otherwise your best judgment" when extracting year/citation values; both include the same "no boolean operators... ignore how recent or well-cited..." instruction when extracting the topic). This was corrected during prompt design after an initial draft had these phrases present in one strategy's prompt but not the other's, which would have made the strategy comparison confounded with a wording-completeness comparison rather than a pure call-structure comparison.
+
+### No OpenAlex Calls
+
+This experiment stops after the LLM extraction step. Extracted parameters are not sent to OpenAlex, and no retrieval-based metric is computed. Including OpenAlex would introduce additional variables (database content, ranking behavior) unrelated to the prompt design being compared, making it impossible to attribute a result to the extraction prompt versus the search engine's own behavior.
 
 ---
 
-## Query Dataset (25 queries)
+## Ground Truth Design
 
-| ID | Category | Query |
+Ground truth for all 40 queries is stored in `query_transformation_v2_gt.json`, authored by an LLM (Claude) and spot-checked by hand for the boundary/ambiguous categories before being used. It was not independently re-verified by a second reviewer.
+
+### `has_topic`
+
+A boolean expected value. Checked by exact match against the model's `has_identifiable_topic` output.
+
+### `year_window`
+
+One of three types:
+- `explicit`: the query gives an exact number (e.g. "last 2 years" -> 2). Checked by exact match.
+- `vague`: the query implies a preference without an exact number (e.g. "recent"). Ground truth specifies an `acceptable_range` (e.g. `[2, 4]`); checked by range membership, not exact match, since no single number is uniquely correct for a vague phrase.
+- `absent`: the query does not mention time. Checked by exact match against the system default (3).
+
+### `min_citations`
+
+Uses `explicit` and `absent` the same way as `year_window` (exact match). For `vague` cases, ground truth specifies a `floor` value instead of a range, and the check is `actual >= floor`, not a bounded range. This differs from `year_window`'s vague handling: a citation count above the floor is still consistent with the query's intent (a value of 500 for "highly cited" is not wrong, only stricter than a lower estimate would be), whereas a `year_window` that is too large defeats the purpose of a "recent" constraint. The two fields were given different comparison rules for this reason.
+
+### `clean_topic`
+
+Not compared by exact string match. Ground truth provides a `clean_topic_reference_answer` (an example of an acceptable answer, not the only correct one) and a `clean_topic_must_preserve` list (specific terms, e.g. proper nouns or acronyms, that the extracted topic should recognizably retain — some entries list acceptable alternatives, e.g. `"RAG"` or `"retrieval augmented generation"`). Evaluation of this field is described under Evaluation Architecture below.
+
+---
+
+## Test Dataset (40 Queries)
+
+### Category Breakdown
+
+| Category | N | Purpose |
 |---|---|---|
-| Q01 | 1 — Time constraint | attention mechanism in transformer models in the last 2 years |
-| Q02 | 1 — Time constraint | recent advances in diffusion models for image generation |
-| Q03 | 1 — Time constraint | graph neural networks in the past 3 years |
-| Q04 | 1 — Time constraint | state space models for sequence modeling published recently |
-| Q05 | 1 — Time constraint | vision language models from the last year |
-| Q06 | 2 — Citation constraint | highly cited papers on LoRA fine-tuning |
-| Q07 | 2 — Citation constraint | most influential work on RLHF for language models |
-| Q08 | 2 — Citation constraint | seminal papers on knowledge distillation |
-| Q09 | 2 — Citation constraint | highly cited research on mixture of experts |
-| Q10 | 2 — Citation constraint | top cited work on in-context learning |
-| Q11 | 3 — Conversational | I want to learn about RAG for LLMs |
-| Q12 | 3 — Conversational | can you find papers about how transformers work |
-| Q13 | 3 — Conversational | I'm looking for research on AI alignment |
-| Q14 | 3 — Conversational | help me find papers about efficient inference for LLMs |
-| Q15 | 3 — Conversational | papers explaining how chain of thought prompting works |
-| Q16 | 4 — Mixed constraints | highly cited recent papers on instruction tuning for LLMs |
-| Q17 | 4 — Mixed constraints | I want recent influential work on multimodal language models |
-| Q18 | 4 — Mixed constraints | find me top papers on neural architecture search from the last 2 years |
-| Q19 | 4 — Mixed constraints | most important papers on federated learning published recently |
-| Q20 | 4 — Mixed constraints | highly cited recent work on vision transformers |
-| Q21 | 5 — Clean (control) | transformer self-attention mechanism |
-| Q22 | 5 — Clean (control) | BERT language model pre-training |
-| Q23 | 5 — Clean (control) | contrastive learning visual representations |
-| Q24 | 5 — Clean (control) | reinforcement learning policy gradient |
-| Q25 | 5 — Clean (control) | neural machine translation sequence to sequence |
+| `time_constraint` | 4 | Year constraint only, mix of explicit and vague phrasing |
+| `citation_constraint` | 4 | Citation constraint only, vague phrasing (e.g. "highly cited") |
+| `conversational` | 2 | Informal phrasing, no year/citation constraint |
+| `clean_technical` | 2 | Formal technical phrasing, no year/citation constraint |
+| `mixed_constraints` | 5 | Year and citation constraints both present, including one query with both given as explicit numbers |
+| `no_topic_boundary` | 2 | Queries expressing search intent with no actual subject matter (e.g. "help me find good research to read") |
+| `no_topic_clear` | 1 | A query unrelated to literature search despite containing a domain-adjacent word ("what's the weather today") |
+| `topic_boundary_bare` | 1 | A bare topic-like noun phrase with no additional context ("weather forecast") |
+| `topic_with_context` | 1 | The same subject area with explicit research framing ("regression models for weather forecasting") |
+| `citation_explicit` | 5 | Citation constraint given as an explicit number, including combinations with explicit or vague year constraints |
+| `cross_domain_broad` | 4 | Single-word or short broad topics outside ML/AI (medicine, physics, environmental science, biology) |
+| `cross_domain_specific` | 4 | Specific technical terms/acronyms outside ML/AI (CRISPR, dark matter, renewable energy, mRNA) |
+| `retained_original` | 5 | Queries carried over unchanged from the earlier 25-query experiment, for reference |
 
-**Category design intent:**
-- Cat 1–4: queries with non-semantic terms that BM25 may match literally (time/citation phrases, conversational words); Strategy A expected to underperform
-- Cat 5: clean technical queries; A ≈ B ≈ C expected — validates that the metric is not uniformly biased toward any strategy. If Cat 5 shows B or C consistently higher than A on clean queries, the metric itself is suspect.
+Total: 40.
 
----
+### Combinatorial Coverage Rationale
 
-## Evaluation Metrics
+The three boolean/near-boolean dimensions (topic present, year constraint present, citation constraint present) define 8 possible combinations. The retained/mixed/time/citation categories cover the four combinations where a topic is present; the `no_topic_*` and `topic_boundary_*` categories were added specifically because the earlier 25-query experiment (predating the `has_identifiable_topic` field) had zero coverage of the four combinations where no topic is present.
 
-| Metric | Definition | Scope | Notes |
-|---|---|---|---|
-| `mean_sim_at_20` | Mean cosine similarity between **original user query** embedding and top-20 OpenAlex result embeddings | All 25 queries | Original query (not reformulated) is embedded — measures whether retrieved papers match the user's original intent regardless of which query form was sent to BM25; uses `nomic-embed-text`; 0.0 if 0 results |
-| `precision_at_5` | Fraction of top-k papers judged relevant by LLM-as-judge (yes/no per paper), where k = min(5, n_results) | Categories 1–4 only (N=20) | `None` if 0 results; denominator is min(5, n_results), not always 5; not run for Cat 5 (control group) |
-| `n_results` | Total OpenAlex result count for the query+filter combination | All 25 queries | Recall proxy; very low values indicate over-restrictive filters |
+### The "weather forecast" Minimal Pair
 
-**Statistical test:** Wilcoxon signed-rank, significance threshold p < 0.05.
-- **Why Wilcoxon (non-parametric):** N=25 is too small to assume normality of differences; Wilcoxon makes no distributional assumption and is robust on small samples.
-- **Why two-sided:** `scipy.stats.wilcoxon(alternative='two-sided')`. Strategy C may over-tighten filters and produce worse results than B — the direction of effect is not pre-assumed. One-sided (B > A) would be more powerful but inappropriate for B vs C.
-- **Effect size:** `r = Z / sqrt(N)` where Z is approximated from p-value and sign of median difference.
+Three queries share the word "weather" but differ in grammatical structure and intended answer:
 
-**Embedding text construction** (mirrors `paper_scraping._build_paper_embedding_text`):
-```
-title + abstract (reconstructed from abstract_inverted_index) + keywords + topics
-```
-Note: `work.get("abstract")` always returns `None` in pyalex — abstract is reconstructed from `abstract_inverted_index`.
+| Query | Expected `has_topic` | Reasoning |
+|---|---|---|
+| "what's the weather today" | `false` | Phrased as a direct question requesting a specific real-time fact, not a request for literature |
+| "weather forecast" | `true` | A bare noun phrase; in the context of a paper-search system, defaults to being read as a topic description |
+| "regression models for weather forecasting" | `true` | Explicit research framing, unambiguous |
+
+This set tests whether the model distinguishes "a query structured as a topic description" from "a query structured as a direct question that happens to mention a domain-adjacent word," rather than keying off the presence of any single word.
 
 ---
 
-## Metric Interpretation
+## Evaluation Architecture
 
-### What Each Metric Measures
+### Deterministic Checks (Python)
 
-**mean_sim@20** measures semantic alignment between the *original user query* and the top-20 papers retrieved by BM25:
+`GroundTruthChecker` in `query-transformation.py` implements the exact/range/floor comparison rules described above for `has_topic`, `year_window`, and `min_citations`. These checks require no LLM call and produce the same result on every run for the same extracted output.
 
-1. Embed the original user query using `nomic-embed-text` → query vector
-2. For each of the top-20 BM25 results, embed the paper (title + abstract + keywords + topics) → paper vector
-3. Compute cosine similarity between query vector and each paper vector
-4. Average the 20 similarity scores → mean_sim@20
+### LLM-as-Judge for `clean_topic` Quality (Claude, Single-Pass)
 
-Key point: the embedding always uses the **original raw query**, not the reformulated `clean_topic`. This ensures the evaluation measures whether *the retrieved papers match what the user actually wanted*, not whether the LLM rephrased the query correctly.
+`clean_topic` is free text, so paraphrases and reordering should not be penalized by exact string matching (e.g. "neural networks for graphs" should not be marked wrong for failing to match "graph neural networks" character-for-character). This field was judged by Claude, reading each extracted `clean_topic` against that query's `clean_topic_reference_answer` and `clean_topic_must_preserve` list, producing:
 
-**precision@5** measures whether the top-5 papers are actually relevant, judged by an LLM:
+- `preserves_key_terms` (boolean): whether every required term is recognizably present (word-level matching; alternatives listed with "or" both count).
+- `quality_score` (1-3): 3 = faithfully captures the subject with no meaningful loss; 2 = captures the general direction but loses specificity or over-broadens a term; 1 = misses the subject, drops a required term, or corrupts a term into something unrelated.
+- `reason`: one sentence justifying the score, logged so any individual judgment can be manually reviewed afterward.
 
-1. Take the top-5 papers from BM25 results (or all if fewer than 5)
-2. An LLM judge reads each paper's title + abstract and answers "yes/no: is this relevant to the original query?"
-3. precision@5 = number of "yes" answers / 5
+Each sample was judged once, not via repeated sampling with majority voting. This is an explicit cost/reliability trade-off, discussed below.
 
-This is human-interpretable but dependent on the LLM judge's reasoning — there is inherent run-to-run variance.
+---
 
-### Why Both Metrics Improve for B/C vs A
+## Trade-offs
 
-Strategy A sends the raw query directly to BM25. Raw queries often contain non-academic tokens ("I want to learn about", "last 2 years", "highly cited") that:
-
-- **For BM25:** become literal search tokens. BM25 ranks papers higher if they contain those exact tokens. A paper discussing "highly cited methods" may rank above a more relevant paper that simply doesn't use that phrase.
-- **For embedding similarity:** the query vector encodes these modifiers, but retrieved papers don't contain them in their text, so cosine similarity is diluted.
-
-Strategies B and C strip these non-topic tokens, leaving only domain-specific keywords (e.g., "attention mechanism transformer self-attention"). BM25 then retrieves papers whose titles/abstracts contain these exact academic terms — papers that are semantically closer to the user's actual research intent.
-
-Result: both mean_sim@20 and precision@5 improve for B/C. Only mean_sim@20 is statistically significant (p<0.01 after Holm-Bonferroni). precision@5 shows the same directional improvement but does not reach significance (p=0.1191).
-
-### Relationship to the Pipeline's Two-Stage Relevance Filter
-
-The downstream pipeline uses a two-stage filter on BM25 candidates:
-- **Stage 1 (embedding similarity):** embed each candidate paper → compare to topic embedding → filter by threshold
-- **Stage 2 (LLM verification):** LLM re-ranks and confirms relevance for borderline papers
-
-mean_sim@20 uses the same `nomic-embed-text` model and the same paper embedding construction as Stage 1. A higher mean_sim@20 means Stage 1 will retain more papers (more papers score above the relevance threshold), and those papers will be more semantically aligned with the user's intent.
-
-mean_sim@20 is **not** Stage 1 itself — Stage 1 applies a threshold and filters; mean_sim@20 measures the distribution of scores before filtering. But it directly predicts how well Stage 1 will perform on these queries.
-
-### Why B/C Precision@5 Is Not Uniformly Higher
-
-Strategies B/C improve precision@5 on average, but individual queries show mixed results:
-
-- **Cat 3 (Conversational, Q11–Q13), B < A:** Q11 "I want to learn about RAG for LLMs" → clean_topic: "retrieval augmented generation large language models". The raw query happened to match papers that use similarly informal phrasing in their abstracts. The cleaned topic retrieved academically phrased papers that are equally valid but less surface-matched.
-- **Cat 2 (Citation constraint, Q07–Q08), B < A:** Strategy A's raw query contained "influential" / "seminal", which directly matched high-impact papers in OpenAlex. Those papers happen to be relevant — the citation-filtering language accidentally produced better BM25 matches.
-
-This is why precision@5 serves as **directional corroboration**, not the primary metric. mean_sim@20 is more stable across query types because it measures semantic space alignment rather than surface keyword overlap.
+- **No statistical significance testing.** With 37-40 topic-present queries split across 13 categories (2-5 queries per category), most categories do not have enough samples for a paired significance test (e.g. McNemar's test) to reach conventional power. Results below are reported as raw counts and scores, not p-values.
+- **Single-pass LLM judging, not multi-sample consensus.** Asking the same judge model the same question multiple times and taking a majority vote reduces the effect of any single judgment's variance, at the cost of additional LLM calls. This experiment used one judgment per sample due to a stated cost constraint. Judgments include a logged reason specifically so they remain manually spot-checkable after the fact, partially offsetting the lack of repeated sampling.
+- **Ground truth was LLM-authored, not independently re-verified for every entry.** The boundary/ambiguous categories were spot-checked by hand; the remaining entries were not.
+- **The extraction model (`ministral-3:14b-cloud`) is the only model tested.** Results describe this model's behavior under both prompt designs; they do not describe how a different extraction model would behave under the same two designs.
 
 ---
 
 ## Full Results
 
-### Per-Query Results (all 25 queries)
+### Deterministic Field Accuracy (out of 40)
 
-| Query ID | Category | mean_sim@20 (Strategy A: raw) | mean_sim@20 (Strategy B: clean topic) | mean_sim@20 (Strategy C: dynamic filters) | precision@5 (Strategy A) | precision@5 (Strategy B) | precision@5 (Strategy C) | clean_topic extracted by LLM (shared by B and C) |
-|---|---|---|---|---|---|---|---|---|
-| 01 | 1 | 0.535016 | 0.536434 | 0.563133 | 0.20 | 0.40 | 0.25 | attention mechanism transformer self-attention multihead attention |
-| 02 | 1 | 0.490507 | 0.513163 | 0.513163 | 0.20 | 0.20 | 0.20 | diffusion models image generation score-based generative models |
-| 03 | 1 | 0.533573 | 0.566207 | 0.566207 | 0.20 | 0.40 | 0.40 | graph neural networks GNN message passing |
-| 04 | 1 | 0.491297 | 0.531075 | 0.531075 | 0.00 | 0.60 | 0.60 | state space models sequence modeling neural ordinary differential equations |
-| 05 | 1 | 0.526168 | 0.556049 | 0.555687 | 0.00 | 0.20 | 0.20 | vision language models multimodal foundation models |
-| 06 | 2 | 0.546148 | 0.569568 | 0.567186 | 0.00 | 0.20 | 0.25 | LoRA low-rank adaptation fine-tuning parameter-efficient transfer learning |
-| 07 | 2 | 0.655358 | 0.637514 | 0.649426 | 0.00 | 0.00 | 0.00 | reinforcement learning human feedback language models RLHF |
-| 08 | 2 | 0.528267 | 0.509243 | 0.512632 | 0.00 | 0.00 | 0.00 | knowledge distillation teacher student models |
-| 09 | 2 | 0.484453 | 0.511686 | 0.518320 | 0.00 | 0.20 | 0.20 | mixture of experts sparse expert networks neural architecture search |
-| 10 | 2 | 0.545957 | 0.569756 | 0.569756 | 0.00 | 0.20 | 0.20 | in-context learning prompt tuning few-shot learning |
-| 11 | 3 | 0.545006 | 0.499319 | 0.499319 | 0.60 | 0.40 | 0.40 | retrieval augmented generation large language models |
-| 12 | 3 | 0.502223 | 0.492328 | 0.492328 | 0.60 | 0.60 | 0.60 | transformer architecture self-attention positional encoding encoder decoder |
-| 13 | 3 | 0.532129 | 0.523831 | 0.523831 | 0.20 | 0.00 | 0.00 | AI alignment safety interpretability robustness |
-| 14 | 3 | 0.534788 | 0.573489 | 0.573489 | 0.20 | 0.00 | 0.00 | efficient inference large language models quantization pruning distillation |
-| 15 | 3 | 0.525909 | 0.561437 | 0.561437 | 0.20 | 0.00 | 0.00 | chain thought prompting reasoning step-by-step |
-| 16 | 4 | 0.580757 | 0.569393 | 0.569393 | 0.00 | 0.00 | 0.00 | instruction tuning large language models prompt engineering |
-| 17 | 4 | 0.541017 | 0.590645 | 0.590645 | 0.00 | 0.00 | 0.00 | multimodal language models vision language pretraining cross-modal alignment |
-| 18 | 4 | 0.556086 | 0.598163 | 0.569996 | 0.00 | 0.00 | 0.00 | neural architecture search NAS |
-| 19 | 4 | 0.497738 | 0.495561 | 0.495561 | 0.00 | 0.20 | 0.20 | federated learning privacy-preserving distributed machine learning |
-| 20 | 4 | 0.552582 | 0.597387 | 0.597387 | 0.00 | 0.20 | 0.20 | vision transformer ViT self-attention computer vision |
-| 21 | 5 | 0.417054 | 0.423800 | 0.423800 | — | — | — | transformer self-attention mechanism multi-head attention |
-| 22 | 5 | 0.545846 | 0.564158 | 0.564158 | — | — | — | BERT pre-training masked language modeling transformer |
-| 23 | 5 | 0.481001 | 0.504062 | 0.504062 | — | — | — | contrastive learning visual representation self-supervised learning |
-| 24 | 5 | 0.415238 | 0.415238 | 0.415238 | — | — | — | reinforcement learning policy gradient methods |
-| 25 | 5 | 0.510799 | 0.516812 | 0.516812 | — | — | — | neural machine translation sequence to sequence encoder decoder attention |
-
----
-
-### Overall Medians (N=25)
-
-| Strategy | median mean_sim@20 |
-|---|---|
-| A (raw query) | 0.5321 |
-| B (clean topic, fixed filters) | 0.5364 |
-| C (clean topic, dynamic filters) | 0.5557 |
-
----
-
-### Wilcoxon Signed-Rank Tests — mean_sim@20 (N=25)
-
-| Comparison | median (strategy X) | median (strategy Y) | W (Wilcoxon test statistic) | p (p-value) | r (effect size) | Result |
-|---|---|---|---|---|---|---|
-| A vs B | 0.5321 | 0.5364 | 61.0 | 0.0096 | 0.529 | **significant** |
-| B vs C | 0.5364 | 0.5557 | 10.0 | 0.5781 | 0.000 | not significant |
-| A vs C | 0.5321 | 0.5557 | 53.0 | 0.0043 | 0.582 | **significant** |
-
-**Holm-Bonferroni correction (k=3, sorted by p):** A vs C (p=0.0043 < α=0.0167 ✓), A vs B (p=0.0096 < α=0.025 ✓), B vs C (p=0.5781 > α=0.05 ✗). Both A vs B and A vs C remain significant after correction.
-
----
-
-### Per-Category Breakdown — median mean_sim@20
-
-| Category | N (queries) | Description | median mean_sim@20 (Strategy A) | median mean_sim@20 (Strategy B) | median mean_sim@20 (Strategy C) | B > A | C > B |
-|---|---|---|---|---|---|---|---|
-| 1 | 5 | Time constraint | 0.5262 | 0.5364 | 0.5557 | ✓ | ✓ |
-| 2 | 5 | Citation constraint | 0.5460 | 0.5696 | 0.5672 | ✓ | ✗ |
-| 3 | 5 | Conversational | 0.5321 | 0.5238 | 0.5238 | ✗ | ✗ |
-| 4 | 5 | Mixed constraints | 0.5526 | 0.5906 | 0.5700 | ✓ | ✗ |
-| 5 | 5 | Clean (control) | 0.4810 | 0.5041 | 0.5041 | ✓ | ✗ |
-
----
-
-### LLM-as-Judge Precision@5 — Categories 1–4 (N=20)
-
-| Strategy | mean precision@5 | N |
+| Field | `single_call_staged` | `split_topic_filter` |
 |---|---|---|
-| A | 0.120 | 20 |
-| B | 0.190 | 20 |
-| C | 0.185 | 20 |
+| `has_topic_correct` | 39/40 | 39/40 |
+| `year_window_correct` | 40/40 | 40/40 |
+| `min_citations_correct` | 37/40 | 37/40 |
 
-#### Wilcoxon Signed-Rank Tests — precision@5 (paired, N=20)
+Both strategies produced identical totals on all three fields. Individual queries were not always identical between the two strategies: for `min_citations`, `single_call_staged` failed on query ids 14, 17, 39; `split_topic_filter` failed on query ids 7, 14, 17. Ids 14 and 17 failed under both strategies (a shared failure, not distinguishing between them); ids 7 and 39 each failed under only one strategy (one discordant pair each direction).
 
-| Comparison | median (strategy X) | median (strategy Y) | W (Wilcoxon test statistic) | p (p-value) | r (effect size) | Result |
-|---|---|---|---|---|---|---|
-| A vs B | 0.000 | 0.200 | 22.0 | 0.1191 | 0.000 | not significant |
-| B vs C | 0.200 | 0.200 | 1.0 | 1.0000 | 0.000 | not significant |
-| A vs C | 0.000 | 0.200 | 23.0 | 0.1260 | 0.000 | not significant |
+`has_topic_correct` failed identically for both strategies on query id 21 ("weather forecast" — ground truth expects `true`; both strategies extracted `false`). Both strategies produced an empty `clean_topic` for this query, consistent with the extraction prompts' own instruction to leave `clean_topic` empty when no topic is judged present.
 
-Note: Only queries where all three strategies had non-`None` `precision_at_5` values are included in the paired test. Queries with `n_results=0` for any strategy produce `precision_at_5=None` and are excluded from the pair.
+### `clean_topic` Quality Scores (out of 37 topic-present queries)
 
-**Holm-Bonferroni correction (k=3, sorted by p):** A vs B (p=0.1191 > α=0.0167 ✗) — first test fails, all three tests are not significant after correction. Precision@5 serves as directional corroboration only; mean_sim@20 is the confirmatory indicator.
-
----
-
-### Strategy C — Extracted Filter Values Per Query
-
-| Query ID | Category | year_window | min_citations | n_results (total OpenAlex result count) |
-|---|---|---|---|---|
-| 01 | 1 | 2 | 50 | 4 |
-| 02 | 1 | 3 | 50 | 199 |
-| 03 | 1 | 3 | 50 | 46 |
-| 04 | 1 | 3 | 50 | 46 |
-| 05 | 1 | 2 | 50 | 60 |
-| 06 | 2 | 3 | 200 | 4 |
-| 07 | 2 | 3 | 200 | 8 |
-| 08 | 2 | 3 | 200 | 9 |
-| 09 | 2 | 3 | 200 | 10 |
-| 10 | 2 | 3 | 200 | 38 |
-| 11 | 3 | 3 | 50 | 391 |
-| 12 | 3 | 3 | 50 | 124 |
-| 13 | 3 | 3 | 50 | 270 |
-| 14 | 3 | 3 | 50 | 39 |
-| 15 | 3 | 3 | 50 | 189 |
-| 16 | 4 | 3 | 200 | 32 |
-| 17 | 4 | 3 | 50 | 104 |
-| 18 | 4 | 2 | 50 | 8 |
-| 19 | 4 | 3 | 50 | 218 |
-| 20 | 4 | 3 | 100 | 43 |
-| 21 | 5 | 3 | 50 | 337 |
-| 22 | 5 | 3 | 50 | 145 |
-| 23 | 5 | 3 | 50 | 497 |
-| 24 | 5 | 3 | 50 | 280 |
-| 25 | 5 | 3 | 50 | 273 |
-
----
-
-## Implementation Notes
-
-### Single LLM call for B and C
-`_extract_search_params(query)` is called once per query and returns `{clean_topic, year_window, min_citations}`. Strategy B uses `clean_topic` with default filters. Strategy C uses all three fields. This ensures B and C receive the identical `clean_topic`; the only controlled variable between B and C is whether dynamic filter values are applied.
-
-### Why separate strategy B and C prompts were abandoned
-An earlier version used two separate prompts: `STRATEGY_B_PMT` (topic-only) and `STRATEGY_C_PMT` (full SearchParams). The B prompt produced PubMed Boolean syntax on several queries (e.g. `"attention mechanisms" AND "transformer models" AND ("2022/01/01"[Date - Publication]...)`), causing 0 results or HTTP 500 errors. The root cause was that the prompt said "BM25 query" without format constraints — the model defaulted to its training bias toward PubMed/Boolean syntax. The merged `SEARCH_PARAMS_PMT` with explicit format constraints (no operators, no quotes, plain keywords only) and concrete examples resolved this.
-
-### Abstract reconstruction
-`work.get("abstract")` always returns `None` in pyalex. Abstract text is reconstructed from `work.get("abstract_inverted_index")` using word-position sorting. This mirrors `paper_scraping._reconstruct_abstract()`.
-
-### Embedding input fields
-Paper embedding text = `title + abstract + keywords + topics`. This mirrors `paper_scraping._build_paper_embedding_text()` to ensure cosine similarity scores are in the same calibrated space as the pipeline's relevance filter.
-
-### Category 5 control group
-Cat 5 queries are already clean technical terms. A ≈ B ≈ C is expected. The observed results (Q21–Q25) confirm this: B and C are equal to A or marginally higher, validating that the metric is not artificially inflating B/C scores. Q24 shows all three strategies at identical sim=0.4152, the lowest across all queries.
-
----
-
-## Statistical Test Rationale
-
-### Why Wilcoxon Signed-Rank?
-
-Test selection follows three sequential decisions:
-
-**Decision 1 — Paired or independent?**
-
-The same 25 queries are evaluated under all three strategies. Each query produces one score per strategy, forming matched triples — this is a repeated-measures (within-subject) design. All independent-group tests are inapplicable:
-
-| Excluded test | Why excluded |
-|---|---|
-| Independent t-test | Assumes two separate, unrelated samples |
-| Mann-Whitney U | Non-parametric equivalent of independent t-test — same exclusion |
-| One-way ANOVA | Assumes independent groups |
-| Kruskal-Wallis | Non-parametric one-way ANOVA — same exclusion |
-| Fisher's Exact / Chi-square | Categorical data in independent groups |
-
-**Decision 2 — How many groups per comparison?**
-
-The experiment uses pairwise comparisons (A vs B, B vs C, A vs C) with pre-specified directional hypotheses. Multi-group omnibus tests are not required:
-
-| Excluded test | Why excluded |
-|---|---|
-| RM-ANOVA | Tests k≥3 conditions simultaneously; parametric (requires normality + sphericity) |
-| Friedman | Non-parametric RM-ANOVA — appropriate as omnibus, but pre-specified pairwise hypotheses make it unnecessary |
-
-When hypotheses are confirmatory and pre-specified (not exploratory), pairwise tests without an omnibus step are statistically defensible. Friedman would be required for exploratory "does anything differ?" questions.
-
-**Decision 3 — Binary or continuous? Parametric or non-parametric?**
-
-Two paired tests remain: Paired t-test and Wilcoxon signed-rank. Two additional paired tests are also eliminated here:
-
-| Excluded test | Why excluded |
-|---|---|
-| McNemar | Requires binary outcome (0/1 per pair); mean_sim@20 is continuous |
-| Cochran's Q | Multi-condition extension of McNemar; same binary requirement |
-
-Paired t-test vs Wilcoxon signed-rank:
-
-| Criterion | Paired t-test | Wilcoxon signed-rank |
+| Metric | `single_call_staged` | `split_topic_filter` |
 |---|---|---|
-| Distributional assumption | Differences must be normally distributed | No distributional assumption (only requires ordinal ranking of differences) |
-| N=25 | Shapiro-Wilk power too low to verify normality reliably | Robust regardless |
-| Tied differences | Inflates variance estimate when many diffs = 0 | Handles tied pairs via average rank assignment |
-| mean_sim@20 range | Bounded [0,1] — difference distribution shape unknown | Unaffected |
+| `preserves_key_terms = true` | 36/37 | 36/37 |
+| Mean `quality_score` (1-3) | 2.92 | 2.65 |
+| Score distribution (3 / 2 / 1) | 35 / 1 / 1 | 25 / 11 / 1 |
 
-**Shapiro-Wilk** is the prerequisite normality test: if differences pass (p > 0.05), Paired t-test is valid. At N=25, Shapiro-Wilk lacks sufficient power to reliably detect non-normality. Combined with the large tied-pair count in B vs C (17/25 differences = 0), Wilcoxon is the correct choice.
+### Samples Scoring ≤2 or Failing Term Preservation
 
-**Decision tree summary:**
-
-```
-Paired / repeated measures (same 25 queries under all 3 strategies)
-    │
-    ├─ k≥3 simultaneous → RM-ANOVA (parametric), Friedman (non-parametric)
-    │   [excluded: pairwise comparisons with pre-specified hypotheses]
-    │
-    ├─ Binary outcome (0/1) → McNemar, Cochran's Q
-    │   [excluded: mean_sim@20 is continuous]
-    │
-    └─ Two-group pairwise, continuous data
-           │
-           ├─ Normal differences → Paired t-test
-           │   [excluded: N=25 too small to verify normality; large tied-pair count]
-           │
-           └─ No distributional assumption → ✅ Wilcoxon signed-rank
-```
-
----
-
-### Why No Omnibus (Friedman) Test?
-
-Friedman test is the non-parametric equivalent of one-way RM-ANOVA. It tests whether any difference exists among k conditions simultaneously, controlling the family-wise Type I error before pairwise comparisons.
-
-**Omnibus is required when:** the analysis is exploratory — hypotheses are formed after seeing which pairs differ.
-
-**Omnibus is not required when:** hypotheses are pre-specified and confirmatory. This experiment defines two primary hypotheses before execution:
-1. Does B outperform A? (topic cleaning effect)
-2. Does C outperform B? (dynamic filter effect)
-
-These are directional, pre-registered hypotheses, not post-hoc fishing. Skipping the Friedman omnibus step is statistically defensible in this context.
-
-A secondary structural reason: A vs C is logically dependent on A vs B and B vs C (transitivity). The effective number of independent comparisons is 2, not 3 — the omnibus provides limited additional protection.
-
----
-
-### Why Holm-Bonferroni? Why Not Standard Bonferroni?
-
-Three pairwise tests per metric inflate the family-wise Type I error rate beyond α=0.05. Multiple comparison correction is needed.
-
-**Standard Bonferroni** sets the per-test threshold at α/k = 0.05/3 = 0.0167. It is uniformly conservative because it assumes all k tests are independent — which they are not here (A vs C is determined by A vs B and B vs C).
-
-**Holm-Bonferroni** (sequential Bonferroni) sorts tests by p-value and applies decreasing thresholds (0.05/k, 0.05/(k-1), ..., 0.05/1). It is a step-down procedure that is:
-- Mathematically proven to control FWER at the same α=0.05 as standard Bonferroni
-- Uniformly more powerful — never rejects fewer tests than standard Bonferroni
-
-There is no scenario where standard Bonferroni outperforms Holm. Holm should always be preferred.
-
-**Impact on this experiment:**
-
-*mean_sim@20 (k=3, sorted by p):*
-
-| Rank | Comparison | p | Holm α | Result |
-|---|---|---|---|---|
-| 1 | A vs C | 0.0043 | 0.05/3 = 0.0167 | ✓ significant |
-| 2 | A vs B | 0.0096 | 0.05/2 = 0.025 | ✓ significant |
-| 3 | B vs C | 0.5781 | 0.05/1 = 0.05 | ✗ not significant |
-
-Main conclusion unchanged: topic cleaning (B) significantly outperforms raw query (A).
-
-*precision@5 (k=3, sorted by p):*
-
-| Rank | Comparison | p | Holm α | Result |
-|---|---|---|---|---|
-| 1 | A vs B | 0.1191 | 0.05/3 = 0.0167 | ✗ first test fails → all not significant |
-
-The A vs B precision@5 result (p=0.1191) fails Holm-Bonferroni. Precision@5 serves as directional corroboration only; mean_sim@20 is the sole confirmatory indicator.
-
----
-
-### Sample Size Justification (N=25)
-
-N=25 was chosen as a balanced design: 5 query categories × 5 queries per category. Equal category representation is required for the per-category breakdown analysis. To maintain balance, any increase would need to add queries in multiples of 5 per category.
-
-N=25 is not an arbitrary convenience choice — it is sufficient for the observed effect size:
-
-| Effect | r | Minimum N for 80% power (α=0.05, two-sided) | Post-hoc power at N=25 |
+| Query ID | Strategy | Extracted `clean_topic` | Reason |
 |---|---|---|---|
-| A vs B mean_sim@20 | 0.529 | ~12 | >97% |
-| A vs B precision@5 | 0.000 | — | — |
+| 5 | `split_topic_filter` | "LoRA fine-tuning highly cited papers" | Leaks the citation-constraint phrase "highly cited papers" into the topic string |
+| 7 | `single_call_staged` | "knowledge distillation seminal papers" | Leaks "seminal papers" qualifier |
+| 7 | `split_topic_filter` | "knowledge distillation seminal papers machine learning deep learning neural networks" | Leaks citation phrase and adds generic, non-specific terms |
+| 8 | `split_topic_filter` | "in-context learning top cited work" | Leaks "top cited work" qualifier |
+| 10 | `split_topic_filter` | "transformers architecture neural networks attention mechanisms deep learning" | Diluted with generic terms not specific to the query |
+| 15 | `split_topic_filter` | "vision transformers highly cited recent work" | Leaks citation/recency qualifier |
+| 16 | `split_topic_filter` | "federated learning citations" | Leaks the word "citations" |
+| 21 | `single_call_staged` | "" (empty) | `has_identifiable_topic` was incorrectly `false` for this query (see above); the extraction prompt leaves `clean_topic` empty in that case |
+| 21 | `split_topic_filter` | "" (empty) | Same as above |
+| 23 | `split_topic_filter` | "LoRA fine-tuning citations" | Leaks the word "citations" |
+| 24 | `split_topic_filter` | "knowledge distillation machine learning" | Broadened with a generic, non-specific term |
+| 25 | `split_topic_filter` | "RAG retrieval augmented generation citations" | Leaks the word "citations" |
+| 26 | `split_topic_filter` | "vision transformers citations" | Leaks the word "citations" |
+| 27 | `split_topic_filter` | "mixture of experts MoE deep learning neural networks" | Diluted with generic terms not specific to the query |
 
-The experiment was adequately powered to detect the A vs B effect. The precision@5 Holm-Bonferroni failure reflects the correction threshold (p=0.1191 > 0.0167), not insufficient power — the uncorrected p already shows a clear directional signal.
+12 of these 14 cases are `split_topic_filter`; 11 of the 12 involve a year- or citation-related word appearing in `clean_topic` despite the prompt's explicit instruction to exclude such words.
+
+### An Observed Pattern in the Failure Cases
+
+In `single_call_staged`, the four questions asking the model to identify and extract year/citation constraints (questions 3-6) come immediately before the question asking it to extract the topic while ignoring those same constraints (question 7), within the same LLM call. In `split_topic_filter`, the topic-extraction call never asks about year/citation constraints at all — the instruction to ignore them appears without the model having first been asked to identify them in that call.
+
+The majority of `split_topic_filter`'s lower-scoring `clean_topic` extractions involve exactly the words (citation counts, "highly cited," "seminal," "top cited") that the same model's `has_citation_constraint`/`min_citations` questions (asked in a separate call) correctly identified as constraint-related. This experiment did not run a further controlled test isolating why this pattern occurs — it is reported as an observed association between the two calls' outputs for `split_topic_filter`, not a mechanism confirmed by additional experimentation.
+
+---
+
+## Implementation
+
+### Prompts
+
+Full text of `SEARCH_PARAMS_STAGED_PMT`, `TOPIC_EXTRACTION_PMT`, and `SEARCH_FILTERS_EXTRACTION_PMT` is in `query-transformation.py`.
+
+### Reused Components from `poc_base.py`
+
+- `ConfigResultTracker`: per-sample JSON persistence with atomic writes and resume support, reused unmodified for storing the 80 (query, strategy) samples.
+- `ExperimentLogger`: structured `[TAG] key=value` console logging, reused unmodified.
+
+`SearchParamsExtractionStrategy` (abstract base class), `SingleCallStagedExtractor`, `SplitTopicFilterExtractor`, and `GroundTruthChecker` are defined in `query-transformation.py` itself, not in `poc_base.py`, since they are specific to this experiment's domain (query parameter extraction) rather than general-purpose utilities reusable across other PoC scripts.
 
 ---
 
 ## Known Limitations
 
-1. **LLM-as-judge not run for Cat 5** — `precision_at_5=None` for all Cat 5 queries by design. The Wilcoxon precision@5 test uses N=20 (Cat 1–4 only).
-2. **Cat 3 B < A** — conversational queries (Q11, Q12) show B lower than A. The LLM extracted accurate topic keywords but the original phrasing ("I want to learn about RAG for LLMs") matched the specific RAG papers more directly because those papers use similar informal language in their abstracts.
-3. **Single run, no replication** — each query was run once. Embedding-based similarity scores are deterministic; LLM-as-judge outputs may vary across runs.
-4. **r=0.000 for B vs C and A vs C in Wilcoxon tables** — the script computes effect size r as `np.sign(np.median(all_diffs)) * z / sqrt(N)`. When most pairs are tied (diff=0), the median of all 25 (or 20) diffs is 0, making np.sign=0 and r=0 regardless of the non-tied pairs' direction. Affected comparisons: B vs C sim@20 (8/25 non-tied, mixed direction), B vs C precision@5 (3/20 non-tied, all B > C), A vs C precision@5 (12/20 non-tied, mixed direction). The W and p values are unaffected by this formula limitation.
+1. **Single extraction model tested.** All results describe `ministral-3:14b-cloud`'s behavior; a different model may not reproduce the same pattern between the two strategies.
+2. **`clean_topic` quality judged by a single LLM pass per sample**, not a multi-sample or multi-model consensus (see Trade-offs).
+3. **Small per-category sample sizes** (2-8 queries per category) support pattern observation, not statistically powered comparison.
+4. **Ground truth was not independently re-verified for every entry** beyond the spot-checked boundary/ambiguous categories.
+5. **`split_topic_filter`'s two calls were run sequentially**, not in parallel, in this implementation, though they are independent and could be parallelized.
+6. **This experiment does not evaluate downstream retrieval quality.** It measures extraction accuracy against ground truth only; it does not measure what OpenAlex would return if the extracted parameters were used to search.

@@ -1,5 +1,5 @@
 """
-Relevance classification experiment — 14 methods vs ground truth
+Relevance classification experiment — 15 methods vs ground truth
 Topic: "attention mechanism in transformer models"
 LLM:   ollama/qwen3.5:2b  (think=False)
 Data:  groundtruth-balanced.json  (120 papers, 60 TP / 60 TN)
@@ -281,24 +281,24 @@ class Experiment:
 
 EXPERIMENTS: list[Experiment] = [
     # ── Keyword ────────────────────────────────────────────────────────────────
-    Experiment("E01 KW-Title",             exp_kw_title),
+    Experiment("Sub-Exp 1 KW-Title",             exp_kw_title),
     # ── LLM standalone ─────────────────────────────────────────────────────────
-    Experiment("E02 LLM-Basic",            exp_llm_basic),
-    Experiment("E03 LLM-Basic-CoT",        exp_llm_basic_cot),
-    Experiment("E04 LLM-Ext",              exp_llm_ext),
+    Experiment("Sub-Exp 2 LLM-Basic",            exp_llm_basic),
+    Experiment("Sub-Exp 3 LLM-Basic-CoT",        exp_llm_basic_cot),
+    Experiment("Sub-Exp 4 LLM-Ext",              exp_llm_ext),
     # ── Embedding standalone ───────────────────────────────────────────────────
-    Experiment("E05 Emb-Nomic-Basic",      exp_emb_nomic_basic,  sequential=True),
-    Experiment("E06 Emb-Nomic-v2",         exp_emb_nomic_v2,     sequential=True),
-    Experiment("E07 Emb-QwenS-Basic",      exp_emb_qwen_s_basic, sequential=True),
-    Experiment("E08 Emb-QwenM",            exp_emb_qwen_m,       sequential=True),
-    Experiment("E09 Emb-QwenS-Ext",        exp_emb_qwen_s_ext,   sequential=True),
+    Experiment("Sub-Exp 5 Emb-Nomic-Basic",      exp_emb_nomic_basic,  sequential=True),
+    Experiment("Sub-Exp 6 Emb-Nomic-v2",         exp_emb_nomic_v2,     sequential=True),
+    Experiment("Sub-Exp 7 Emb-QwenS-Basic",      exp_emb_qwen_s_basic, sequential=True),
+    Experiment("Sub-Exp 8 Emb-QwenM",            exp_emb_qwen_m,       sequential=True),
+    Experiment("Sub-Exp 9 Emb-QwenS-Ext",        exp_emb_qwen_s_ext,   sequential=True),
     # ── Two-stage ──────────────────────────────────────────────────────────────
-    Experiment("E10 TS-QwenS-Ext-Basic",   exp_ts_qwen_s_ext_basic,   two_stage=True),
-    Experiment("E11 TS-QwenS-Ext-Loose",   exp_ts_qwen_s_ext_loose,   two_stage=True),
-    Experiment("E12 TS-QwenS-Ext-Strict",  exp_ts_qwen_s_ext_strict,  two_stage=True),
-    Experiment("E13 TS-Nomic-Basic-Loose",  exp_ts_nomic_basic_loose,  two_stage=True),
-    Experiment("E14 TS-Nomic-Basic-Strict", exp_ts_nomic_basic_strict, two_stage=True),
-    Experiment("E15 TS-Nomic-Ext-Strict",   exp_ts_nomic_ext_strict,   two_stage=True),
+    Experiment("Sub-Exp 10 TS-QwenS-Ext-Basic",   exp_ts_qwen_s_ext_basic,   two_stage=True),
+    Experiment("Sub-Exp 11 TS-QwenS-Ext-Loose",   exp_ts_qwen_s_ext_loose,   two_stage=True),
+    Experiment("Sub-Exp 12 TS-QwenS-Ext-Strict",  exp_ts_qwen_s_ext_strict,  two_stage=True),
+    Experiment("Sub-Exp 13 TS-Nomic-Basic-Loose",  exp_ts_nomic_basic_loose,  two_stage=True),
+    Experiment("Sub-Exp 14 TS-Nomic-Basic-Strict", exp_ts_nomic_basic_strict, two_stage=True),
+    Experiment("Sub-Exp 15 TS-Nomic-Ext-Strict",   exp_ts_nomic_ext_strict,   two_stage=True),
 ]
 
 # ── Evaluation ─────────────────────────────────────────────────────────────────

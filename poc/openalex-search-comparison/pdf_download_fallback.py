@@ -24,6 +24,8 @@ Download fallback chain (tried in order until one succeeds)
 import re
 import sys
 import time
+import json
+import socket
 from pydantic import BaseModel
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -44,6 +46,13 @@ if email := _ENV.get("OPENALEX_EMAIL", ""):
     pyalex.config.email = email
 pyalex.config.max_retries = 5
 pyalex.config.retry_backoff_factor = 0.5
+
+# Safety net: some libraries used here (arxiv, pyalex's internal HTTP client)
+# don't expose a timeout parameter, so a rate-limited or unresponsive server
+# can hang the process indefinitely. This sets a hard ceiling on any socket
+# operation that doesn't already have its own explicit timeout (the
+# requests.get(..., timeout=REQUEST_TIMEOUT) calls elsewhere are unaffected).
+socket.setdefaulttimeout(35)
 
 QUERY              = "attention mechanism in transformer models"
 TARGET_OA_STATUSES = {"diamond", "gold", "green"}
@@ -124,7 +133,7 @@ def extract_doi(work: dict) -> Optional[str]:
 
 
 def extract_arxiv(work: dict) -> tuple[Optional[str], Optional[str]]:
-    """Scan work['locations'] for an arxiv.org entry.
+    """Scan work['locations'] for an arxiv.org entry, falling back to the DOI.
 
     Returns (arxiv_id, pdf_url) — both are Optional.
 
@@ -147,6 +156,12 @@ def extract_arxiv(work: dict) -> tuple[Optional[str], Optional[str]]:
         → raw segment    = '1706.03762v5'
         → arxiv_id       = '1706.03762'          (version stripped)
         → pdf_url        = 'https://arxiv.org/pdf/1706.03762'  (latest)
+
+    Fallback — DOI-encoded ArXiv ID:
+    Some OpenAlex records have no arxiv.org entry in locations at all, even
+    though the paper is ArXiv-native. ArXiv's own DOI prefix (10.48550) encodes
+    the ArXiv ID directly in the DOI suffix (e.g. "10.48550/arxiv.2501.06425").
+    This is only checked when locations scanning finds nothing.
     """
     for loc in work.get("locations", []):
         landing = loc.get("landing_page_url") or ""
@@ -155,6 +170,14 @@ def extract_arxiv(work: dict) -> tuple[Optional[str], Optional[str]]:
             arxiv_id = re.sub(r"v\d+$", "", raw)   # strip version suffix
             pdf_url  = f"https://arxiv.org/pdf/{arxiv_id}"   # always unversioned
             return arxiv_id, pdf_url
+
+    doi = (work.get("ids") or {}).get("doi") or work.get("doi") or ""
+    m = re.search(r"10\.48550/arxiv\.([\w.]+)", doi)
+    if m:
+        arxiv_id = m.group(1)
+        pdf_url  = f"https://arxiv.org/pdf/{arxiv_id}"
+        return arxiv_id, pdf_url
+
     return None, None
 
 
@@ -202,12 +225,18 @@ def _get_pdf_via_requests(url: str, dest: Path) -> None:
 
     Sends browser-like headers to avoid 403 blocks from publishers such as
     AAAI OJS that specifically reject the default "python-requests" User-Agent.
+    Validates the response body starts with the PDF magic bytes (%PDF-) rather
+    than trusting the Content-Type header, which some hosts omit or misreport
+    (e.g. an arXiv abstract HTML page returned instead of the direct PDF).
     """
     resp = requests.get(url, headers=_BROWSER_HEADERS, timeout=REQUEST_TIMEOUT)
     resp.raise_for_status()
-    content_type = resp.headers.get("Content-Type", "")
-    if "pdf" not in content_type and len(resp.content) < 1024:
-        raise ValueError(f"Response does not look like a PDF (Content-Type: {content_type})")
+    if not resp.content.startswith(b"%PDF-"):
+        content_type = resp.headers.get("Content-Type", "")
+        raise ValueError(
+            f"Response is not a PDF (Content-Type: {content_type}, "
+            f"does not start with %PDF- magic bytes)"
+        )
     _write_bytes(dest, resp.content)
 
 
@@ -270,7 +299,10 @@ def _strategy_pyalex_pdf_get(paper: PaperIDs, dest: Path) -> DownloadResult:
         content = single.pdf.get()
         if not content:
             return DownloadResult(success=False, strategy=label, error="pdf.get() returned None")
-        _write_bytes(dest, content if isinstance(content, bytes) else content.encode())
+        content_bytes = content if isinstance(content, bytes) else content.encode()
+        if not content_bytes.startswith(b"%PDF-"):
+            return DownloadResult(success=False, strategy=label, error="pdf.get() did not return a PDF (missing %PDF- magic bytes)")
+        _write_bytes(dest, content_bytes)
         return DownloadResult(success=True, strategy=label, path=dest)
     except Exception as e:
         return DownloadResult(success=False, strategy=label, error=str(e))
@@ -315,13 +347,22 @@ def download_pdf_with_fallback(
     Returns all attempted DownloadResult objects so the caller can inspect
     which strategies were tried, which failed, and which finally succeeded.
     The successful result (if any) is the last item with result.success=True.
+
+    Prints a start/finish marker around each strategy attempt (flushed
+    immediately) so a hang is visible in the log — without this, a stuck
+    strategy call is invisible until the whole chain returns, since results
+    were previously only printed after this function completes.
     """
     filename = _safe_filename(paper.title, fallback=paper.openalex_id) + ".pdf"
     dest     = output_dir / filename
     results: list[DownloadResult] = []
 
     for strategy_fn in _DOWNLOAD_STRATEGIES:
+        label = strategy_fn.__name__[len("_strategy_"):]
+        started = datetime.now(tz=timezone.utc).strftime("%H:%M:%S")
+        print(f"       ⏳ [{label}] started {started}", flush=True)
         result = strategy_fn(paper, dest)
+        print(f"       ⏳ [{label}] finished ({'success' if result.success else 'failed'})", flush=True)
         results.append(result)
         if result.success:
             break   # stop on first success
@@ -483,6 +524,37 @@ def fetch_works_by_titles(titles: list[str]) -> list[tuple[str, Optional[dict]]]
     return found
 
 
+def fetch_works_by_ids(openalex_ids: list[str]) -> list[tuple[str, Optional[dict]]]:
+    """Look up each OpenAlex ID directly via Works()[id].
+
+    Used for dataset-driven runs (e.g. groundtruth-balanced.json) where the
+    exact OpenAlex Work ID is already known — no title search needed.
+    Returns list of (openalex_id, work_or_None) so the caller always knows
+    which IDs failed to resolve.
+    """
+    found = []
+    for openalex_id in openalex_ids:
+        try:
+            work = Works()[openalex_id]
+        except Exception:
+            work = None
+        found.append((openalex_id, work))
+        status = f"✓ {work.get('display_name', '')[:60]}" if work else "✗ not found"
+        print(f"      {status}")
+    return found
+
+
+def load_dataset_ids(json_path: Path, limit: Optional[int] = None) -> list[str]:
+    """Load OpenAlex IDs from a groundtruth-style JSON array (each entry has "id").
+
+    limit: when set, only the first N entries are returned — used for small-scale
+    validation runs before committing to the full dataset.
+    """
+    entries = json.loads(json_path.read_text(encoding="utf-8"))
+    ids = [e["id"] for e in entries]
+    return ids[:limit] if limit else ids
+
+
 def filter_by_oa_status(works: list[dict], statuses: set[str]) -> list[dict]:
     """Keep only works whose oa_status is in the target set."""
     return [w for w in works if extract_oa_status(w) in statuses]
@@ -555,11 +627,16 @@ def run_and_display(
     do_download: bool,
     raw_works: list[dict] | None = None,
     verbose: bool = False,
-) -> None:
-    """Print ID extraction results and optionally download PDFs for each paper."""
+) -> list[list[DownloadResult]]:
+    """Print ID extraction results and optionally download PDFs for each paper.
+
+    Returns the per-paper DownloadResult lists (empty when do_download=False)
+    so callers can aggregate fallback-chain statistics across the run.
+    """
     print(f"\n{_SEP}")
     print("RESULTS")
     print(_SEP)
+    all_dl_results: list[list[DownloadResult]] = []
     works_iter = raw_works if (verbose and raw_works) else [None] * len(papers)
     for i, (paper, work) in enumerate(zip(papers, works_iter), 1):
         print_paper(i, paper)
@@ -568,6 +645,8 @@ def run_and_display(
         if do_download:
             dl_results = download_pdf_with_fallback(paper)
             print_download_result(dl_results)
+            all_dl_results.append(dl_results)
+    return all_dl_results
 
 
 def print_summary(papers: list[PaperIDs]) -> None:
@@ -594,6 +673,39 @@ def print_summary(papers: list[PaperIDs]) -> None:
     print(f"  OA status dist   : {oa_dist}")
 
 
+def print_strategy_summary(all_results: list[list[DownloadResult]]) -> None:
+    """Print how far each paper cascaded down the fallback chain.
+
+    For each strategy: how many papers reached it (every earlier strategy
+    failed) and how many it actually resolved. attempted - won is how many
+    reached that strategy but still failed, cascading further down the chain.
+    """
+    n = len(all_results)
+    if not n:
+        print("\n  (no download results to summarise)")
+        return
+
+    strategy_order = [fn.__name__[len("_strategy_"):] for fn in _DOWNLOAD_STRATEGIES]
+    attempted = {s: 0 for s in strategy_order}
+    won       = {s: 0 for s in strategy_order}
+    total_failed = 0
+
+    for results in all_results:
+        for r in results:
+            attempted[r.strategy] += 1
+        if results and results[-1].success:
+            won[results[-1].strategy] += 1
+        else:
+            total_failed += 1
+
+    print(f"\n{_SEP}")
+    print("FALLBACK CHAIN BREAKDOWN")
+    print(_SEP)
+    for s in strategy_order:
+        print(f"  {s:<22}: attempted {attempted[s]:>3}/{n}, won {won[s]:>3}")
+    print(f"  {'failed (all strategies)':<22}: {total_failed:>3}/{n}")
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 @click.command()
@@ -606,6 +718,26 @@ def print_summary(papers: list[PaperIDs]) -> None:
         "Run broad search with this query. "
         "If omitted, falls back to title-lookup mode (PAPER_TITLES list)."
     ),
+)
+@click.option(
+    "--dataset-json",
+    "dataset_json",
+    default=None,
+    type=click.Path(exists=True, path_type=Path),
+    metavar="PATH",
+    help=(
+        "Run against OpenAlex IDs loaded from a groundtruth-style JSON array "
+        "(each entry must have an 'id' field, e.g. groundtruth-balanced.json). "
+        "Takes priority over --broad-search and PAPER_TITLES."
+    ),
+)
+@click.option(
+    "--limit",
+    "limit",
+    default=None,
+    type=int,
+    metavar="N",
+    help="With --dataset-json, only process the first N entries (for small-scale validation runs).",
 )
 @click.option(
     "--filter",
@@ -663,6 +795,8 @@ def print_summary(papers: list[PaperIDs]) -> None:
 )
 def main(
     broad_search: Optional[str],
+    dataset_json: Optional[Path],
+    limit: Optional[int],
     search_filter: str,
     cited_threshold: int,
     year_window: int,
@@ -682,8 +816,40 @@ def main(
     print("\n[0/N] Checking OpenAlex quota...")
     check_and_assert_quota()
 
+    # ── Mode: dataset JSON (OpenAlex IDs known in advance) ──────────────────────
+    if dataset_json is not None:
+        ids = load_dataset_ids(dataset_json, limit=limit)
+        total_steps = 4 if do_download else 3
+        print(f"  Mode       : dataset JSON ({len(ids)} papers from {dataset_json.name})")
+        print(_SEP)
+
+        print(f"\n[1/{total_steps}] Looking up {len(ids)} OpenAlex IDs...")
+        id_results = fetch_works_by_ids(ids)
+
+        matched_works = [(i, w) for i, w in id_results if w is not None]
+        not_found     = [i     for i, w in id_results if w is None]
+        print(f"      → {len(matched_works)} matched, {len(not_found)} not found")
+
+        print(f"\n[2/{total_steps}] Extracting IDs...")
+        papers = [work_to_paper_ids(w) for _, w in matched_works]
+
+        if do_download:
+            print(f"\n[3/{total_steps}] Downloading PDFs (fallback chain)...")
+
+        print(f"\n[{3 + int(do_download)}/{total_steps}] Displaying results...")
+        raw_works = [w for _, w in matched_works]
+        all_dl_results = run_and_display(papers, do_download, raw_works=raw_works, verbose=verbose)
+
+        if not_found:
+            print(f"\n  Not found in OpenAlex:")
+            for i in not_found:
+                print(f"    ✗ {i}")
+
+        if do_download:
+            print_strategy_summary(all_dl_results)
+
     # ── Mode: specific titles ─────────────────────────────────────────────────
-    if broad_search is None and PAPER_TITLES:
+    elif broad_search is None and PAPER_TITLES:
         total_steps = 4 if do_download else 3
         print(f"  Mode       : title lookup ({len(PAPER_TITLES)} papers)")
         print(_SEP)
