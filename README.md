@@ -140,15 +140,15 @@ This repository is a fork of
 - [Paper Discovery Pipeline](#experiments--paper-discovery-pipeline)
   - [Exp 1 — Retrieval Method Comparison & Tavily Replacement](#experiment-1--retrieval-method-comparison--tavily-replacement---2026-03-16)
   - [Exp 2 — Re-ranking & Verification Pipeline](#experiment-2--re-ranking--verification-pipeline---2026-03-17)
-  - [Exp 3 — Threshold Analysis for System Routing](#experiment-3--threshold-analysis-for-system-routing---2026-03-17)
-  - [Exp 4 — PDF Download Reliability](#experiment-4--pdf-download-reliability---2026-03-18)
+  - [Exp 3 — Score-Band Routing: Calibrating the Two-Stage LLM Escalation Threshold](#experiment-3--score-band-routing-calibrating-the-two-stage-llm-escalation-threshold---2026-03-17)
+  - [Exp 4 — PDF Acquisition: ArXiv ID Lookup and Four-Strategy Download Fallback](#experiment-4--pdf-acquisition-arxiv-id-lookup-and-four-strategy-download-fallback---2026-03-18)
   - [Exp 5 — Query Transformation: Structured Extraction](#experiment-5--query-transformation-structured-extraction---2026-07-15)
 - [Slide Generation Pipeline](#experiments--slide-generation-pipeline)
-  - [Exp 6 — Structured Output Method Comparison](#experiment-6--structured-output-method-comparison---2026-03-28)
+  - [Exp 6 — Constrained Decoding vs. Text Completion: Structured Output Method Selection Across LiteLLM Providers](#experiment-6--constrained-decoding-vs-text-completion-structured-output-method-selection-across-litellm-providers---2026-03-28)
   - [Exp 7 — Slide Layout Selection](#experiment-7--slide-layout-selection---2026-04-02)
   - [Exp 8 — ReAct Agent: Model & Prompt Evaluation](#experiment-8--react-agent-model--prompt-evaluation---2026-03-27)
   - [Exp 9 — ReAct Agent: Task Prompt Engineering for PPTX Code Generation](#experiment-9--react-agent-task-prompt-engineering-for-pptx-code-generation---2026-04-05)
-  - [Exp 10 — ReAct Agent: How a Prompt Example Key Breaks Tool Dispatch in 4B Models](#experiment-10--react-agent-how-a-prompt-example-key-breaks-tool-dispatch-in-4b-models---2026-04-07)
+  - [Exp 10 — ReAct Agent: Conversation-Format Instructions and Error Handling](#experiment-10--react-agent-conversation-format-instructions-and-error-handling---2026-04-07)
 - [RAG Summarization Pipeline](#experiments--rag-summarization-pipeline)
   - [Exp 11 — PDF Chunking and Boilerplate Filtering](#experiment-11--pdf-chunking-and-boilerplate-filtering---2026-06-11)
   - [Exp 12 — Retrieval Strategy Comparison](#experiment-12--retrieval-strategy-comparison---2026-06-17)
@@ -230,15 +230,13 @@ Research Topic
 
 ---
 
-#### Experiment 3 — Threshold Analysis for System Routing   (2026-03-17)
+#### Experiment 3 — Score-Band Routing: Calibrating the Two-Stage LLM Escalation Threshold   (2026-03-17)
 
 **System Architecture:** Step 2 — Re-ranking & Verification (routing threshold)
 
-| Band sent to Stage-2 LLM | Papers routed | % of corpus | Errors captured |
+| Selected band | Papers routed | % of corpus | Stage-1 false positives captured |
 |---|---|---|---|
-| Narrow [0.500, 0.610) | 50 | 41.7% | 87% |
-| Wide [0.480, 0.610) | 60 | 50.0% | 91% |
-| Full [0.455, 0.610) | 77 | 64.2% | 100% |
+| [0.500, 0.610) | 50 / 120 | 41.7% | **100% (20/20)** |
 
 - *Problem:* The two-stage ablation uses oracle routing requiring ground-truth labels — not deployable at inference time where labels are unavailable.
 - *Change:* Derived score-band [0.500, 0.610) from ROC analysis on the 120-paper benchmark using only cosine similarity scores.
@@ -249,13 +247,13 @@ Research Topic
 
 ---
 
-#### Experiment 4 — PDF Download Reliability   (2026-03-18)
+#### Experiment 4 — PDF Acquisition: ArXiv ID Lookup and Four-Strategy Download Fallback   (2026-03-18)
 
 **System Architecture:** Step 3 — PDF Acquisition & Parsing
 
 - *Problem:* lz-chen's single-strategy download silently drops non-ArXiv papers. OpenAlex buries ArXiv IDs in a nested locations array — not in the top-level IDs field where Semantic Scholar placed them.
 - *Change:* Four-strategy fallback chain with OA status pre-filter at retrieval time; ArXiv IDs parsed from location URLs with version suffix stripped.
-- *Result:* 5/5 papers downloaded; structural guarantee that every OA-filtered paper has at least one viable download path.
+- *Result:* All 120 papers in the validation set downloaded successfully, exercising all four fallback strategies for the first time.
 
 > ✅ **In current pipeline**
 > → Full report: [experiments/01-openalex-paper-discovery/04-pdf_download_fallback.md](experiments/01-openalex-paper-discovery/04-pdf_download_fallback.md)
@@ -286,21 +284,22 @@ The experiments below are the systematic evaluation that led to replacing LLM co
 
 ---
 
-#### Experiment 6 — Structured Output Method Comparison   (2026-03-28)
+#### Experiment 6 — Constrained Decoding vs. Text Completion: Structured Output Method Selection Across LiteLLM Providers   (2026-03-28)
 
 **System Architecture:** Step 5 — Slide Outline + HITL (layout selection sub-step)
 
-| Method | Where structure is enforced | gemma3:4b | qwen3.5:4b |
-|---|---|---|---|
-| FunctionCallingProgram | LLM provider's function-calling API | **0%** | **0%** |
-| **LLMTextCompletionProgram** | **Client-side Pydantic parser** | **0–100%** | **100%** |
-| Ollama format parameter | Ollama server (grammar-constrained decoding) | 100% | 100% |
-| Structured LLM Wrapper | Client-side Pydantic parser | 0–100% | 100% |
-| Structured Predict | Client-side Pydantic parser | 0–100% | 100% |
+| Method (`x/4` = prompt variants passing) | `gemma3:4b` | `ministral-3:14b-cloud` | `groq/gpt-oss-20b` | `openrouter/gemini` | `gemini` (direct) |
+|---|---|---|---|---|---|
+| Function Calling | 0/4 | 0/4 | 3/4 | 0/4 | 4/4 |
+| **Text Completion ✅** | **4/4** | **4/4** | **4/4** | **4/4** | **4/4** |
+| Ollama Format Parameter | 4/4 | 4/4 | – | – | – |
+| Structured LLM Wrapper | 4/4 | 4/4 | 3/4 | 4/4 | 4/4 |
+| Structured Predict | 4/4 | 4/4 | 4/4 | 4/4 | 4/4 |
+| Provider-Native Schema | 4/4 | 0/4 | 1/4 | 4/4 | 4/4 |
 
-- *Problem:* FunctionCallingProgram (lz-chen's method) fails unconditionally on all tested local Ollama models — 0% success, crashes before inference.
-- *Change:* LLMTextCompletionProgram with client-side Pydantic parsing works across all LiteLLM providers including local Ollama.
-- *Result:* 0% → 100% structured output reliability.
+- *Problem:* lz-chen's original couples structured output to one fixed mechanism — Azure OpenAI's native function calling — leaving it unclear whether the same approach works if the model or provider changes.
+- *Change:* Compared 6 structured-output methods across 5 models (2 local, 3 cloud) and 4 prompt variants.
+- *Result:* Text Completion (client-side Pydantic parsing) is one of only two methods with zero failures across every model and prompt tested; native function calling fails on both local models and one of three cloud providers.
 
 > ✅ **In current pipeline**
 > → Full report: [experiments/02-agent-behavior/06-structured_output_method_comparison.md](experiments/02-agent-behavior/06-structured_output_method_comparison.md)
@@ -342,9 +341,9 @@ Slide outline (from Step 5 HITL)
  P2 (layout lookup + null guard patterns) achieves 100% code correctness
       │  tool dispatch still broken
       ▼
- [Exp 10] Does fixing the tool dispatch suffix fix agent reliability?
- P4 achieves 100% task completion — but python-pptx lacks markdown support
-      │  0% → 100% task completion, avg turns 9.0 → 3.0
+ [Exp 10] Does fixing the reply-format instructions make the agent reliable?
+ Same rendering task costs 2–17 tool calls depending on model/error —
+ deterministic renderer needs zero
       ▼
 Architectural finding (2026-04-15): python-pptx has no markdown parser —
 LLM-generated content collapsed all bullets into one paragraph, `*` appeared
@@ -365,13 +364,13 @@ Decision: LLM → List[ParagraphItem] JSON → PptxRenderer (deterministic)
 | Model | Size | Slide generation | Tool calls | Slide modification |
 |---|---|---|---|---|
 | gemma3:4b | 4B | ✅ Success | **1 call** | ✅ Success |
-| qwen3.5:4b | 4B | ✅ Success | 16 calls | ✅ Success |
+| qwen3.5:4b | 4B | ✅ Success | 16 calls | — (not tested) |
 | gemma3n:e2b | 2B | ❌ Timeout (600s) | 0 | — |
 | gemma3n:e4b | 4B | ❌ Incompatible | 0 | — |
 
 - *Problem:* Switching from GPT-4o to local 4B models breaks the ReAct agent — vague task phrasing causes models to output text instead of calling tools.
 - *Change:* Evaluated 4 local models with explicit task directives; gemma3:4b identified as viable with 1 tool call vs 16 for qwen3.5:4b.
-- *Result:* Task completes but generated code fails 8.3% of the time — motivating Exp 8.
+- *Result:* Task completes but generated code fails 8.3% of the time — motivating Exp 9.
 
 > 🚫 **Superseded** — replaced with deterministic rendering.
 > → Full report: [experiments/02-agent-behavior/08-react_agent_model_prompt_eval.md](experiments/02-agent-behavior/08-react_agent_model_prompt_eval.md)
@@ -391,26 +390,27 @@ Decision: LLM → List[ParagraphItem] JSON → PptxRenderer (deterministic)
 
 - *Problem:* lz-chen's original prompt (P0) generates valid code only 8.3% of the time — gemma3:4b copies the style of the provided code example, including what it omits.
 - *Change:* Added explicit layout lookup and null guard code patterns to the prompt (P2).
-- *Result:* 100% code correctness — but tool dispatch still broken, leading to Exp 9.
+- *Result:* 100% code correctness — but tool dispatch still broken, leading to Exp 10.
 
 > 🚫 **Superseded** — replaced with deterministic rendering.
 > → Full report: [experiments/02-agent-behavior/09-react_agent_task_prompt_eval.md](experiments/02-agent-behavior/09-react_agent_task_prompt_eval.md)
 
 ---
 
-#### Experiment 10 — ReAct Agent: How a Prompt Example Key Breaks Tool Dispatch in 4B Models   (2026-04-07)
+#### Experiment 10 — ReAct Agent: Conversation-Format Instructions and Error Handling   (2026-04-07)
 
 **System Architecture:** Step 6 — PPTX Rendering (original ReAct approach, superseded)
 
-| Model | Before | After | Delta |
-|---|---|---|---|
-| gemma3:4b — task completed | 0% | **100%** | +100pp |
-| gemma3:4b — avg turns | 9.0 | **3.0** | −67% |
-| ministral-3:14b — task completed | 100% | 100% | unchanged |
+| Condition | Model | Tool calls per run |
+|---|---|---|
+| Rendering, normal path (before fix) | `qwen3.5:4b` | 17 |
+| Rendering, normal path (after fix) | both models | **2** |
+| Rendering, persistent execution error | `gemma3:4b` | 9 |
+| Rendering — current pipeline (no LLM) | — | **0** |
 
-- *Problem:* gemma3:4b dispatches 0% of tool calls with the correct argument key — it copies the example key `"input"` instead of reading the tool's own parameter spec `"code"`.
-- *Change:* Changed the format example key from `"input"` to `"code"` in the ReAct template.
-- *Result:* 0% → 100% task completion, avg turns 9.0 → 3.0; python-pptx's lack of markdown parsing then drove the decision to replace ReActAgent with deterministic rendering.
+- *Problem:* Even with a validated task prompt, the ReAct loop's cost was unpredictable and neither tested model handled every error condition reliably.
+- *Change:* Fixed a wrong argument-key example that caused gemma3:4b's tool calls to fail outright, then tested an explicit give-up rule for unrecoverable errors.
+- *Result:* The fix resolves the normal path, but under errors gemma3:4b still can't follow the reply format and ministral-3:14b-cloud fails to finish self-healing within budget — no model is fully reliable, and retry cost for the same task ranges 2–17× depending on model and error conditions, motivating the switch to deterministic rendering.
 
 > 🚫 **Superseded** — replaced with deterministic rendering.
 > → Full report: [experiments/02-agent-behavior/10-react_agent_tool_dispatch_eval.md](experiments/02-agent-behavior/10-react_agent_tool_dispatch_eval.md)
@@ -476,12 +476,12 @@ Acknowledgements, Ethics sections — with zero false positives across 28 papers
 
 | Strategy | Recall@5 | nDCG@5 | Latency (s) |
 |---|---|---|---|
-| Dense only | 0.553 | 0.426 | 131 |
-| BM25 hybrid | 0.566 | 0.456 | 246 |
-| **BM25 + query expansion** ✅ | **0.608** | **0.487** | 5,212 |
-| BM25 + query expansion + reranker | 0.608 | 0.487 | 6,269 |
+| Dense only | 0.413 | 0.386 | 9,323 |
+| BM25 hybrid | 0.588 | 0.554 | 5,674 |
+| **BM25 + query expansion** ✅ | **0.608** | 0.559 | **5,212** |
+| BM25 + query expansion + reranker | 0.608 | **0.586** | 6,269 |
 
-- *Problem:* Dense-only retrieval (Recall@5 = 0.553) was unvalidated; no sparse
+- *Problem:* Dense-only retrieval (Recall@5 = 0.413) was unvalidated; no sparse
   model had been selected for hybrid search.
 - *Change:* Part A selected `Qdrant/bm25` as the sparse model (fastest, no GPU);
   Part B compared 6 retrieval configs on 28 papers across 4 query types.
