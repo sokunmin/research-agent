@@ -317,8 +317,26 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
                     available_layout_names=all_layout_names,
                     available_layouts=self.pptx_spec.all_layout,
                 )
-                response_text = "".join(p.text for p in response.content).strip()
                 source_text = "".join(p.text for p in slide.content).strip()
+                needs_fallback = response.layout_name not in all_layout_names
+                if not needs_fallback and source_text:
+                    _, actual_idx_c = self.pptx_spec.get_placeholder_indices(
+                        response.layout_name
+                    )
+                    needs_fallback = actual_idx_c is None
+                if needs_fallback:
+                    fallback_layout = self.pptx_spec.find_default_content_layout_name()
+                    fb_t, fb_c = self.pptx_spec.get_placeholder_indices(fallback_layout)
+                    logger.warning(
+                        "Incompatible layout %r for slide %r, falling back to %r",
+                        response.layout_name,
+                        slide.title,
+                        fallback_layout,
+                    )
+                    response.layout_name = fallback_layout
+                    response.idx_title_placeholder = fb_t
+                    response.idx_content_placeholder = fb_c
+                response_text = "".join(p.text for p in response.content).strip()
                 if not response_text and source_text:
                     # AUGMENT_LAYOUT_PMT instructs the LLM to copy `content` verbatim —
                     # empty output despite non-empty input means it failed to copy,
@@ -414,6 +432,13 @@ class SlideGenerationWorkflow(HumanInTheLoopWorkflow):
             Path(ev.pptx_fpath), outlines
         )
         if empty_indices:
+            if n_retry >= self.max_validation_retries:
+                self._emit_message(
+                    ctx, "validate_slides",
+                    message=f"Max retries ({self.max_validation_retries}) reached with empty slides, stopping.",
+                )
+                self.copy_final_slide(await ctx.store.get("latest_pptx_file"))
+                return StopEvent(str(self.workflow_artifacts_path / "final.pptx"))
             self._emit_message(
                 ctx, "validate_slides",
                 message=f"Step 1: {len(empty_indices)} empty slides found, re-rendering...",

@@ -130,6 +130,22 @@ class PptxLayoutToolSpec:
                 return layout["layout_name"]
         return self._all_layout[0]["layout_name"]
 
+    def find_default_content_layout_name(self) -> str:
+        """Return the default content layout name — template-agnostic.
+
+        Priority:
+          1. First non-cover layout that has both title-type and content-type placeholders
+          2. Fallback: first layout in template
+        """
+        cover = self.find_cover_layout_name()
+        for layout in self._all_layout:
+            if layout["layout_name"] == cover:
+                continue
+            ph_types = {p["placeholder_type"] for p in layout["placeholders"]}
+            if (ph_types & _TITLE_TYPES) and (ph_types & _CONTENT_TYPES):
+                return layout["layout_name"]
+        return self._all_layout[0]["layout_name"]
+
     def to_tool_list(self) -> list[FunctionTool]:
         """Full list of PPTX layout tools available from this spec."""
         return [
