@@ -480,10 +480,7 @@ class SummaryGenerationWorkflow(HumanInTheLoopWorkflow):
         for document_id, info in ev.paper_map.items():
             paper_title = info["title"]
             has_shared_summary = self._files.has_cached_summary(document_id)
-            needs_vector_indexing = (
-                not self._paper_store.is_indexed(document_id)
-                or not self._paper_store._is_rag_indexed(document_id)
-            )
+            needs_vector_indexing = not self._paper_store.is_indexed(document_id)
 
             logger.info(
                 "[DIAG] paper2summary_dispatcher: dispatching document_id=%s title=%r needs_summarization=%s needs_vector_indexing=%s",
