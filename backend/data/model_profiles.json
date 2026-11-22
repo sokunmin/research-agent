@@ -1,12 +1,15 @@
 {
   "roles": {
-    "smart":           "ollama/qwen3.5:cloud",
-    "fast":            "ollama/ministral-3:14b-cloud",
-    "vision":          "ollama/gemma4:31b-cloud",
+    "smart":           "ollama/qwen3.5:4b",
+    "fast":            "ollama/qwen3.5:2b",
+    "vision":          "ollama/gemma3:4b",
     "vision_fallback": "openrouter/google/gemma-3-27b-it:free",
     "embed":           "ollama/nomic-embed-text"
   },
   "models": {
+    "ollama/qwen3.5:4b":             { "extra_body": {"think": false} },
+    "ollama/qwen3.5:2b":             { "extra_body": {"think": false} },
+    "ollama/gemma3:4b":              { "extra_body": {} },
     "ollama/gpt-oss:20b-cloud":      { "extra_body": {} },
     "ollama/ministral-3:14b-cloud":  { "extra_body": {} },
     "ollama/gemma4:31b-cloud":       { "extra_body": {} },
